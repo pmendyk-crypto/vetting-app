@@ -11,14 +11,16 @@
 
   <p><strong>Case ID:</strong> {{ case["id"] }}</p>
   <p><strong>Radiologist queue:</strong>
-    <a href="/radiologist/{{ case['radiologist']|urlencode }}">
-      /radiologist/{{ case["radiologist"] }}
-    </a>
+    <a href="/admin?radiologist={{ case['radiologist']|urlencode }}">
+      {{ case["radiologist"] }} (view in admin)</a>
   </p>
 
-  <p><a href="/vet/{{ case['id'] }}">Open vetting page</a></p>
+  <p><a href="/admin/case/{{ case['id'] }}">Open case (admin view)</a></p>
   <p><a href="/case/{{ case['id'] }}/pdf">Download PDF summary</a></p>
 
-  <p><a href="/submit">Submit another</a></p>
+  <p>
+    <a class="btn" href="/admin">Return to dashboard</a>
+    <a style="margin-left:12px;" href="/submit">Submit another</a>
+  </p>
 </body>
 </html>
