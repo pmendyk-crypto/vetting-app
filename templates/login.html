@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vetting Application — Secure Access</title>
+    <link rel="stylesheet" href="/static/css/site.css">
+    <link rel="stylesheet" href="/static/css/login.css">
+  </head>
+  <body>
+    <main class="container">
+      <section class="hero">
+        <h1>Vetting Console</h1>
+        <p>Secure access to case vetting with AI-assisted review and radiology workflow tools.</p>
+        <p class="small">Managed access for clinicians and administrators. All actions are audited.</p>
+      </section>
+
+      <aside>
+        <div class="login-card">
+          <h2 style="margin:0 0 8px 0;">Sign in ({{ role | capitalize }})</h2>
+          <p class="small" style="margin-bottom:12px;">Enter your credentials to continue.</p>
+
+          <form method="post" action="/login">
+            <input type="hidden" name="role" value="{{ role }}">
+            <input type="hidden" name="next" value="{{ next }}">
+
+            <div class="form-row">
+              <label for="username">Username</label>
+              <input id="username" name="username" type="text" placeholder="e.g. j.smith" required>
+            </div>
+
+            <div class="form-row">
+              <label for="password">Password</label>
+              <input id="password" name="password" type="password" placeholder="Your password" required>
+            </div>
+
+            <div class="actions">
+              <button class="btn-primary" type="submit">Sign in</button>
+              <div style="text-align:right">
+                <a class="small" href="/forgot-password?role={{ role }}">Forgot password?</a>
+              </div>
+            </div>
+
+            {% if error %}
+              <div class="err">{{ error }}</div>
+            {% endif %}
+          </form>
+
+          <div class="footer">
+            <div>Need help? Contact your system administrator.</div>
+            <div style="margin-top:6px;"><a href="/">Return to homepage</a></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </body>
+</html>

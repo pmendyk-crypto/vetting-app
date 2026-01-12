@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+        <strong>{{ c["status"] }}</strong>
+  <meta charset="utf-8">
+  <title>Queue</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+  <h1>Queue: {{ name }}</h1>
+
+  {% if cases|length == 0 %}
+      {% for c in cases %}
+        <li>
+          <strong>{{ c["status"] }}</strong>
+          | {{ c["created_at"] }}
+          | {{ c["patient_id"] }}
+          | {{ c["study_description"] }}
+          | <a href="/vet/{{ c['id'] }}">Open</a>
+          | <a href="/case/{{ c['id'] }}/pdf">PDF</a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <p><a href="/">Back</a></p>
+</body>
+</html>

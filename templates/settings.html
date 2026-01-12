@@ -1,0 +1,279 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vetting App | Admin</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border-bottom: 1px solid #ddd; padding: 10px; vertical-align: top; }
+    th { text-align: left; background: #f6f6f6; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #eee; }
+    .row-actions a { margin-right: 10px; }
+    .filters { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0 18px; }
+    .filters label { font-size: 12px; color: #444; display: block; margin-bottom: 4px; }
+    .filters input, .filters select { padding: 8px; min-width: 180px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .btn { display: inline-block; padding: 10px 14px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; }
+    .btn.secondary { background: #555; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .small { font-size: 12px; color: #666; }
+
+    /* Step 2 + 3: add this at the bottom of the style block */
+    @media (max-width: 700px) {
+      body { margin: 14px; font-size: 16px; }
+      table { display: block; overflow-x: auto; white-space: nowrap; }
+      .filters { flex-direction: column; gap: 10px; }
+      .filters input, .filters select { width: 100%; min-width: 0; }
+      .topbar { flex-direction: column; align-items: flex-start; }
+      .actions { width: 100%; }
+      .btn { width: 100%; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div>
+      <h1 style="margin:0;">Settings</h1>
+      <p style="margin:6px 0 0; color:#555;">SLA, radiologists, users, protocols.</p>
+      {% if current_user %}
+        <div class="small">Logged in as: {{ current_user["username"] }} ({{ current_user["role"] }})</div>
+      {% endif %}
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a class="btn secondary" href="/admin">Back to dashboard</a>
+      <a class="btn secondary" href="/logout">Logout</a>
+    </div>
+  </div>
+  <!-- Tab selector -->
+  <div class="settings-tabs" style="margin-top:18px; display:flex; gap:12px; justify-content:center;">
+    <button type="button" class="btn tab-btn active" data-tab="sla">SLA</button>
+    <button type="button" class="btn tab-btn" data-tab="radiologists">Radiologists</button>
+    <button type="button" class="btn tab-btn" data-tab="users">Users</button>
+    <button type="button" class="btn tab-btn" data-tab="protocols">Protocols</button>
+  </div>
+
+  <div id="settings-content" style="margin-top:16px;">
+    <section class="settings-section" data-tab="sla">
+      <div class="card">
+        <h2 style="margin-top:0;">SLA</h2>
+        <form method="post" action="/settings/sla" class="row">
+          <div>
+            <label>SLA (hours)</label>
+            <input name="sla_hours" value="{{ sla_hours }}" type="number" min="1" max="999" required>
+          </div>
+          <div>
+            <button type="submit" class="btn">Save SLA</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="settings-section" data-tab="radiologists">
+      <div class="card">
+        <h2 style="margin-top:0;">Radiologists</h2>
+
+        <form method="post" action="/settings/radiologist/add" class="row">
+          <div>
+            <label>First name</label>
+            <input name="name" placeholder="e.g. John" required>
+          </div>
+          <div>
+            <label>Surname</label>
+            <input name="surname" placeholder="e.g. Smith" required>
+          </div>
+          <div>
+            <label>GMC number</label>
+            <input name="gmc" placeholder="e.g. 1234567" inputmode="numeric">
+          </div>
+          <div>
+            <label>Email (optional)</label>
+            <input name="email" placeholder="e.g. dr.smith@nhs.net">
+          </div>
+          <div>
+            <button type="submit" class="btn">Add / Update</button>
+          </div>
+        </form>
+
+        <table>
+          <thead>
+            <tr>
+              <th>First name</th>
+              <th>Surname</th>
+              <th>GMC</th>
+              <th>Email</th>
+              <th style="width:100px;">Edit</th>
+              <th style="width:120px;">Remove</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in radiologists %}
+              <tr>
+                <td>{{ r["name"] }}</td>
+                <td>{{ r["surname"] or "" }}</td>
+                <td>{{ r["gmc"] or "" }}</td>
+                <td>{{ r["email"] or "" }}</td>
+                <td>
+                  <a class="btn" href="/settings/radiologist/edit/{{ r['name']|urlencode }}" style="padding:8px 10px;">Edit</a>
+                </td>
+                <td>
+                  <form method="post" action="/settings/radiologist/delete" style="margin:0;">
+                    <input type="hidden" name="name" value="{{ r['name'] }}">
+                    <button type="submit" class="btn danger" style="padding:8px 10px;">Delete</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="settings-section" data-tab="users">
+      <div class="card">
+        <h2 style="margin-top:0;">Users</h2>
+        <p class="small" style="margin-top:0;">Create admin users or radiologist users. Radiologist users must be linked to a radiologist name.</p>
+
+        <form method="post" action="/settings/user/add" class="row">
+          <div>
+            <label>Username</label>
+            <input name="username" placeholder="e.g. jsmith" required>
+          </div>
+
+          <div>
+            <label>Password</label>
+            <input name="password" type="password" placeholder="Set initial password" required>
+          </div>
+
+          <div>
+            <label>Role</label>
+            <select name="role" required>
+              <option value="admin">admin</option>
+              <option value="radiologist">radiologist</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Radiologist name (required for radiologist role)</label>
+            <select name="radiologist_name">
+              <option value="">None</option>
+              {% for rn in rad_names %}
+                <option value="{{ rn }}">{{ rn }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <button type="submit" class="btn">Add / Update user</button>
+          </div>
+        </form>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Role</th>
+              <th>Linked radiologist</th>
+              <th style="width:120px;">Remove</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+              <tr>
+                <td>{{ u["username"] }}</td>
+                <td>{{ u["role"] }}</td>
+                <td>{{ u["radiologist_name"] or "" }}</td>
+                <td>
+                  <form method="post" action="/settings/user/delete" style="margin:0;">
+                    <input type="hidden" name="username" value="{{ u['username'] }}">
+                    <button type="submit" class="btn danger" style="padding:8px 10px;">Delete</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <p class="small">Note: the code blocks deleting username "admin".</p>
+      </div>
+    </section>
+
+    <section class="settings-section" data-tab="protocols">
+      <div class="card">
+        <h2 style="margin-top:0;">Protocols</h2>
+
+        <form method="post" action="/settings/protocol/add" class="row">
+          <div>
+            <label>Protocol name</label>
+            <input name="name" placeholder="e.g. CT Head (stroke)" required>
+          </div>
+          <div>
+            <button type="submit" class="btn">Add / Enable</button>
+          </div>
+        </form>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Protocol</th>
+              <th style="width:120px;">Active</th>
+              <th style="width:120px;">Remove</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in protocols %}
+              <tr>
+                <td>{{ p["name"] }}</td>
+                <td>{{ "Yes" if p["is_active"] else "No" }}</td>
+                <td>
+                  {% if p["is_active"] %}
+                    <form method="post" action="/settings/protocol/delete" style="margin:0;">
+                      <input type="hidden" name="name" value="{{ p['name'] }}">
+                      <button type="submit" class="btn danger" style="padding:8px 10px;">Disable</button>
+                    </form>
+                  {% else %}
+                    <span class="small">Disabled</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <p class="small">Disable removes the protocol from the dropdown but keeps history for existing cases.</p>
+      </div>
+    </section>
+  </div>
+
+  <style>
+    /* Settings tab behaviour */
+    .settings-section { display:none; }
+    .settings-section.active { display:block; }
+    .settings-tabs { max-width:980px; margin:0 auto; }
+    .settings-tabs .tab-btn { background:#222; color:#fff; border-radius:8px; padding:10px 14px; border:0; box-shadow:0 1px 0 rgba(255,255,255,0.03) inset; cursor:pointer; flex:1 1 160px; text-align:center; min-width:140px; }
+    .settings-tabs .tab-btn:not(:last-child) { margin-right:6px; }
+    .settings-tabs .tab-btn.active { background: linear-gradient(180deg,#2286ff,#1765d6); box-shadow:0 6px 20px rgba(23,101,214,0.18); }
+    .settings-tabs .tab-btn:hover { transform: translateY(-1px); }
+    /* make the focused card use full width */
+    #settings-content .card { width: 100%; }
+    @media (max-width:700px) { .settings-tabs .tab-btn { width:100%; display:block; margin-right:0; } }
+  </style>
+
+  <script>
+    (function(){
+      const tabs = document.querySelectorAll('.tab-btn');
+      const sections = document.querySelectorAll('.settings-section');
+      function activate(tabName){
+        tabs.forEach(t=> t.classList.toggle('active', t.getAttribute('data-tab')===tabName));
+        sections.forEach(s=> s.classList.toggle('active', s.getAttribute('data-tab')===tabName));
+      }
+      tabs.forEach(t=> t.addEventListener('click', ()=> activate(t.getAttribute('data-tab'))));
+      // initialize - activate first tab or keep SLA as default
+      activate(document.querySelector('.tab-btn.active')?.getAttribute('data-tab') || 'sla');
+    })();
+  </script>
+
+</body>
+</html>

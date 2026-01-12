@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vetting App | Radiologist</title>
+    <link rel="stylesheet" href="/static/css/site.css">
+  </head>
+<body>
+  <div class="topbar">
+    <div>
+      <h1 style="margin:0;">My cases</h1>
+      <p style="margin:6px 0 0; color:#555;">Assigned cases for vetting.</p>
+    </div>
+    <a class="btn" href="/logout">Logout</a>
+  </div>
+
+  <form method="get" action="/radiologist" class="filters">
+    <div>
+      <label>Status</label>
+      <select name="status">
+        <option value="" {% if selected_status == "" %}selected{% endif %}>All</option>
+        <option value="PENDING" {% if selected_status == "PENDING" %}selected{% endif %}>PENDING</option>
+        <option value="VETTED" {% if selected_status == "VETTED" %}selected{% endif %}>VETTED</option>
+      </select>
+    </div>
+    <div style="align-self:flex-end;">
+      <button type="submit" class="btn">Apply</button>
+      <a href="/radiologist" style="margin-left:8px;">Reset</a>
+    </div>
+  </form>
+
+  {% if cases|length == 0 %}
+    <p>No cases found.</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Created</th>
+          <th>TAT</th>
+          <th>Patient</th>
+          <th>Study</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in cases %}
+          <tr>
+            <td><span class="pill" data-status="{{ c['status']|lower }}">{{ c["status"] }}</span></td>
+            <td>{{ c["created_display"] }}</td>
+            <td>
+              <span class="tat"
+                    data-created="{% if c['created_iso'] is defined %}{{ c['created_iso'] }}{% endif %}"
+                    data-status="{{ c['status'] }}">
+                {% if c["tat_display"] is defined %}
+                  {{ c["tat_display"] }}
+                {% elif c["age_display"] is defined %}
+                  {{ c["age_display"] }}
+                {% endif %}
+              </span>
+            </td>
+            <td>{{ c["patient_id"] }}</td>
+            <td>{{ c["study_description"] }}</td>
+            <td>
+              <a href="/vet/{{ c['id'] }}">Open</a>
+              &nbsp;|&nbsp;
+              <a href="/case/{{ c['id'] }}/pdf">PDF</a>
+              {% if c["uploaded_filename"] %}
+                &nbsp;|&nbsp;
+                <a href="/case/{{ c['id'] }}/attachment">Attachment</a>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  <script>
+    function formatTat(seconds) {
+      if (seconds < 60) return "<1m";
+      const minutesTotal = Math.floor(seconds / 60);
+      const hoursTotal = Math.floor(minutesTotal / 60);
+      const days = Math.floor(hoursTotal / 24);
+      const minutes = minutesTotal % 60;
+      const hours = hoursTotal % 24;
+
+      if (days > 0) return `${days}d ${String(hours).padStart(2,"0")}h ${String(minutes).padStart(2,"0")}m`;
+      if (hoursTotal > 0) return `${String(hoursTotal).padStart(2,"0")}h ${String(minutes).padStart(2,"0")}m`;
+      return `${minutesTotal}m`;
+    }
+
+    function updateTats() {
+      const now = new Date();
+      document.querySelectorAll(".tat").forEach(el => {
+        const iso = el.getAttribute("data-created");
+        const status = el.getAttribute("data-status");
+        if (!iso) return;
+
+        // Stop updating once vetted
+        const s = String(status || "").toLowerCase();
+        if (s === "vetted") return;
+
+        // Only update while pending
+        if (s !== "pending") return;
+
+        const created = new Date(iso);
+        const diffSeconds = Math.max(0, Math.floor((now - created) / 1000));
+        el.textContent = formatTat(diffSeconds);
+      });
+    }
+
+    updateTats();
+    setInterval(updateTats, 30000);
+  </script>
+</body>
+</html>

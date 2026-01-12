@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Submitted</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+  <h1>Submitted</h1>
+
+  <p><strong>Case ID:</strong> {{ case["id"] }}</p>
+  <p><strong>Radiologist queue:</strong>
+    <a href="/radiologist/{{ case['radiologist']|urlencode }}">
+      /radiologist/{{ case["radiologist"] }}
+    </a>
+  </p>
+
+  <p><a href="/vet/{{ case['id'] }}">Open vetting page</a></p>
+  <p><a href="/case/{{ case['id'] }}/pdf">Download PDF summary</a></p>
+
+  <p><a href="/submit">Submit another</a></p>
+</body>
+</html>

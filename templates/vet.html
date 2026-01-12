@@ -1,0 +1,147 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vetting App | Admin</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+</head>
+<body>
+
+  <div class="page-header">
+    <div>
+      <h1 style="margin:0;">Vetting</h1>
+      <div class="page-meta" style="margin-top:6px;">
+        <span class="case-id">Case: {{ case["id"] }}</span>
+        <span>Status:</span>
+        <span class="pill" data-status="{{ case['status']|lower }}">{{ case["status"] }}</span>
+      </div>
+    </div>
+    <div class="actions">
+      <a class="btn secondary" href="/radiologist">Back to my cases</a>
+      <a class="btn secondary" href="/logout">Logout</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="left">
+      <div class="card">
+        <h2 style="margin-top:0;">Details</h2>
+
+        <p><b>Patient ID:</b> {{ case["patient_id"] }}</p>
+        <p><b>Study:</b> {{ case["study_description"] }}</p>
+        <p><b>Admin notes:</b><br>{{ case["admin_notes"] or "" }}</p>
+
+        {% if case["uploaded_filename"] %}
+          <p class="small">
+            Attachment: <b>{{ case["uploaded_filename"] }}</b><br>
+            <a href="/case/{{ case['id'] }}/attachment/inline" target="_blank">Open attachment in new tab</a>
+            &nbsp;|&nbsp;
+            <a href="/case/{{ case['id'] }}/attachment" target="_blank">Download</a>
+          </p>
+        {% else %}
+          <p class="small">No attachment uploaded.</p>
+        {% endif %}
+
+        <hr style="border:none; border-top:1px solid rgba(255,255,255,0.06); margin:18px 0;">
+
+        <h2 style="margin-top:0;">Decision</h2>
+
+        <form method="post" action="/vet/{{ case['id'] }}">
+          <div class="decision-grid">
+            <div>
+              <label for="protocol">Protocol</label>
+              <select id="protocol" name="protocol" required>
+                <option value="">Select protocol...</option>
+                {% for p in protocols %}
+                  <option value="{{ p }}" {% if case["protocol"] and case["protocol"] == p %}selected{% endif %}>{{ p }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <label for="decision">Decision</label>
+              <select id="decision" name="decision" required>
+                {% for d in decisions %}
+                  <option value="{{ d }}" {% if case["decision"] and case["decision"] == d %}selected{% endif %}>{{ d }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="full">
+              <label for="decision_comment">Comment <span class="small">(required for some decisions)</span></label>
+              <textarea id="decision_comment" name="decision_comment" placeholder="Add comment if needed">{{ case["decision_comment"] or "" }}</textarea>
+            </div>
+
+            <div class="full">
+              <div class="row">
+                <button type="submit" class="btn" id="saveDecision">Save decision</button>
+                <a class="btn secondary" href="/radiologist">Cancel</a>
+              </div>
+            </div>
+          </div>
+
+          {% if case["vetted_at"] %}
+            <p class="small" style="margin-top:12px;">
+              Vetted at (UTC): {{ case["vetted_at"] }}
+            </p>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="card">
+        <h2 style="margin-top:0;">Attachment preview</h2>
+
+        {% if case["uploaded_filename"] %}
+          <p class="small" style="margin-top:0;">
+            PDFs and images preview well. Office files may download instead.
+          </p>
+          <iframe src="/case/{{ case['id'] }}/attachment/inline"></iframe>
+        {% else %}
+          <p class="small">No attachment uploaded.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+    <script>
+      // Require a comment when a decision requiring comment is selected
+      (function(){
+        const form = document.querySelector('form[action^="/vet/"]');
+        if (!form) return;
+        const decision = form.querySelector('select[name="decision"]');
+        const comment = form.querySelector('#decision_comment');
+
+        function needsComment(val){
+          if (!val) return false;
+          return String(val).toLowerCase().includes('comment');
+        }
+
+        function validate(e){
+          if (needsComment(decision.value) && (!comment.value || String(comment.value).trim() === '')){
+            e.preventDefault();
+            comment.focus();
+            comment.style.boxShadow = '0 0 0 3px rgba(255,153,0,0.12)';
+            alert('Please add a comment when selecting this decision.');
+            return false;
+          }
+          return true;
+        }
+
+        form.addEventListener('submit', validate);
+
+        decision.addEventListener('change', ()=>{
+          if (needsComment(decision.value)){
+            comment.setAttribute('required','required');
+          } else {
+            comment.removeAttribute('required');
+            comment.style.boxShadow = '';
+          }
+        });
+      })();
+    </script>
+
+</body>
+</html>

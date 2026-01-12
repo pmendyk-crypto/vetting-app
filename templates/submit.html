@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Submit case</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+</head>
+<body>
+  <div class="container">
+    <div class="card" style="max-width:760px;margin:0 auto;">
+      <h1 style="margin-top:0;">Submit case</h1>
+
+      <form action="/submit" method="post" enctype="multipart/form-data">
+        <div style="display:grid;grid-template-columns:1fr;gap:12px">
+          <div>
+            <label>Patient ID</label>
+            <input name="patient_id" required style="width:100%">
+          </div>
+
+          <div>
+            <label>Study description</label>
+            <input name="study_description" required style="width:100%">
+          </div>
+
+          <div>
+            <label>Admin notes (optional)</label>
+            <textarea name="admin_notes" rows="5" style="width:100%"></textarea>
+          </div>
+
+          <div>
+            <label>Radiologist</label>
+            <select name="radiologist" required style="width:100%">
+              {% for r in radiologists %}
+                <option value="{{ r }}">{{ r }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label>Attachment (optional)</label>
+            <input type="file" name="attachment">
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:center;margin-top:8px">
+            <button type="submit" class="btn">Submit</button>
+            <a class="btn secondary" href="/">Return to home</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,12 @@
+__pycache__/
+.venv/
+venv/
+*.pyc
+.git/
+ngrok.zip
+ngrok.exe
+cloudflared.exe
+node_modules/
+uploads/
+*.db
+*.sqlite3
