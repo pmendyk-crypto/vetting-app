@@ -130,7 +130,9 @@ def init_db() -> None:
         """
         CREATE TABLE IF NOT EXISTS radiologists (
             name TEXT PRIMARY KEY,
-            email TEXT
+            email TEXT,
+            surname TEXT,
+            gmc TEXT
         )
         """
     )
@@ -194,6 +196,30 @@ def ensure_cases_schema() -> None:
     conn.close()
 
 
+def ensure_radiologists_schema() -> None:
+    """
+    Safe schema upgrades for the radiologists table.
+    """
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='radiologists'")
+    if not cur.fetchone():
+        conn.close()
+        return
+
+    cur.execute("PRAGMA table_info(radiologists)")
+    cols = {row[1] for row in cur.fetchall()}
+
+    if "surname" not in cols:
+        cur.execute("ALTER TABLE radiologists ADD COLUMN surname TEXT")
+    if "gmc" not in cols:
+        cur.execute("ALTER TABLE radiologists ADD COLUMN gmc TEXT")
+
+    conn.commit()
+    conn.close()
+
+
 def get_setting(key: str, default: str) -> str:
     conn = get_db()
     row = conn.execute("SELECT value FROM config WHERE key = ?", (key,)).fetchone()
@@ -217,17 +243,17 @@ def set_setting(key: str, value: str) -> None:
 # -------------------------
 def list_radiologists() -> list[dict]:
     conn = get_db()
-    rows = conn.execute("SELECT name, email FROM radiologists ORDER BY name").fetchall()
+    rows = conn.execute("SELECT name, email, surname, gmc FROM radiologists ORDER BY name").fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def upsert_radiologist(name: str, email: str) -> None:
+def upsert_radiologist(name: str, email: str, surname: str = "", gmc: str = "") -> None:
     conn = get_db()
     conn.execute(
-        "INSERT INTO radiologists(name, email) VALUES(?, ?) "
-        "ON CONFLICT(name) DO UPDATE SET email=excluded.email",
-        (name.strip(), email.strip()),
+        "INSERT INTO radiologists(name, email, surname, gmc) VALUES(?, ?, ?, ?) "
+        "ON CONFLICT(name) DO UPDATE SET email=excluded.email, surname=excluded.surname, gmc=excluded.gmc",
+        (name.strip(), email.strip(), surname.strip(), gmc.strip()),
     )
     conn.commit()
     conn.close()
@@ -242,7 +268,7 @@ def delete_radiologist(name: str) -> None:
 
 def get_radiologist(name: str) -> dict | None:
     conn = get_db()
-    row = conn.execute("SELECT name, email FROM radiologists WHERE name = ?", (name,)).fetchone()
+    row = conn.execute("SELECT name, email, surname, gmc FROM radiologists WHERE name = ?", (name,)).fetchone()
     conn.close()
     return dict(row) if row else None
 
@@ -386,7 +412,7 @@ def ensure_seed_data() -> None:
     row = conn.execute("SELECT COUNT(*) AS c FROM radiologists").fetchone()
     if row and row["c"] == 0:
         for n in RADIOLOGISTS_SEED:
-            conn.execute("INSERT OR IGNORE INTO radiologists(name, email) VALUES(?, '')", (n,))
+            conn.execute("INSERT OR IGNORE INTO radiologists(name, email, surname, gmc) VALUES(?, ?, ?, ?)", (n, "", "", ""))
         conn.commit()
     conn.close()
 
@@ -402,6 +428,7 @@ def ensure_seed_data() -> None:
 # -------------------------
 init_db()
 ensure_cases_schema()
+ensure_radiologists_schema()
 ensure_seed_data()
 ensure_default_protocols()
 
@@ -786,9 +813,9 @@ def update_sla(request: Request, sla_hours: str = Form(...)):
 
 
 @app.post("/settings/radiologist/add")
-def add_radiologist(request: Request, name: str = Form(...), email: str = Form("")):
+def add_radiologist(request: Request, name: str = Form(...), email: str = Form(""), surname: str = Form(""), gmc: str = Form("")):
     require_admin(request)
-    upsert_radiologist(name, email)
+    upsert_radiologist(name, email, surname, gmc)
     return RedirectResponse(url="/settings", status_code=303)
 
 
