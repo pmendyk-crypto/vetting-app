@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: vetting-app
+    env: docker
+    repo: https://github.com/pmendyk-crypto/vetting-app.git
+    branch: main
+    dockerfilePath: Dockerfile
+    plan: free
+    autoDeploy: true
+    instanceSize: starter
+    envVars: []
