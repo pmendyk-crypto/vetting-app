@@ -6,7 +6,7 @@
   <title>Vetting App | Admin</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; }
+    body { font-family: Arial, sans-serif; margin: 24px; display: flex; flex-direction: column; min-height: 100vh; }
     table { border-collapse: collapse; width: 100%; }
     th, td { border-bottom: 1px solid #ddd; padding: 10px; vertical-align: top; }
     th { text-align: left; background: #f6f6f6; }
@@ -20,6 +20,18 @@
     .btn.secondary { background: #555; }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .small { font-size: 12px; color: #666; }
+    
+    .header-with-logo { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+    .logo-container { width: 50px; height: 50px; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #333; font-size: 24px; }
+    .logo-text h2 { margin: 0; font-size: 18px; }
+    .logo-text p { margin: 2px 0 0 0; font-size: 12px; color: #666; }
+    
+    .main-content { flex: 1; }
+    .page-footer { text-align: center; padding: 30px 20px; border-top: 1px solid #ddd; margin-top: 50px; color: #666; font-size: 13px; }
+    .page-footer p { margin: 0; }
+    
+    .wrapper { display: flex; flex-direction: column; min-height: 100vh; }
+    .container { flex: 1; }
 
     /* Step 2 + 3: add this at the bottom of the style block */
     @media (max-width: 700px) {
@@ -34,12 +46,14 @@
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="wrapper">
+    <div class="main-content container">
     <div class="topbar">
       <div>
         <h1 style="margin:0;">Case details</h1>
       </div>
       <div class="actions">
+        <a class="btn" href="/admin/case/{{ case['id'] }}/edit">Edit Case</a>
         <a class="btn secondary" href="/admin">Back to dashboard</a>
         <a class="btn secondary" href="/logout">Logout</a>
       </div>
@@ -65,7 +79,12 @@
         <a href="/case/{{ case['id'] }}/attachment" target="_blank">Download attachment</a>
       {% endif %}
     </p>
+    </div>
+    </div>
+
+    <div class="page-footer">
+      <p>Powered by <strong>Lumos Lab</strong> - Healthcare Applications</p>
+    </div>
   </div>
-</div>
 </body>
 </html>

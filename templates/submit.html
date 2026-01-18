@@ -3,52 +3,145 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Submit case</title>
+  <title>Submit New Case</title>
   <link rel="stylesheet" href="/static/css/site.css">
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; flex: 1; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .page-title { margin: 0 0 20px 0; color: white; }
+    .form-section { background: var(--card-bg); border: 1px solid var(--card-border); padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+    .form-section h2 { color: white; font-size: 16px; margin: 0 0 16px 0; }
+    .form-row { margin-bottom: 16px; }
+    .form-row label { display: block; color: rgba(255,255,255,0.8); font-size: 13px; margin-bottom: 6px; font-weight: 500; }
+    .required::after { content: " *"; color: #ff9999; }
+    .form-row input, .form-row select, .form-row textarea { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); color: white; font-size: 13px; box-sizing: border-box; }
+    .form-row input::placeholder, .form-row textarea::placeholder { color: rgba(255,255,255,0.4); }
+    .form-row input:focus, .form-row select:focus, .form-row textarea:focus { outline: none; border-color: rgba(255,255,255,0.15); background: rgba(0,0,0,0.35); }
+    .form-row textarea { min-height: 100px; resize: vertical; }
+    .form-row.full { grid-column: 1 / -1; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .actions { display: flex; gap: 12px; margin-top: 20px; }
+    .btn { display: inline-block; padding: 10px 16px; background: #1f6feb; color: white; border: none; border-radius: 6px; text-decoration: none; font-weight: 600; cursor: pointer; }
+    .btn:hover { filter: brightness(1.05); }
+    .btn.secondary { background: rgba(255,255,255,0.08); }
+    .btn.secondary:hover { background: rgba(255,255,255,0.12); }
+    .err { color: #ffb4b4; background: rgba(255,180,180,0.08); padding: 10px; border-radius: 6px; margin-bottom: 16px; }
+    .info-text { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 4px; }
+    .form-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    
+    .header-with-logo { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+    .logo-container { width: 50px; height: 50px; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #333; font-size: 24px; }
+    .logo-text h2 { margin: 0; font-size: 18px; }
+    .logo-text p { margin: 2px 0 0 0; font-size: 12px; color: rgba(255,255,255,0.6); }
+    
+    .page-footer { text-align: center; padding: 30px 20px; border-top: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); font-size: 13px; }
+    .page-footer p { margin: 0; }
+    
+    @media (max-width: 700px) {
+      .form-two-col { grid-template-columns: 1fr; }
+      .topbar { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
 </head>
 <body>
+  <div class="header-with-logo" style="padding: 20px 0 0 0; max-width: 800px; margin: 0 auto; padding-left: 20px; padding-right: 20px;">
+    <object data="/static/images/logo.svg" type="image/svg+xml" style="width: 50px; height: 50px;" alt="Lumos Lab Logo"></object>
+    <div class="logo-text">
+      <h2>Lumos Lab</h2>
+      <p>Healthcare Applications</p>
+    </div>
+  </div>
+
   <div class="container">
-    <div class="card" style="max-width:760px;margin:0 auto;">
-      <h1 style="margin-top:0;">Submit case</h1>
+    <div class="topbar">
+      <h1 class="page-title">Create New Case</h1>
+      <a href="/admin" class="btn secondary">Back</a>
+    </div>
 
-      <form action="/submit" method="post" enctype="multipart/form-data">
-        <div style="display:grid;grid-template-columns:1fr;gap:12px">
-          <div>
-            <label>Patient ID</label>
-            <input name="patient_id" required style="width:100%">
+    <form method="post" action="/submit" enctype="multipart/form-data">
+      <!-- Patient Information -->
+      <div class="form-section">
+        <h2>Patient Information</h2>
+
+        <div class="form-two-col">
+          <div class="form-row">
+            <label class="required">First Name</label>
+            <input name="patient_first_name" type="text" required>
           </div>
 
-          <div>
-            <label>Study description</label>
-            <input name="study_description" required style="width:100%">
+          <div class="form-row">
+            <label class="required">Surname</label>
+            <input name="patient_surname" type="text" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="required">Patient / Referral ID</label>
+          <input name="patient_referral_id" type="text" required>
+        </div>
+      </div>
+
+      <!-- Case Details -->
+      <div class="form-section">
+        <h2>Case Details</h2>
+
+        <div class="form-two-col">
+          <div class="form-row">
+            <label class="required">Institution</label>
+            <select name="institution_id" required>
+              <option value="">-- Select Institution --</option>
+              {% for inst in institutions %}
+                <option value="{{ inst.id }}">{{ inst.name }}</option>
+              {% endfor %}
+            </select>
+            <p class="info-text">Each institution has its own SLA and protocols</p>
           </div>
 
-          <div>
-            <label>Admin notes (optional)</label>
-            <textarea name="admin_notes" rows="5" style="width:100%"></textarea>
-          </div>
-
-          <div>
-            <label>Radiologist</label>
-            <select name="radiologist" required style="width:100%">
-              {% for r in radiologists %}
-                <option value="{{ r }}">{{ r }}</option>
+          <div class="form-row">
+            <label class="required">Assign Radiologist</label>
+            <select name="radiologist" required>
+              <option value="">-- Select Radiologist --</option>
+              {% for rad in radiologists %}
+                <option value="{{ rad.name }}">{{ rad.name }}</option>
               {% endfor %}
             </select>
           </div>
-
-          <div>
-            <label>Attachment (optional)</label>
-            <input type="file" name="attachment">
-          </div>
-
-          <div style="display:flex;gap:12px;align-items:center;margin-top:8px">
-            <button type="submit" class="btn">Submit</button>
-            <a class="btn secondary" href="/">Return to home</a>
-          </div>
         </div>
-      </form>
-    </div>
+
+        <div class="form-row">
+          <label class="required">Study Description</label>
+          <input name="study_description" type="text" placeholder="e.g., CT Head (standard)" required>
+        </div>
+
+        <div class="form-row">
+          <label>Admin Notes</label>
+          <textarea name="admin_notes" placeholder="Optional additional notes..."></textarea>
+        </div>
+      </div>
+
+      <!-- Attachment -->
+      <div class="form-section">
+        <h2>Attachment</h2>
+
+        <div class="form-row">
+          <label class="required">Upload File</label>
+          <input name="attachment" type="file" required>
+          <p class="info-text">Upload the imaging file for review</p>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="actions">
+        <button type="submit" class="btn" name="action" value="submit">Submit</button>
+        <button type="submit" class="btn" name="action" value="submit_another">Submit Another Case</button>
+        <a href="/admin" class="btn secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="page-footer">
+    <p>Powered by <strong>Lumos Lab</strong> - Healthcare Applications</p>
   </div>
 </body>
 </html>

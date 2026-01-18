@@ -1,147 +1,532 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Vetting App | Admin</title>
-  <link rel="stylesheet" href="/static/css/site.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vet Case - Vetting Suite</title>
+    <link rel="stylesheet" href="/static/css/site.css">
+    <style>
+        .vet-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .vet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .vet-header h1 {
+            font-size: 28px;
+            margin: 0;
+            color: rgba(255, 255, 255, 0.98);
+        }
+
+        .case-meta {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        .meta-item {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-pending {
+            background: rgba(255, 200, 0, 0.15);
+            color: #ffc800;
+        }
+
+        .status-vetted {
+            background: rgba(74, 222, 128, 0.15);
+            color: #4ade80;
+        }
+
+        .status-rejected {
+            background: rgba(255, 100, 100, 0.15);
+            color: #ff6464;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: #1f6feb;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d5ccc;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(31, 111, 235, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(31, 111, 235, 0.15);
+            color: #1f6feb;
+            border: 1px solid rgba(31, 111, 235, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(31, 111, 235, 0.25);
+        }
+
+        .btn-success {
+            background: rgba(74, 222, 128, 0.15);
+            color: #4ade80;
+            border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+
+        .btn-success:hover {
+            background: rgba(74, 222, 128, 0.25);
+        }
+
+        .vet-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .vet-card {
+            background: var(--card-bg);
+            border: var(--card-border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .vet-card h2 {
+            font-size: 18px;
+            color: #1f6feb;
+            margin: 0 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(31, 111, 235, 0.2);
+        }
+
+        .detail-row {
+            margin-bottom: 15px;
+        }
+
+        .detail-row label {
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .detail-row p {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.85);
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.75);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: block;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid rgba(31, 111, 235, 0.2);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 14px;
+            font-family: inherit;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #1f6feb;
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.1);
+        }
+
+        .form-group select option {
+            background: #0a1628;
+            color: rgba(255, 255, 255, 0.95);
+            padding: 8px;
+        }
+
+        .required-marker {
+            color: #ff9999;
+            margin-left: 4px;
+        }
+
+        .protocol-instructions {
+            background: rgba(31, 111, 235, 0.08);
+            border-left: 3px solid #1f6feb;
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 8px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.85);
+            line-height: 1.6;
+            display: none;
+        }
+
+        .protocol-instructions.visible {
+            display: block;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(31, 111, 235, 0.2);
+        }
+
+        .form-actions button {
+            flex: 1;
+        }
+
+        .attachment-preview {
+            width: 100%;
+            min-height: 500px;
+            border: 1px solid rgba(31, 111, 235, 0.2);
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .attachment-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 500px;
+            color: rgba(255, 255, 255, 0.5);
+            font-style: italic;
+        }
+
+        .attachment-links {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .attachment-links a {
+            color: #1f6feb;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .attachment-links a:hover {
+            text-decoration: underline;
+        }
+
+        .info-box {
+            background: rgba(31, 111, 235, 0.08);
+            border: 1px solid rgba(31, 111, 235, 0.2);
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.75);
+            margin-bottom: 15px;
+        }
+
+        .info-box strong {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        @media (max-width: 1024px) {
+            .vet-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .vet-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .header-actions {
+                width: 100%;
+                flex-direction: column;
+            }
+
+            .header-actions .btn {
+                width: 100%;
+            }
+
+            .case-meta {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .form-actions {
+                flex-direction: column;
+            }
+        }
+    </style>
 </head>
 <body>
+    <div class="vet-container">
+        <div class="vet-header">
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <div>
+                    <h1>Vetting Case</h1>
+                    <div class="case-meta">
+                        <div class="meta-item">
+                            <strong>Case ID:</strong> {{ case.id }}
+                        </div>
+                        <div class="meta-item">
+                            <strong>Status:</strong>
+                            <span class="status-badge status-{{ case.status|lower }}">{{ case.status }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a href="/radiologist" class="btn btn-secondary">Back to Cases</a>
+                <a href="/logout" class="btn btn-secondary">Logout</a>
+            </div>
+        </div>
 
-  <div class="page-header">
-    <div>
-      <h1 style="margin:0;">Vetting</h1>
-      <div class="page-meta" style="margin-top:6px;">
-        <span class="case-id">Case: {{ case["id"] }}</span>
-        <span>Status:</span>
-        <span class="pill" data-status="{{ case['status']|lower }}">{{ case["status"] }}</span>
-      </div>
-    </div>
-    <div class="actions">
-      <a class="btn secondary" href="/radiologist">Back to my cases</a>
-      <a class="btn secondary" href="/logout">Logout</a>
-    </div>
-  </div>
-
-  <div class="wrap">
-    <div class="left">
-      <div class="card">
-        <h2 style="margin-top:0;">Details</h2>
-
-        <p><b>Patient ID:</b> {{ case["patient_id"] }}</p>
-        <p><b>Study:</b> {{ case["study_description"] }}</p>
-        <p><b>Admin notes:</b><br>{{ case["admin_notes"] or "" }}</p>
-
-        {% if case["uploaded_filename"] %}
-          <p class="small">
-            Attachment: <b>{{ case["uploaded_filename"] }}</b><br>
-            <a href="/case/{{ case['id'] }}/attachment/inline" target="_blank">Open attachment in new tab</a>
-            &nbsp;|&nbsp;
-            <a href="/case/{{ case['id'] }}/attachment" target="_blank">Download</a>
-          </p>
-        {% else %}
-          <p class="small">No attachment uploaded.</p>
-        {% endif %}
-
-        <hr style="border:none; border-top:1px solid rgba(255,255,255,0.06); margin:18px 0;">
-
-        <h2 style="margin-top:0;">Decision</h2>
-
-        <form method="post" action="/vet/{{ case['id'] }}">
-          <div class="decision-grid">
+        <div class="vet-layout">
+            <!-- Left Column: Details & Decision -->
             <div>
-              <label for="protocol">Protocol</label>
-              <select id="protocol" name="protocol" required>
-                <option value="">Select protocol...</option>
-                {% for p in protocols %}
-                  <option value="{{ p }}" {% if case["protocol"] and case["protocol"] == p %}selected{% endif %}>{{ p }}</option>
-                {% endfor %}
-              </select>
+                <!-- Case Details Card -->
+                <div class="vet-card">
+                    <h2>Case Details</h2>
+
+                    <div class="detail-row">
+                        <label>Institution</label>
+                        <p>{{ case.institution_name or 'Not specified' }}</p>
+                    </div>
+
+                    <div class="detail-row">
+                        <label>Patient</label>
+                        <p>
+                            {% if case.patient_first_name or case.patient_surname %}
+                                {{ case.patient_first_name }} {{ case.patient_surname }}
+                            {% else %}
+                                {{ case.patient_id or 'Not specified' }}
+                            {% endif %}
+                            {% if case.patient_referral_id %}
+                                <br><span style="font-size: 11px; color: rgba(255,255,255,0.6);">Ref: {{ case.patient_referral_id }}</span>
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    <div class="detail-row">
+                        <label>Study Description</label>
+                        <p>{{ case.study_description or 'Not specified' }}</p>
+                    </div>
+
+                    <div class="detail-row">
+                        <label>Admin Notes</label>
+                        <p>{{ case.admin_notes or 'None' }}</p>
+                    </div>
+
+                    {% if case.uploaded_filename %}
+                    <div class="detail-row">
+                        <label>Attachment</label>
+                        <p>{{ case.uploaded_filename }}</p>
+                        <div class="attachment-links">
+                            <a href="/case/{{ case.id }}/attachment/inline" target="_blank">View</a>
+                            <a href="/case/{{ case.id }}/attachment">Download</a>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Decision Card -->
+                <div class="vet-card">
+                    <h2>Vetting Decision</h2>
+
+                    <form method="POST" action="/vet/{{ case.id }}" id="vetForm">
+                        <div class="form-group">
+                            <label for="decision">
+                                Decision
+                                <span class="required-marker">*</span>
+                            </label>
+                            <select id="decision" name="decision" required onchange="validateRejectComment()">
+                                <option value="">Select a decision...</option>
+                                {% for d in decisions %}
+                                <option value="{{ d }}">{{ d }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="protocolGroup">
+                            <label for="protocol">
+                                Protocol
+                                <span class="required-marker">*</span>
+                            </label>
+                            <select id="protocol" name="protocol" required onchange="showProtocolInstructions()">
+                                <option value="">Select a protocol...</option>
+                                {% for p in protocols %}
+                                <option value="{{ p.name }}" data-instructions="{{ p.instructions or '' }}">
+                                    {{ p.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div id="protocolInstructions" class="protocol-instructions"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="decision_comment">
+                                Comment
+                                <span id="commentRequired" class="required-marker" style="display:none;">*</span>
+                            </label>
+                            <textarea id="decision_comment" name="decision_comment" rows="4" placeholder="Add comment if needed..."></textarea>
+                            <div id="rejectWarning" class="info-box" style="display:none; margin-top: 8px;">
+                                <strong>⚠️ Required:</strong> Comment is mandatory when rejecting a case.
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Save Decision</button>
+                            <a href="/radiologist" class="btn btn-secondary">Cancel</a>
+                        </div>
+
+                        {% if case.vetted_at %}
+                        <div class="info-box" style="margin-top: 15px;">
+                            <strong>Vetted at:</strong> {{ case.vetted_at }} (UTC)
+                        </div>
+                        {% endif %}
+                    </form>
+                </div>
             </div>
 
+            <!-- Right Column: Attachment Preview -->
             <div>
-              <label for="decision">Decision</label>
-              <select id="decision" name="decision" required>
-                {% for d in decisions %}
-                  <option value="{{ d }}" {% if case["decision"] and case["decision"] == d %}selected{% endif %}>{{ d }}</option>
-                {% endfor %}
-              </select>
-            </div>
+                <div class="vet-card">
+                    <h2>Attachment Preview</h2>
 
-            <div class="full">
-              <label for="decision_comment">Comment <span class="small">(required for some decisions)</span></label>
-              <textarea id="decision_comment" name="decision_comment" placeholder="Add comment if needed">{{ case["decision_comment"] or "" }}</textarea>
+                    {% if case.uploaded_filename %}
+                        <p style="font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 0;">
+                            PDFs and images display in the preview below.
+                        </p>
+                        <iframe src="/case/{{ case.id }}/attachment/inline" class="attachment-preview"></iframe>
+                    {% else %}
+                        <div class="attachment-placeholder">
+                            No attachment uploaded
+                        </div>
+                    {% endif %}
+                </div>
             </div>
-
-            <div class="full">
-              <div class="row">
-                <button type="submit" class="btn" id="saveDecision">Save decision</button>
-                <a class="btn secondary" href="/radiologist">Cancel</a>
-              </div>
-            </div>
-          </div>
-
-          {% if case["vetted_at"] %}
-            <p class="small" style="margin-top:12px;">
-              Vetted at (UTC): {{ case["vetted_at"] }}
-            </p>
-          {% endif %}
-        </form>
-      </div>
+        </div>
     </div>
-
-    <div class="right">
-      <div class="card">
-        <h2 style="margin-top:0;">Attachment preview</h2>
-
-        {% if case["uploaded_filename"] %}
-          <p class="small" style="margin-top:0;">
-            PDFs and images preview well. Office files may download instead.
-          </p>
-          <iframe src="/case/{{ case['id'] }}/attachment/inline"></iframe>
-        {% else %}
-          <p class="small">No attachment uploaded.</p>
-        {% endif %}
-      </div>
-    </div>
-  </div>
 
     <script>
-      // Require a comment when a decision requiring comment is selected
-      (function(){
-        const form = document.querySelector('form[action^="/vet/"]');
-        if (!form) return;
-        const decision = form.querySelector('select[name="decision"]');
-        const comment = form.querySelector('#decision_comment');
+        function showProtocolInstructions() {
+            const select = document.getElementById('protocol');
+            const selected = select.options[select.selectedIndex];
+            const instructions = selected.getAttribute('data-instructions');
+            const instructionsDiv = document.getElementById('protocolInstructions');
 
-        function needsComment(val){
-          if (!val) return false;
-          return String(val).toLowerCase().includes('comment');
+            if (instructions && instructions.trim()) {
+                instructionsDiv.textContent = instructions;
+                instructionsDiv.classList.add('visible');
+            } else {
+                instructionsDiv.classList.remove('visible');
+            }
         }
 
-        function validate(e){
-          if (needsComment(decision.value) && (!comment.value || String(comment.value).trim() === '')){
-            e.preventDefault();
-            comment.focus();
-            comment.style.boxShadow = '0 0 0 3px rgba(255,153,0,0.12)';
-            alert('Please add a comment when selecting this decision.');
-            return false;
-          }
-          return true;
+        function validateRejectComment() {
+            const decision = document.getElementById('decision').value;
+            const comment = document.getElementById('decision_comment');
+            const commentRequired = document.getElementById('commentRequired');
+            const rejectWarning = document.getElementById('rejectWarning');
+            const protocolGroup = document.getElementById('protocolGroup');
+            const protocolSelect = document.getElementById('protocol');
+
+            if (decision === 'Reject') {
+                commentRequired.style.display = 'inline';
+                rejectWarning.style.display = 'block';
+                comment.setAttribute('required', 'required');
+                protocolGroup.style.display = 'none';
+                protocolSelect.removeAttribute('required');
+            } else {
+                commentRequired.style.display = 'none';
+                rejectWarning.style.display = 'none';
+                comment.removeAttribute('required');
+                protocolGroup.style.display = 'block';
+                protocolSelect.setAttribute('required', 'required');
+            }
         }
 
-        form.addEventListener('submit', validate);
+        // Form submission validation
+        document.getElementById('vetForm').addEventListener('submit', function(e) {
+            const decision = document.getElementById('decision').value;
+            const comment = document.getElementById('decision_comment').value.trim();
+            const protocol = document.getElementById('protocol').value;
 
-        decision.addEventListener('change', ()=>{
-          if (needsComment(decision.value)){
-            comment.setAttribute('required','required');
-          } else {
-            comment.removeAttribute('required');
-            comment.style.boxShadow = '';
-          }
+            if (decision === 'Reject' && !comment) {
+                e.preventDefault();
+                document.getElementById('decision_comment').focus();
+                document.getElementById('decision_comment').style.borderColor = '#ff6464';
+                alert('Comment is required when rejecting a case.');
+                return false;
+            }
+
+            if (decision !== 'Reject' && !protocol) {
+                e.preventDefault();
+                document.getElementById('protocol').focus();
+                document.getElementById('protocol').style.borderColor = '#ff6464';
+                alert('Protocol is required for non-rejected decisions.');
+                return false;
+            }
         });
-      })();
-    </script>
 
+        // Initialize on page load
+        validateRejectComment();
+    </script>
 </body>
 </html>

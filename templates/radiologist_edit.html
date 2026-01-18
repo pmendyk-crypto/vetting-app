@@ -35,9 +35,11 @@
 </head>
 <body>
   <div class="top">
-    <div>
-      <h1 style="margin:0;">Edit radiologist</h1>
-      <p style="margin:6px 0 0; color:#555;">Update details for this radiologist.</p>
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <div>
+        <h1 style="margin:0;">Edit radiologist</h1>
+        <p style="margin:6px 0 0; color:#555;">Update details for this radiologist.</p>
+      </div>
     </div>
     <a class="btn secondary" href="/settings">Back to settings</a>
   </div>
@@ -49,6 +51,15 @@
 
       <label>Email</label>
       <input name="email" value="{{ rad['email'] or '' }}" placeholder="e.g. dr.smith@nhs.net">
+
+      <label>Surname</label>
+      <input name="surname" value="{{ rad['surname'] or '' }}" placeholder="e.g. Smith">
+
+      <label>GMC Number</label>
+      <input name="gmc" value="{{ rad['gmc'] or '' }}" placeholder="e.g. 1234567">
+
+      <label>Speciality</label>
+      <input name="speciality" value="{{ rad['speciality'] or '' }}" placeholder="e.g. Radiology, Neuroradiology">
 
       <div class="row">
         <button type="submit" class="btn">Save</button>

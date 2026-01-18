@@ -5,75 +5,112 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Vetting App | Admin</title>
   <link rel="stylesheet" href="/static/css/site.css">
+  <style>
+    .tab-buttons { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab-btn { padding: 10px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; color: rgba(255,255,255,0.7); cursor: pointer; font-weight: 500; font-size: 13px; transition: all 0.2s; }
+    .tab-btn.active { background: #1f6feb; color: white; border-color: #1f6feb; }
+    .tab-btn:hover { background: rgba(255,255,255,0.12); }
+    .filters-section { background: var(--card-bg); border: 1px solid var(--card-border); padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+    .filters-content { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 12px; align-items: flex-end; }
+    .filter-group { display: flex; flex-direction: column; }
+    .filter-group label { font-size: 12px; color: rgba(255,255,255,0.7); margin-bottom: 4px; }
+    .filter-group input, .filter-group select { padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.3); color: white; font-size: 12px; }
+    table th { cursor: pointer; user-select: none; position: relative; }
+    table th:hover { background: rgba(255,255,255,0.08); }
+    table th.sortable::after { content: " ↕"; opacity: 0.5; font-size: 11px; }
+    table th.sort-asc::after { content: " ↑"; opacity: 1; }
+    table th.sort-desc::after { content: " ↓"; opacity: 1; }
+    @media (max-width: 1200px) {
+      .filters-content { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 700px) {
+      .filters-content { grid-template-columns: 1fr; }
+      .tab-buttons { flex-wrap: wrap; }
+    }
+  </style>
 </head>
 <body>
   <div class="topbar">
-    <div>
-      <h1 style="margin:0;">Admin dashboard</h1>
-      <p style="margin:6px 0 0; color:#555;">Vetting cases.</p>
-      {% if current_user %}
-        <div class="small">Logged in as: {{ current_user["username"] }} ({{ current_user["role"] }})</div>
-      {% endif %}
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <div>
+        <h1 style="margin:0;">Admin Dashboard</h1>
+        <p style="margin:6px 0 0; color: rgba(255,255,255,0.6); font-size: 13px;">All: {{ total_count }} | Pending: {{ pending_count }} | Vetted: {{ vetted_count }} | Rejected: {{ rejected_count }}</p>
+        {% if current_user %}
+          <div class="small">Logged in as: {{ current_user["username"] }} ({{ current_user["role"] }})</div>
+        {% endif %}
+      </div>
     </div>
 
     <div class="actions">
+      <a class="btn" href="/submit">Submit New Case</a>
       <a class="btn secondary" href="/settings">Settings</a>
-      <a class="btn" href="/submit">Submit new case</a>
       <a class="btn secondary" href="/logout">Logout</a>
     </div>
   </div>
 
-  <!-- Tabs + CSV -->
-  <div class="tabs">
-    <a class="tablink {% if tab == 'all' %}active{% endif %}"
-       href="/admin?tab=all&radiologist={{ selected_radiologist }}&q={{ q }}">All</a>
-
-    <a class="tablink {% if tab == 'pending' %}active{% endif %}"
-       href="/admin?tab=pending&radiologist={{ selected_radiologist }}&q={{ q }}">Pending</a>
-
-    <a class="tablink {% if tab == 'vetted' %}active{% endif %}"
-       href="/admin?tab=vetted&radiologist={{ selected_radiologist }}&q={{ q }}">Vetted</a>
-
-    <span style="margin-left:auto;">
-      <a href="/admin.csv?tab={{ tab }}&radiologist={{ selected_radiologist }}&q={{ q }}">Download CSV</a>
-    </span>
+  <!-- Status Tabs -->
+  <div class="tab-buttons">
+    <a href="/admin?tab=all&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="tab-btn {% if tab == 'all' %}active{% endif %}">All</a>
+    <a href="/admin?tab=pending&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="tab-btn {% if tab == 'pending' %}active{% endif %}">Pending</a>
+    <a href="/admin?tab=vetted&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="tab-btn {% if tab == 'vetted' %}active{% endif %}">Vetted</a>
+    <a href="/admin?tab=rejected&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="tab-btn {% if tab == 'rejected' %}active{% endif %}">Rejected</a>
+    <span style="margin-left:auto;"><a href="/admin.csv?tab={{ tab }}" style="color: #1f6feb; text-decoration: none; font-size: 13px;">Download CSV</a></span>
   </div>
 
-  <!-- Filters (keeps tab) -->
-  <form method="get" action="/admin" class="filters">
-    <input type="hidden" name="tab" value="{{ tab }}">
+  <!-- Filters -->
+  <div class="filters-section">
+    <form method="get" action="/admin" style="display: contents;">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <input type="hidden" name="sort_by" value="{{ sort_by }}">
+      <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
 
-    <div>
-      <label>Radiologist</label>
-      <select name="radiologist">
-        <option value="" {% if selected_radiologist == "" %}selected{% endif %}>All</option>
-        {% for r in radiologists %}
-          <option value="{{ r }}" {% if selected_radiologist == r %}selected{% endif %}>{{ r }}</option>
-        {% endfor %}
-      </select>
-    </div>
+      <div class="filters-content">
+        <div class="filter-group">
+          <label>Institution</label>
+          <select name="institution">
+            <option value="">All Institutions</option>
+            {% for inst in institutions %}
+              <option value="{{ inst.id }}" {% if selected_institution == inst.id|string %}selected{% endif %}>{{ inst.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-    <div>
-      <label>Search (Patient ID or Study)</label>
-      <input name="q" value="{{ q }}" placeholder="e.g. 123456 or CT Head">
-    </div>
+        <div class="filter-group">
+          <label>Radiologist</label>
+          <select name="radiologist">
+            <option value="">All Radiologists</option>
+            {% for r in radiologists %}
+              <option value="{{ r }}" {% if selected_radiologist == r %}selected{% endif %}>{{ r }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-    <div style="align-self:flex-end;">
-      <button type="submit" class="btn">Apply</button>
-      <a href="/admin?tab={{ tab }}" style="margin-left:8px;">Reset</a>
-    </div>
-  </form>
+        <div class="filter-group">
+          <label>Search (Name, ID, Study)</label>
+          <input name="q" value="{{ q }}" placeholder="Search...">
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button type="submit" class="btn" style="margin: 0;">Apply</button>
+          <a href="/admin?tab={{ tab }}" class="btn secondary" style="margin: 0; text-decoration: none;">Reset</a>
+        </div>
+      </div>
+    </form>
+  </div>
 
   {% if cases|length == 0 %}
-    <p>No cases found.</p>
+    <p style="color: rgba(255,255,255,0.6); text-align: center; padding: 40px;">No cases found.</p>
   {% else %}
     <table>
       <thead>
         <tr>
-          <th>Status</th>
-          <th>Created</th>
-          <th>TAT</th>
-          <th>Patient</th>
+          <th class="sortable" onclick="updateSort('status')">Status</th>
+          <th class="sortable" onclick="updateSort('created_at')">Created</th>
+          <th class="sortable" onclick="updateSort('tat')">TAT</th>
+          <th class="sortable" onclick="updateSort('patient_first_name')">First Name</th>
+          <th class="sortable" onclick="updateSort('patient_surname')">Surname</th>
+          <th class="sortable" onclick="updateSort('patient_referral_id')">Referral ID</th>
+          <th class="sortable" onclick="updateSort('institution_id')">Institution</th>
           <th>Study</th>
           <th>Radiologist</th>
           <th>Actions</th>
@@ -82,33 +119,18 @@
       <tbody>
         {% for c in cases %}
           <tr>
-            <td><span class="pill" data-status="{{ c['status']|lower }}">{{ c["status"] }}</span></td>
-
-            <td>
-              {% if c["created_display"] is defined %}
-                {{ c["created_display"] }}
-              {% else %}
-                {{ c["created_at"] }}
-              {% endif %}
-            </td>
-
-            <td>
-              <span class="tat"
-                    data-created="{% if c['created_iso'] is defined %}{{ c['created_iso'] }}{% endif %}"
-                    data-status="{{ c['status'] }}">
-                {% if c["tat_display"] is defined %}
-                  {{ c["tat_display"] }}
-                {% elif c["age_display"] is defined %}
-                  {{ c["age_display"] }}
-                {% endif %}
-              </span>
-            </td>
-
-            <td>{{ c["patient_id"] }}</td>
+            <td><span class="pill" data-status="{{ c['status']|lower }}">{{ c["status"]|capitalize }}</span></td>
+            <td>{{ c["created_display"] }}</td>
+            <td>{{ c["tat_display"] }}</td>
+            <td>{{ c["patient_first_name"] }}</td>
+            <td>{{ c["patient_surname"] }}</td>
+            <td>{{ c["patient_referral_id"] }}</td>
+            <td>{{ c["institution_name"] or "—" }}</td>
             <td>{{ c["study_description"] }}</td>
             <td>{{ c["radiologist"] }}</td>
             <td class="row-actions">
-                <a href="/admin/case/{{ c['id'] }}">Open</a>
+              <a href="/admin/case/{{ c['id'] }}">Open</a>
+              <a href="/case/{{ c['id'] }}/pdf" target="_blank">PDF</a>
             </td>
           </tr>
         {% endfor %}
@@ -117,55 +139,41 @@
   {% endif %}
 
   <script>
-    function formatTat(seconds) {
-      if (seconds < 60) return "<1m";
-      const minutesTotal = Math.floor(seconds / 60);
-      const hoursTotal = Math.floor(minutesTotal / 60);
-      const days = Math.floor(hoursTotal / 24);
-      const minutes = minutesTotal % 60;
-      const hours = hoursTotal % 24;
-
-      if (days > 0) return `${days}d ${String(hours).padStart(2,"0")}h ${String(minutes).padStart(2,"0")}m`;
-      if (hoursTotal > 0) return `${String(hoursTotal).padStart(2,"0")}h ${String(minutes).padStart(2,"0")}m`;
-      return `${minutesTotal}m`;
+    function updateSort(column) {
+      const currentSort = new URLSearchParams(window.location.search).get('sort_by');
+      const currentDir = new URLSearchParams(window.location.search).get('sort_dir') || 'desc';
+      const newDir = (currentSort === column && currentDir === 'desc') ? 'asc' : 'desc';
+      const tab = new URLSearchParams(window.location.search).get('tab') || 'all';
+      const institution = new URLSearchParams(window.location.search).get('institution') || '';
+      const radiologist = new URLSearchParams(window.location.search).get('radiologist') || '';
+      const q = new URLSearchParams(window.location.search).get('q') || '';
+      
+      let url = `/admin?tab=${tab}&sort_by=${column}&sort_dir=${newDir}`;
+      if (institution) url += `&institution=${institution}`;
+      if (radiologist) url += `&radiologist=${radiologist}`;
+      if (q) url += `&q=${q}`;
+      
+      window.location.href = url;
     }
 
-    function isPending(status) {
-      if (!status) return false;
-      const s = String(status).toLowerCase();
-      return s === "pending" || s === "p e n d i n g".replace(/ /g,"") || s === "pending";
-    }
-
-    function updateTats() {
-      const now = new Date();
-      document.querySelectorAll(".tat").forEach(el => {
-        const iso = el.getAttribute("data-created");
-        const status = el.getAttribute("data-status");
-        if (!iso) return;
-
-        // Stop updating once vetted
-        const s = String(status || "").toLowerCase();
-        if (s === "vetted" || s === "vetted".toLowerCase() || s === "vetted".toUpperCase().toLowerCase()) {
-          return;
-        }
-        if (s === "vetted" || s === "vetted") return; // defensive
-        if (s === "vetted") return;
-
-        // If your DB uses PENDING/VETTED uppercase, this still works:
-        if (s === "vetted") return;
-        if (s === "vetted") return;
-
-        // Only update while pending (covers pending/PENDING)
-        if (s !== "pending") return;
-
-        const created = new Date(iso);
-        const diffSeconds = Math.max(0, Math.floor((now - created) / 1000));
-        el.textContent = formatTat(diffSeconds);
-      });
-    }
-
-    updateTats();
-    setInterval(updateTats, 30000);
+    // Mark active sort header
+    const sortBy = new URLSearchParams(window.location.search).get('sort_by') || 'created_at';
+    const sortDir = new URLSearchParams(window.location.search).get('sort_dir') || 'desc';
+    document.querySelectorAll('th.sortable').forEach(th => {
+      const col = th.textContent.toLowerCase().trim();
+      const mapToSort = {
+        'created': 'created_at',
+        'tat': 'tat',
+        'first name': 'patient_first_name',
+        'surname': 'patient_surname',
+        'referral id': 'patient_referral_id',
+        'institution': 'institution_id',
+        'status': 'status'
+      };
+      if (mapToSort[col] === sortBy) {
+        th.classList.add(`sort-${sortDir}`);
+      }
+    });
   </script>
 </body>
 </html>

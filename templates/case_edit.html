@@ -1,0 +1,147 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Edit Case | Vetting App</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; display: flex; flex-direction: column; min-height: 100vh; }
+    .container { max-width: 800px; margin: 0 auto; flex: 1; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+    .btn { display: inline-block; padding: 10px 14px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
+    .btn.secondary { background: #555; }
+    .btn.danger { background: #da3633; }
+    .form-group { margin-bottom: 18px; }
+    label { display: block; font-weight: bold; margin-bottom: 6px; color: #333; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-family: Arial, sans-serif; font-size: 14px; box-sizing: border-box; }
+    textarea { resize: vertical; min-height: 100px; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #1f6feb; background: #f6f9ff; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .form-row.full { grid-template-columns: 1fr; }
+    .card { background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+    .actions { display: flex; gap: 10px; }
+    h1 { margin: 0 0 8px 0; }
+    .small { font-size: 12px; color: #666; }
+    
+    .header-with-logo { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+    .logo-container { width: 50px; height: 50px; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #333; font-size: 24px; }
+    .logo-text h2 { margin: 0; font-size: 18px; }
+    .logo-text p { margin: 2px 0 0 0; font-size: 12px; color: #666; }
+    
+    .main-content { flex: 1; }
+    .page-footer { text-align: center; padding: 30px 20px; border-top: 1px solid #ddd; margin-top: 50px; color: #666; font-size: 13px; }
+    .page-footer p { margin: 0; }
+    
+    .wrapper { display: flex; flex-direction: column; min-height: 100vh; }
+    
+    @media (max-width: 700px) {
+      body { margin: 14px; font-size: 16px; }
+      .topbar { flex-direction: column; align-items: flex-start; }
+      .actions { width: 100%; }
+      .btn { width: 100%; text-align: center; }
+      .form-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="main-content">
+  <div class="container">
+    <div class="topbar">
+      <div>
+        <h1>Edit Case {{ case["id"] }}</h1>
+        <p class="small">Status: <strong>{{ case["status"] }}</strong></p>
+      </div>
+      <div class="actions">
+        <a class="btn secondary" href="/admin/case/{{ case['id'] }}">View Case</a>
+        <a class="btn secondary" href="/admin">Back</a>
+        <a class="btn secondary" href="/logout">Logout</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <form method="POST">
+        <div class="form-row">
+          <div class="form-group">
+            <label>First Name</label>
+            <input type="text" name="patient_first_name" value="{{ case['patient_first_name'] or '' }}" placeholder="First Name">
+          </div>
+          <div class="form-group">
+            <label>Surname</label>
+            <input type="text" name="patient_surname" value="{{ case['patient_surname'] or '' }}" placeholder="Surname">
+          </div>
+        </div>
+
+        <div class="form-row full">
+          <div class="form-group">
+            <label>Patient Referral ID</label>
+            <input type="text" name="patient_referral_id" value="{{ case['patient_referral_id'] or '' }}" placeholder="Patient ID">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Institution</label>
+            <select name="institution_id">
+              <option value="">Select Institution</option>
+              {% for inst in institutions %}
+                <option value="{{ inst['id'] }}" {% if case['institution_id'] == inst['id'] %}selected{% endif %}>
+                  {{ inst['name'] }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Assign to Radiologist</label>
+            <select name="radiologist">
+              <option value="">Select Radiologist</option>
+              {% for rad in radiologists %}
+                <option value="{{ rad['name'] }}" {% if case['radiologist'] == rad['name'] %}selected{% endif %}>
+                  {{ rad['name'] }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row full">
+          <div class="form-group">
+            <label>Study Description</label>
+            <textarea name="study_description" placeholder="Study Description">{{ case['study_description'] or '' }}</textarea>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Protocol</label>
+            <input type="text" name="protocol" value="{{ case['protocol'] or '' }}" list="protocol-list" placeholder="Protocol">
+            <datalist id="protocol-list">
+              {% for p in protocols %}
+                <option value="{{ p }}">
+              {% endfor %}
+            </datalist>
+          </div>
+        </div>
+
+        <div class="form-row full">
+          <div class="form-group">
+            <label>Admin Notes</label>
+            <textarea name="admin_notes" placeholder="Admin Notes">{{ case['admin_notes'] or '' }}</textarea>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn">Save Changes</button>
+          <a class="btn secondary" href="/admin/case/{{ case['id'] }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+    </div>
+
+    <div class="page-footer">
+      <p>Powered by <strong>Lumos Lab</strong> - Healthcare Applications</p>
+    </div>
+  </div>
+</body>
+</html>

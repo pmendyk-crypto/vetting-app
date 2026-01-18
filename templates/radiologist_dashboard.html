@@ -1,118 +1,360 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vetting App | Radiologist</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Cases - Vetting Suite</title>
     <link rel="stylesheet" href="/static/css/site.css">
-  </head>
+    <style>
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .dashboard-header h1 {
+            font-size: 28px;
+            margin: 0;
+            color: rgba(255, 255, 255, 0.98);
+        }
+
+        .header-info {
+            color: rgba(255, 255, 255, 0.6);
+            margin: 5px 0 0 0;
+            font-size: 14px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: #1f6feb;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d5ccc;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(31, 111, 235, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(31, 111, 235, 0.15);
+            color: #1f6feb;
+            border: 1px solid rgba(31, 111, 235, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(31, 111, 235, 0.25);
+        }
+
+        /* Tab Styles */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            border-bottom: 1px solid rgba(31, 111, 235, 0.2);
+        }
+
+        .tab-btn {
+            padding: 12px 20px;
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn.active {
+            color: #1f6feb;
+            border-bottom-color: #1f6feb;
+        }
+
+        .tab-btn:hover {
+            color: rgba(255, 255, 255, 0.85);
+        }
+
+        .tab-stats {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 2px 8px;
+            background: rgba(31, 111, 235, 0.15);
+            border-radius: 12px;
+            font-size: 12px;
+            color: #1f6feb;
+            font-weight: 600;
+        }
+
+        /* Table Styles */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--card-bg);
+            border: var(--card-border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .data-table thead {
+            background: rgba(31, 111, 235, 0.1);
+            border-bottom: 1px solid rgba(31, 111, 235, 0.2);
+        }
+
+        .data-table th {
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: #1f6feb;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .data-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(31, 111, 235, 0.1);
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 14px;
+        }
+
+        .data-table tbody tr:hover {
+            background: rgba(31, 111, 235, 0.05);
+        }
+
+        .data-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-pending {
+            background: rgba(255, 200, 0, 0.15);
+            color: #ffc800;
+        }
+
+        .status-vetted {
+            background: rgba(74, 222, 128, 0.15);
+            color: #4ade80;
+        }
+
+        .status-rejected {
+            background: rgba(255, 100, 100, 0.15);
+            color: #ff6464;
+        }
+
+        .tat-display {
+            font-weight: 500;
+            font-family: 'Courier New', monospace;
+        }
+
+        .tat-breached {
+            color: #ff6464;
+        }
+
+        .action-links {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .action-links a {
+            color: #1f6feb;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .action-links a:hover {
+            color: #2a7bff;
+            text-decoration: underline;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .empty-state-text {
+            font-size: 16px;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .header-actions {
+                width: 100%;
+            }
+
+            .tabs {
+                flex-wrap: wrap;
+            }
+
+            .data-table {
+                font-size: 12px;
+            }
+
+            .data-table th,
+            .data-table td {
+                padding: 8px 12px;
+            }
+
+            .action-links {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
 <body>
-  <div class="topbar">
-    <div>
-      <h1 style="margin:0;">My cases</h1>
-      <p style="margin:6px 0 0; color:#555;">Assigned cases for vetting.</p>
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <div>
+                    <h1>My Cases</h1>
+                    <p class="header-info">Cases assigned for vetting</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a href="/logout" class="btn btn-secondary">Logout</a>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            <button class="tab-btn {% if tab == 'all' %}active{% endif %}" onclick="switchTab('all')">
+                All
+                <span class="tab-stats">{{ cases|length }}</span>
+            </button>
+            <button class="tab-btn {% if tab == 'pending' %}active{% endif %}" onclick="switchTab('pending')">
+                Pending
+                <span class="tab-stats">{{ cases|selectattr('status', 'equalto', 'pending')|list|length }}</span>
+            </button>
+            <button class="tab-btn {% if tab == 'vetted' %}active{% endif %}" onclick="switchTab('vetted')">
+                Vetted
+                <span class="tab-stats">{{ cases|selectattr('status', 'equalto', 'vetted')|list|length }}</span>
+            </button>
+            <button class="tab-btn {% if tab == 'rejected' %}active{% endif %}" onclick="switchTab('rejected')">
+                Rejected
+                <span class="tab-stats">{{ cases|selectattr('status', 'equalto', 'rejected')|list|length }}</span>
+            </button>
+        </div>
+
+        <!-- Cases Table -->
+        {% if cases|length == 0 %}
+        <div class="empty-state">
+            <div class="empty-state-icon">📋</div>
+            <div class="empty-state-text">No cases found</div>
+        </div>
+        {% else %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>TAT</th>
+                    <th>Patient</th>
+                    <th>Study</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in cases %}
+                <tr>
+                    <td>
+                        <span class="status-badge status-{{ c.status|lower }}">
+                            {{ c.status }}
+                        </span>
+                    </td>
+                    <td>{{ c.created_display }}</td>
+                    <td>
+                        <span class="tat-display {% if c.sla_breached %}tat-breached{% endif %}">
+                            {{ c.tat_display }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if c.patient_first_name or c.patient_surname %}
+                            {{ c.patient_first_name }} {{ c.patient_surname }}
+                            {% if c.patient_referral_id %}
+                                <br><span style="font-size: 11px; color: rgba(255,255,255,0.6);">{{ c.patient_referral_id }}</span>
+                            {% endif %}
+                        {% else %}
+                            {{ c.patient_id or 'N/A' }}
+                        {% endif %}
+                    </td>
+                    <td>{{ c.study_description }}</td>
+                    <td>
+                        <div class="action-links">
+                            <a href="/vet/{{ c.id }}">Open</a>
+                            <a href="/case/{{ c.id }}/pdf">PDF</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(31,111,235,0.2);">
+            <a href="/radiologist" class="btn btn-secondary">Refresh</a>
+        </div>
     </div>
-    <a class="btn" href="/logout">Logout</a>
-  </div>
 
-  <form method="get" action="/radiologist" class="filters">
-    <div>
-      <label>Status</label>
-      <select name="status">
-        <option value="" {% if selected_status == "" %}selected{% endif %}>All</option>
-        <option value="PENDING" {% if selected_status == "PENDING" %}selected{% endif %}>PENDING</option>
-        <option value="VETTED" {% if selected_status == "VETTED" %}selected{% endif %}>VETTED</option>
-      </select>
-    </div>
-    <div style="align-self:flex-end;">
-      <button type="submit" class="btn">Apply</button>
-      <a href="/radiologist" style="margin-left:8px;">Reset</a>
-    </div>
-  </form>
-
-  {% if cases|length == 0 %}
-    <p>No cases found.</p>
-  {% else %}
-    <table>
-      <thead>
-        <tr>
-          <th>Status</th>
-          <th>Created</th>
-          <th>TAT</th>
-          <th>Patient</th>
-          <th>Study</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in cases %}
-          <tr>
-            <td><span class="pill" data-status="{{ c['status']|lower }}">{{ c["status"] }}</span></td>
-            <td>{{ c["created_display"] }}</td>
-            <td>
-              <span class="tat"
-                    data-created="{% if c['created_iso'] is defined %}{{ c['created_iso'] }}{% endif %}"
-                    data-status="{{ c['status'] }}">
-                {% if c["tat_display"] is defined %}
-                  {{ c["tat_display"] }}
-                {% elif c["age_display"] is defined %}
-                  {{ c["age_display"] }}
-                {% endif %}
-              </span>
-            </td>
-            <td>{{ c["patient_id"] }}</td>
-            <td>{{ c["study_description"] }}</td>
-            <td>
-              <a href="/vet/{{ c['id'] }}">Open</a>
-              &nbsp;|&nbsp;
-              <a href="/case/{{ c['id'] }}/pdf">PDF</a>
-              {% if c["uploaded_filename"] %}
-                &nbsp;|&nbsp;
-                <a href="/case/{{ c['id'] }}/attachment">Attachment</a>
-              {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% endif %}
-
-  <script>
-    function formatTat(seconds) {
-      if (seconds < 60) return "<1m";
-      const minutesTotal = Math.floor(seconds / 60);
-      const hoursTotal = Math.floor(minutesTotal / 60);
-      const days = Math.floor(hoursTotal / 24);
-      const minutes = minutesTotal % 60;
-      const hours = hoursTotal % 24;
-
-      if (days > 0) return `${days}d ${String(hours).padStart(2,"0")}h ${String(minutes).padStart(2,"0")}m`;
-      if (hoursTotal > 0) return `${String(hoursTotal).padStart(2,"0")}h ${String(minutes).padStart(2,"0")}m`;
-      return `${minutesTotal}m`;
-    }
-
-    function updateTats() {
-      const now = new Date();
-      document.querySelectorAll(".tat").forEach(el => {
-        const iso = el.getAttribute("data-created");
-        const status = el.getAttribute("data-status");
-        if (!iso) return;
-
-        // Stop updating once vetted
-        const s = String(status || "").toLowerCase();
-        if (s === "vetted") return;
-
-        // Only update while pending
-        if (s !== "pending") return;
-
-        const created = new Date(iso);
-        const diffSeconds = Math.max(0, Math.floor((now - created) / 1000));
-        el.textContent = formatTat(diffSeconds);
-      });
-    }
-
-    updateTats();
-    setInterval(updateTats, 30000);
-  </script>
+    <script>
+        function switchTab(tabName) {
+            const params = new URLSearchParams();
+            if (tabName !== 'all') {
+                params.set('tab', tabName);
+            }
+            const url = '/radiologist' + (params.toString() ? '?' + params.toString() : '');
+            window.location.href = url;
+        }
+    </script>
 </body>
 </html>
