@@ -660,9 +660,21 @@ ensure_default_protocols()
 # -------------------------
 def list_institutions() -> list[dict]:
     conn = get_db()
-    rows = conn.execute("SELECT id, name, sla_hours FROM institutions ORDER BY name").fetchall()
+    rows = conn.execute("SELECT id, name, sla_hours, created_at FROM institutions ORDER BY name").fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        d = dict(r)
+        # Format created_at as DD-MM-YYYY HH:MM
+        if d.get("created_at"):
+            try:
+                dt = parse_iso_dt(d["created_at"])
+                if dt:
+                    d["created_at"] = dt.strftime("%d-%m-%Y %H:%M")
+            except:
+                pass
+        result.append(d)
+    return result
 
 
 def get_institution(inst_id: int) -> dict | None:
@@ -805,7 +817,7 @@ def admin_dashboard(
         tab = "all"
 
     # Validate sort parameters
-    valid_sorts = ["created_at", "patient_first_name", "patient_surname", "patient_referral_id", "institution_id", "tat", "status"]
+    valid_sorts = ["created_at", "patient_first_name", "patient_surname", "patient_referral_id", "institution_id", "tat", "status", "study_description", "radiologist"]
     if sort_by not in valid_sorts:
         sort_by = "created_at"
     if sort_dir not in ("asc", "desc"):
@@ -1324,8 +1336,13 @@ def add_user(
     role = role.strip()
     radiologist_name = radiologist_name.strip() or None
 
+    # Only require radiologist_name for radiologist role
     if role == "radiologist" and not radiologist_name:
         raise HTTPException(status_code=400, detail="Radiologist user must be linked to a radiologist name")
+    
+    # For admin users, radiologist_name should be None
+    if role == "admin":
+        radiologist_name = None
 
     create_user(username, password, role, radiologist_name, first_name, surname, email)
     return RedirectResponse(url="/settings", status_code=303)
@@ -1583,7 +1600,7 @@ def vet_form(request: Request, case_id: str):
 def vet_submit(
     request: Request,
     case_id: str,
-    protocol: str = Form(...),
+    protocol: str = Form(""),
     decision: str = Form(...),
     decision_comment: str = Form(""),
 ):
@@ -1593,9 +1610,15 @@ def vet_submit(
     if decision not in DECISIONS:
         raise HTTPException(status_code=400, detail="Invalid decision")
 
-    # If decision is "Reject", comment is mandatory
-    if decision == "Reject" and not decision_comment.strip():
-        raise HTTPException(status_code=400, detail="Comment is required when rejecting a case")
+    # If decision is "Reject", comment is mandatory and protocol is not required
+    if decision == "Reject":
+        if not decision_comment.strip():
+            raise HTTPException(status_code=400, detail="Comment is required when rejecting a case")
+        protocol = ""  # Clear protocol for rejected cases
+    else:
+        # For Approve/Approve with comment, protocol is required
+        if not protocol.strip():
+            raise HTTPException(status_code=400, detail="Protocol is required for approved cases")
 
     conn = get_db()
     row = conn.execute("SELECT radiologist FROM cases WHERE id = ?", (case_id,)).fetchone()
@@ -1725,8 +1748,11 @@ def case_pdf(request: Request, case_id: str):
             except:
                 return ""
 
+        # Convert row to dict to avoid Row.get() issues
+        case_data = dict(row)
+
         # Get radiologist details (for GNC number)
-        rad_name = row["radiologist"]
+        rad_name = case_data.get("radiologist", "")
         rad_gmc = ""
         if rad_name:
             rad = get_radiologist(rad_name)
@@ -1735,8 +1761,8 @@ def case_pdf(request: Request, case_id: str):
 
         # Get institution details
         institution_name = ""
-        if row.get("institution_id"):
-            inst = get_institution(row.get("institution_id"))
+        if case_data.get("institution_id"):
+            inst = get_institution(case_data.get("institution_id"))
             if inst:
                 institution_name = inst["name"]
 
@@ -1750,18 +1776,18 @@ def case_pdf(request: Request, case_id: str):
         y -= 15
         c.setFont("Helvetica", 10)
 
-        line("Case ID", row["id"])
+        line("Case ID", case_data.get("id", ""))
         
         # Created timestamp in DD-MM-YYYY HH:MM format
-        created_formatted = format_datetime(row["created_at"])
+        created_formatted = format_datetime(case_data.get("created_at", ""))
         line("Created", created_formatted)
 
         # Patient Information
-        patient_name = f"{row.get('patient_first_name') or ''} {row.get('patient_surname') or ''}".strip() or "N/A"
+        patient_name = f"{case_data.get('patient_first_name') or ''} {case_data.get('patient_surname') or ''}".strip() or "N/A"
         line("Patient Name", patient_name)
         
-        if row.get("patient_referral_id"):
-            line("Referral ID", row["patient_referral_id"])
+        if case_data.get("patient_referral_id"):
+            line("Referral ID", case_data.get("patient_referral_id", ""))
 
         # Institution
         line("Institution", institution_name or "N/A")
@@ -1774,8 +1800,8 @@ def case_pdf(request: Request, case_id: str):
             line("GMC/GNC Number", rad_gmc)
 
         # Study Description
-        if row.get("study_description"):
-            line("Study Description", row["study_description"])
+        if case_data.get("study_description"):
+            line("Study Description", case_data.get("study_description", ""))
 
         y -= 10
         c.setFont("Helvetica-Bold", 11)
@@ -1784,19 +1810,19 @@ def case_pdf(request: Request, case_id: str):
         c.setFont("Helvetica", 10)
 
         # Decision
-        line("Decision", row["decision"] or "N/A")
+        line("Decision", case_data.get("decision", "N/A"))
 
         # Protocol (only if not rejected)
-        if row.get("decision") != "Reject" and row.get("protocol"):
-            line("Protocol", row["protocol"])
+        if case_data.get("decision") != "Reject" and case_data.get("protocol"):
+            line("Protocol", case_data.get("protocol", ""))
 
         # Decision Comment
-        if row.get("decision_comment"):
+        if case_data.get("decision_comment"):
             c.setFont("Helvetica-Bold", 10)
             c.drawString(50, y, "Comment:")
             c.setFont("Helvetica", 10)
             y -= 15
-            comment_lines = (row["decision_comment"] or "").split('\n')
+            comment_lines = (case_data.get("decision_comment", "") or "").split('\n')
             for comment_line in comment_lines:
                 if y < 100:
                     c.showPage()
@@ -1806,7 +1832,7 @@ def case_pdf(request: Request, case_id: str):
 
         y -= 10
         # Vetted timestamp in DD-MM-YYYY HH:MM format
-        vetted_formatted = format_datetime(row["vetted_at"])
+        vetted_formatted = format_datetime(case_data.get("vetted_at", ""))
         if vetted_formatted:
             c.setFont("Helvetica-Bold", 10)
             c.drawString(50, y, "Vetted:")

@@ -53,7 +53,9 @@
         <h1 style="margin:0;">Case details</h1>
       </div>
       <div class="actions">
-        <a class="btn" href="/admin/case/{{ case['id'] }}/edit">Edit Case</a>
+        {% if case['status'] == 'pending' %}
+          <a class="btn" href="/admin/case/{{ case['id'] }}/edit">Edit Case</a>
+        {% endif %}
         <a class="btn secondary" href="/admin">Back to dashboard</a>
         <a class="btn secondary" href="/logout">Logout</a>
       </div>
@@ -73,10 +75,10 @@
 
 </div>
     <p class="small">
-      <a href="/case/{{ case['id'] }}/pdf" target="_blank">Open PDF</a>
+      <a href="/case/{{ case['id'] }}/pdf" target="_blank">Open vetting Form</a>
       {% if case["uploaded_filename"] %}
         &nbsp;|&nbsp;
-        <a href="/case/{{ case['id'] }}/attachment" target="_blank">Download attachment</a>
+        <a href="/case/{{ case['id'] }}/attachment" target="_blank">Download referral</a>
       {% endif %}
     </p>
     </div>

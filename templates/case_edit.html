@@ -13,16 +13,30 @@
     .btn.secondary { background: #555; }
     .btn.danger { background: #da3633; }
     .form-group { margin-bottom: 18px; }
-    label { display: block; font-weight: bold; margin-bottom: 6px; color: #333; }
-    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-family: Arial, sans-serif; font-size: 14px; box-sizing: border-box; }
+    label { display: block; font-weight: bold; margin-bottom: 6px; color: rgba(255,255,255,0.9); }
+    input, select, textarea { 
+      width: 100%; 
+      padding: 10px; 
+      border: 1px solid rgba(31, 111, 235, 0.3); 
+      border-radius: 6px; 
+      font-family: Arial, sans-serif; 
+      font-size: 14px; 
+      box-sizing: border-box;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.95);
+    }
+    select option {
+      background: #0a1628;
+      color: rgba(255, 255, 255, 0.95);
+    }
     textarea { resize: vertical; min-height: 100px; }
-    input:focus, select:focus, textarea:focus { outline: none; border-color: #1f6feb; background: #f6f9ff; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #1f6feb; background: rgba(255, 255, 255, 0.12); }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
     .form-row.full { grid-template-columns: 1fr; }
-    .card { background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+    .card { background: var(--card-bg); border: var(--card-border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
     .actions { display: flex; gap: 10px; }
     h1 { margin: 0 0 8px 0; }
-    .small { font-size: 12px; color: #666; }
+    .small { font-size: 12px; color: rgba(255,255,255,0.7); }
     
     .header-with-logo { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
     .logo-container { width: 50px; height: 50px; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #333; font-size: 24px; }
