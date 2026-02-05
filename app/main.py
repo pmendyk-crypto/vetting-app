@@ -60,6 +60,11 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 
 APP_SECRET = os.environ.get("APP_SECRET", "dev-secret-change-me")
 SESSION_TIMEOUT_MINUTES = 30  # Session expires after 30 minutes of inactivity
+
+# Warn if using default secret in production
+if APP_SECRET == "dev-secret-change-me":
+    print("[WARNING] Using default APP_SECRET! Set APP_SECRET environment variable in production!")
+
 app.add_middleware(SessionMiddleware, secret_key=APP_SECRET, same_site="lax", max_age=SESSION_TIMEOUT_MINUTES * 60)
 
 # Middleware to add no-cache headers to authenticated pages
@@ -719,20 +724,24 @@ def verify_user(username: str, password: str) -> dict | None:
             if user_dict["is_superuser"]:
                 user_dict["role"] = "admin"
             else:
-                # Map role from active membership
-                conn = get_db()
-                membership = conn.execute(
-                    "SELECT org_role FROM memberships WHERE user_id = ? AND is_active = 1 ORDER BY id LIMIT 1",
-                    (row["id"],),
-                ).fetchone()
-                conn.close()
+                # Map role from active membership (only if user has id column)
+                if "id" in row_keys:
+                    conn = get_db()
+                    membership = conn.execute(
+                        "SELECT org_role FROM memberships WHERE user_id = ? AND is_active = 1 ORDER BY id LIMIT 1",
+                        (row["id"],),
+                    ).fetchone()
+                    conn.close()
 
-                if membership and membership["org_role"] == "org_admin":
-                    user_dict["role"] = "admin"
-                elif membership and membership["org_role"] == "radiologist":
-                    user_dict["role"] = "radiologist"
+                    if membership and membership["org_role"] == "org_admin":
+                        user_dict["role"] = "admin"
+                    elif membership and membership["org_role"] == "radiologist":
+                        user_dict["role"] = "radiologist"
+                    else:
+                        user_dict["role"] = "user"
                 else:
-                    user_dict["role"] = "user"
+                    # Fall back to role column for old schema
+                    user_dict["role"] = row.get("role", "user")
 
             user_dict["radiologist_name"] = None  # Will be looked up separately if needed
         return user_dict
@@ -901,15 +910,23 @@ def ensure_superadmin_user() -> None:
 # -------------------------
 # Init DB on startup
 # -------------------------
-init_db()
-ensure_cases_schema()
-ensure_institutions_schema()
-ensure_radiologists_schema()
-ensure_users_schema()
-ensure_protocols_schema()
-ensure_seed_data()
-ensure_superadmin_user()
-ensure_default_protocols()
+try:
+    print("[startup] Initializing database...")
+    init_db()
+    ensure_cases_schema()
+    ensure_institutions_schema()
+    ensure_radiologists_schema()
+    ensure_users_schema()
+    ensure_protocols_schema()
+    ensure_seed_data()
+    ensure_superadmin_user()
+    ensure_default_protocols()
+    print("[startup] Database initialization complete")
+except Exception as e:
+    print(f"[ERROR] Database initialization failed: {e}")
+    import traceback
+    traceback.print_exc()
+    print("[ERROR] Application may not function correctly. Check DATABASE_URL environment variable.")
 
 
 # -------------------------
@@ -1158,17 +1175,27 @@ def login_submit(
     username: str = Form(...),
     password: str = Form(...),
 ):
-    user = verify_user(username, password)
-    if not user:
+    try:
+        user = verify_user(username, password)
+        if not user:
+            return templates.TemplateResponse(
+                "index.html",
+                {"request": request, "error": "Invalid username or password"},
+                status_code=401,
+            )
+    except Exception as e:
+        print(f"[ERROR] Login failed with exception: {e}")
+        import traceback
+        traceback.print_exc()
         return templates.TemplateResponse(
             "index.html",
-            {"request": request, "error": "Invalid username or password"},
-            status_code=401,
+            {"request": request, "error": "System error during login. Please check server logs."},
+            status_code=500,
         )
 
     import time
     request.session["user"] = {
-        "id": user["id"],
+        "id": user.get("id"),  # May be None for old schema
         "username": user["username"],
         "first_name": user.get("first_name"),
         "surname": user.get("surname"),
