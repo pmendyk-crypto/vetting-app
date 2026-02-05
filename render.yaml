@@ -8,4 +8,15 @@ services:
     plan: free
     autoDeploy: true
     instanceSize: starter
-    envVars: []
+    envVars:
+      - key: APP_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vetting-db
+          property: connectionString
+
+databases:
+  - name: vetting-db
+    databaseName: vetting_app
+    plan: free
