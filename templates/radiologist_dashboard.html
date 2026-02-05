@@ -167,6 +167,11 @@
             color: #ffc800;
         }
 
+        .status-reopened {
+            background: rgba(243, 156, 18, 0.15);
+            color: #f39c12;
+        }
+
         .status-vetted {
             background: rgba(74, 222, 128, 0.15);
             color: #4ade80;
@@ -274,7 +279,11 @@
             </button>
             <button class="tab-btn {% if tab == 'pending' %}active{% endif %}" onclick="switchTab('pending')">
                 Pending
-                <span class="tab-stats">{{ cases|selectattr('status', 'equalto', 'pending')|list|length }}</span>
+                <span class="tab-stats">{{ cases|selectattr('status', 'in', ['pending', 'reopened'])|list|length }}</span>
+            </button>
+            <button class="tab-btn {% if tab == 'reopened' %}active{% endif %}" onclick="switchTab('reopened')">
+                Reopened
+                <span class="tab-stats">{{ cases|selectattr('status', 'equalto', 'reopened')|list|length }}</span>
             </button>
             <button class="tab-btn {% if tab == 'vetted' %}active{% endif %}" onclick="switchTab('vetted')">
                 Vetted

@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-02-01T15:25:08.222519+00:00",
+  "status": "success",
+  "errors": [],
+  "warnings": [],
+  "summary": {
+    "phase1": "Core tables created",
+    "phase2": "org_id columns added",
+    "default_org_id": 1,
+    "users_migrated": 0,
+    "radiologists_migrated": 6,
+    "records_org_scoped": 10
+  }
+}

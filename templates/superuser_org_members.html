@@ -1,0 +1,122 @@
+<!-- Superuser: Organisation Members Management -->
+<!-- File: templates/superuser_org_members.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Members: {{ org.name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Members of <strong>{{ org.name }}</strong></h1>
+    <p><a href="/superuser/organisations">← Back to Organisations</a></p>
+    
+    <!-- Add Existing User -->
+    <div class="section">
+        <h2>Add Existing User</h2>
+        <form method="post" action="/superuser/organisations/{{ org.id }}/members/add" class="form">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" placeholder="username" required>
+                <small>User must already exist in the system</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="org_role">Role in Organisation:</label>
+                <select id="org_role" name="org_role" required>
+                    <option value="org_user">User</option>
+                    <option value="radiologist">Radiologist</option>
+                    <option value="org_admin">Organisation Admin</option>
+                </select>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Add User</button>
+        </form>
+    </div>
+    
+    <!-- Members Table -->
+    <div class="section">
+        <h2>Current Members</h2>
+        
+        {% if memberships %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Joined</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for membership, user in member_data %}
+                <tr>
+                    <td><strong>{{ user.username }}</strong></td>
+                    <td>{{ user.email or '-' }}</td>
+                    <td>
+                        <span class="badge" 
+                              style="background-color: 
+                                {% if membership.org_role == 'org_admin' %}#dc3545
+                                {% elif membership.org_role == 'radiologist' %}#007bff
+                                {% else %}#6c757d
+                                {% endif %}; color: white;">
+                            {{ membership.org_role }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if membership.is_active %}
+                            <span class="badge" style="background-color: #28a745; color: white;">Active</span>
+                        {% else %}
+                            <span class="badge" style="background-color: #dc3545; color: white;">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ membership.created_at[:10] }}</td>
+                    <td>
+                        <a href="/superuser/organisations/{{ org.id }}/members/{{ membership.id }}/edit" 
+                           class="btn btn-sm btn-warning">Edit Role</a>
+                        
+                        {% if membership.is_active %}
+                        <a href="/superuser/organisations/{{ org.id }}/members/{{ membership.id }}/deactivate" 
+                           class="btn btn-sm btn-danger" 
+                           onclick="return confirm('Deactivate membership?')">Deactivate</a>
+                        {% else %}
+                        <a href="/superuser/organisations/{{ org.id }}/members/{{ membership.id }}/activate" 
+                           class="btn btn-sm btn-success">Reactivate</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="alert alert-info">No members in this organisation yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+.section { margin-bottom: 2rem; padding: 1.5rem; border: 1px solid #ddd; border-radius: 4px; }
+.form { margin-bottom: 1rem; }
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+.form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
+.form-group small { display: block; margin-top: 0.25rem; color: #666; }
+.btn { padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block; cursor: pointer; border: none; }
+.btn-primary { background-color: #007bff; color: white; }
+.btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+.btn-warning { background-color: #ffc107; color: black; }
+.btn-success { background-color: #28a745; color: white; }
+.btn-danger { background-color: #dc3545; color: white; }
+.badge { padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.875rem; }
+.table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+.table th, .table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #ddd; }
+.table th { background-color: #f8f9fa; font-weight: bold; }
+.table tbody tr:hover { background-color: #f5f5f5; }
+.alert { padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
+.alert-info { background-color: #d1ecf1; color: #0c5460; }
+a { color: #007bff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+{% endblock %}

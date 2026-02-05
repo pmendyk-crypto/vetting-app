@@ -370,16 +370,20 @@
 
                     <div class="detail-row">
                         <label>Admin Notes</label>
-                        <p>{{ case.admin_notes or 'None' }}</p>
+                        <p style="{% if case.status == 'reopened' %}color: #f39c12; font-weight: bold;{% endif %}">
+                            {{ case.admin_notes or 'None' }}
+                        </p>
+                        {% if case.status == 'reopened' %}
+                        <p style="color: #f39c12; font-size: 12px; margin-top: 8px;">
+                            ⚠️ This case has been reopened for review. Please read the admin notes carefully before making a decision.
+                        </p>
+                        {% endif %}
                     </div>
 
                     {% if case.uploaded_filename %}
                     <div class="detail-row">
                         <label>Attachment</label>
                         <p>{{ case.uploaded_filename }}</p>
-                        <div class="attachment-links">
-                            <a href="/case/{{ case.id }}/attachment/inline" target="_blank">View</a>
-                        </div>
                     </div>
                     {% endif %}
                 </div>

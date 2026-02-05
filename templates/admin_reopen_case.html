@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reopen Case | Vetting Suite</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; display: flex; flex-direction: column; min-height: 100vh; }
+    .container { max-width: 800px; margin: 0 auto; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .btn { display: inline-block; padding: 10px 14px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
+    .btn.secondary { background: #555; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; margin-bottom: 8px; font-weight: bold; }
+    .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-family: Arial, sans-serif; resize: vertical; min-height: 150px; }
+    .info-box { background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 15px; margin-bottom: 20px; }
+    .info-box h3 { margin-top: 0; color: #856404; }
+    .info-box p { margin: 8px 0; color: #856404; }
+    .case-details { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; margin-bottom: 20px; color: #212529; }
+    .case-details p { margin: 8px 0; color: #212529; }
+    .case-details strong { display: inline-block; width: 150px; color: #212529; }
+    .case-details h3 { color: #212529; margin-top: 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <h1>Reopen Case</h1>
+      <a class="btn secondary" href="/admin/case/{{ case['id'] }}">Cancel</a>
+    </div>
+
+    <div class="info-box">
+      <h3>⚠️ Reopening Case for Review</h3>
+      <p>This will change the case status to "reopened" and clear the previous vetting decision.</p>
+      <p>The radiologist will be able to review and provide a new decision based on your notes.</p>
+    </div>
+
+    <div class="case-details">
+      <h3>Case Details</h3>
+      <p><strong>Case ID:</strong> {{ case['id'] }}</p>
+      <p><strong>Current Status:</strong> {{ case['status'] }}</p>
+      <p><strong>Patient:</strong> {{ case['patient_first_name'] }} {{ case['patient_surname'] }}</p>
+      <p><strong>Radiologist:</strong> {{ case['radiologist'] }}</p>
+      {% if case['decision'] %}
+        <p><strong>Previous Decision:</strong> {{ case['decision'] }}</p>
+      {% endif %}
+      {% if case['decision_comment'] %}
+        <p><strong>Previous Comment:</strong><br>{{ case['decision_comment'] }}</p>
+      {% endif %}
+    </div>
+
+    <form method="post" action="/admin/case/{{ case['id'] }}/reopen">
+      <div class="form-group">
+        <label for="reopen_notes">Reason for Reopening (Required) *</label>
+        <textarea id="reopen_notes" name="reopen_notes" required placeholder="Explain why this case needs to be reopened and what the radiologist should review..."></textarea>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <button type="submit" class="btn">Reopen Case</button>
+        <a class="btn secondary" href="/admin/case/{{ case['id'] }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

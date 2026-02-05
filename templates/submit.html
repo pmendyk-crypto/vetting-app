@@ -99,9 +99,9 @@
           </div>
 
           <div class="form-row">
-            <label class="required">Assign Radiologist</label>
-            <select name="radiologist" required>
-              <option value="">-- Select Radiologist --</option>
+            <label>Assign Radiologist</label>
+            <select name="radiologist">
+              <option value="">-- Select or Skip --</option>
               {% for rad in radiologists %}
                 <option value="{{ rad.name }}">{{ rad.name }}</option>
               {% endfor %}
@@ -141,7 +141,7 @@
   </div>
 
   <div class="page-footer">
-    <p>Powered by <strong>Lumos Lab</strong> - Healthcare Applications</p>
+    <p>Vetting Suite - Healthcare Applications</p>
   </div>
 </body>
 </html>

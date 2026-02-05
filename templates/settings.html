@@ -203,6 +203,21 @@
             gap: 8px;
         }
 
+        .access-form {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .access-form select {
+            padding: 6px 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(31, 111, 235, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 12px;
+        }
+
         .badge {
             display: inline-block;
             padding: 4px 8px;
@@ -420,7 +435,6 @@
         <!-- Tabs Navigation -->
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('institutions', this)">Institutions</button>
-            <button class="tab-btn" onclick="switchTab('radiologists', this)">Radiologists</button>
             <button class="tab-btn" onclick="switchTab('users', this)">Users</button>
             <button class="tab-btn" onclick="switchTab('protocols', this)">Protocols</button>
         </div>
@@ -458,6 +472,7 @@
                                 <th>Institution Name</th>
                                 <th>SLA (hours)</th>
                                 <th>Created</th>
+                                <th>Modified</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -467,6 +482,7 @@
                                 <td>{{ inst.name }}</td>
                                 <td>{{ inst.sla_hours }}</td>
                                 <td>{{ inst.created_at if inst.created_at else 'N/A' }}</td>
+                                <td>{{ inst.modified_at if inst.modified_at else 'N/A' }}</td>
                                 <td>
                                     <button class="btn btn-secondary btn-small" onclick="editInstitution({{ inst.id }}, '{{ inst.name }}', {{ inst.sla_hours }})">Edit</button>
                                 </td>
@@ -481,96 +497,18 @@
             </div>
         </div>
 
-        <!-- ===================== RADIOLOGISTS TAB ===================== -->
-        <div id="radiologists" class="tab-content">
-            <div class="settings-section">
-                <div class="section-title">Manage Radiologists</div>
-                
-                <div class="form-card">
-                    <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Add New Radiologist</h3>
-                    <form method="POST" action="/settings/radiologist/add">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>First Name</label>
-                                <input type="text" name="name" required placeholder="e.g., John">
-                            </div>
-                            <div class="form-group">
-                                <label>Surname</label>
-                                <input type="text" name="surname" placeholder="e.g., Smith">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Email</label>
-                                <input type="email" name="email" placeholder="e.g., john@example.com">
-                            </div>
-                            <div class="form-group">
-                                <label>GMC Registration</label>
-                                <input type="text" name="gmc" placeholder="e.g., 1234567">
-                            </div>
-                        </div>
-                        <div class="form-row full">
-                            <div class="form-group">
-                                <label>Speciality</label>
-                                <input type="text" name="speciality" placeholder="e.g., General Radiology, Oncology">
-                            </div>
-                        </div>
-                        <div class="button-group">
-                            <button type="submit" class="btn btn-primary">Add Radiologist</button>
-                        </div>
-                    </form>
-                </div>
-
-                <div class="form-card">
-                    <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Current Radiologists</h3>
-                    {% if radiologists %}
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>First Name</th>
-                                <th>Surname</th>
-                                <th>Email</th>
-                                <th>Speciality</th>
-                                <th>GMC</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for rad in radiologists %}
-                            <tr class="radiologist-row">
-                                <td>{{ rad.name }}</td>
-                                <td>{{ rad.surname if rad.surname else 'N/A' }}</td>
-                                <td>{{ rad.email if rad.email else 'N/A' }}</td>
-                                <td>{{ rad.speciality if rad.speciality else 'N/A' }}</td>
-                                <td>{{ rad.gmc if rad.gmc else 'N/A' }}</td>
-                                <td>
-                                    <div class="action-buttons">
-                                        <button class="btn btn-secondary btn-small" onclick="editRadiologist('{{ rad.name }}', '{{ rad.surname }}', '{{ rad.email }}', '{{ rad.gmc }}', '{{ rad.speciality }}')">Edit</button>
-                                        <form style="display: inline;" method="POST" action="/settings/radiologist/delete" onsubmit="return confirm('Delete radiologist?');">
-                                            <input type="hidden" name="name" value="{{ rad.name }}">
-                                            <button type="submit" class="btn btn-danger btn-small">Delete</button>
-                                        </form>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}
-                    <div class="empty-message">No radiologists configured yet</div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
         <!-- ===================== USERS TAB ===================== -->
         <div id="users" class="tab-content">
             <div class="settings-section">
                 <div class="section-title">Manage Users</div>
+                <p style="color: rgba(255,255,255,0.7); margin: 0 0 16px 0; font-size: 13px;">
+                    Access levels control what each user can do: <strong>Admin</strong> manages cases and settings,
+                    <strong>Radiologist</strong> can only vet assigned cases, and <strong>User</strong> has limited access.
+                </p>
                 
                 <div class="form-card">
                     <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Add New User</h3>
-                    <form method="POST" action="/settings/user/add">
+                    <form id="addUserForm" method="POST" action="/settings/user/add">
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Username</label>
@@ -598,17 +536,24 @@
                             </div>
                             <div class="form-group">
                                 <label>Role</label>
-                                <select name="role" required>
+                                <select name="role" id="addUserRole" required onchange="toggleRadiologistFields()">
                                     <option value="">Select Role</option>
                                     <option value="admin">Admin</option>
                                     <option value="radiologist">Radiologist</option>
+                                    <option value="user">User</option>
                                 </select>
                             </div>
                         </div>
-                        <div class="form-row full">
-                            <div class="form-group">
-                                <label>Link to Radiologist (if role is radiologist)</label>
-                                <input type="text" name="radiologist_name" placeholder="Name of radiologist (e.g., John)">
+                        <div id="radiologistFields" style="display:none;">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>GMC Registration</label>
+                                    <input type="text" name="gmc" placeholder="e.g., 1234567">
+                                </div>
+                                <div class="form-group">
+                                    <label>Speciality</label>
+                                    <input type="text" name="speciality" placeholder="e.g., General Radiology, Cardiology">
+                                </div>
                             </div>
                         </div>
                         <div class="button-group">
@@ -626,7 +571,7 @@
                                 <th>Username</th>
                                 <th>Name</th>
                                 <th>Email</th>
-                                <th>Role</th>
+                                <th>Access Level</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -637,7 +582,16 @@
                                 <td>{{ user.first_name }} {% if user.surname %}{{ user.surname }}{% endif %}</td>
                                 <td>{{ user.email if user.email else 'N/A' }}</td>
                                 <td>
-                                    <span style="text-transform: uppercase; font-size: 11px; font-weight: 600; color: #1f6feb;">{{ user.role }}</span>
+                                    <form method="POST" action="/settings/user/access" class="access-form">
+                                        <input type="hidden" name="user_id" value="{{ user.user_id if user.user_id is not none else '' }}">
+                                        <input type="hidden" name="username" value="{{ user.username }}">
+                                        <select name="org_role">
+                                            <option value="org_admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
+                                            <option value="radiologist" {% if user.role == 'radiologist' %}selected{% endif %}>Radiologist</option>
+                                            <option value="org_user" {% if user.role == 'user' %}selected{% endif %}>User</option>
+                                        </select>
+                                        <button type="submit" class="btn btn-secondary btn-small">Save</button>
+                                    </form>
                                 </td>
                                 <td>
                                     <div class="action-buttons">
@@ -915,6 +869,16 @@
     <script>
         let currentInstId = null;
 
+        function toggleRadiologistFields() {
+            const role = document.getElementById('addUserRole').value;
+            const radiologistFields = document.getElementById('radiologistFields');
+            if (role === 'radiologist') {
+                radiologistFields.style.display = 'block';
+            } else {
+                radiologistFields.style.display = 'none';
+            }
+        }
+
         function switchTab(tabName, buttonElement) {
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
@@ -1058,7 +1022,7 @@
         </div>
 
         <div class="page-footer">
-            <p>Powered by <strong>Lumos Lab</strong> - Healthcare Applications</p>
+            <p>Powered by <strong>Vetting Suite</strong> - Healthcare Applications</p>
         </div>
     </div>
 </body>

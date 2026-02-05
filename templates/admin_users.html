@@ -1,0 +1,224 @@
+<!-- Organisation Admin: User Management -->
+<!-- File: templates/admin_users.html -->
+
+{% extends "base.html" %}
+
+{% block title %}User Management - {{ org.name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>User Management: <strong>{{ org.name }}</strong></h1>
+    
+    <!-- Create New User Form -->
+    <div class="section">
+        <h2>Create New User in {{ org.name }}</h2>
+        <form method="post" action="/admin/settings/users/create" class="form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" name="username" placeholder="username" required 
+                           pattern="[a-zA-Z0-9_-]+" title="Alphanumeric, underscore, hyphen only">
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" placeholder="user@example.com" required>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" placeholder="temporary password" required>
+                    <small>User should change password on first login</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="org_role">Role:</label>
+                    <select id="org_role" name="org_role" required>
+                        <option value="org_user">User</option>
+                        <option value="radiologist">Radiologist</option>
+                        <option value="org_admin">Organisation Admin</option>
+                    </select>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Create User</button>
+        </form>
+    </div>
+    
+    <!-- Users Table -->
+    <div class="section">
+        <h2>Users in {{ org.name }}</h2>
+        
+        {% if members %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Joined</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for membership, user in members %}
+                <tr>
+                    <td><strong>{{ user.username }}</strong></td>
+                    <td>{{ user.email or '-' }}</td>
+                    <td>
+                        <span class="badge role-badge-{{ membership.org_role }}">
+                            {{ membership.org_role | replace('_', ' ') | title }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if membership.is_active and user.is_active %}
+                            <span class="badge badge-success">Active</span>
+                        {% else %}
+                            <span class="badge badge-danger">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ membership.created_at[:10] }}</td>
+                    <td>
+                        <a href="/admin/settings/users/{{ membership.id }}/edit" 
+                           class="btn btn-sm btn-info">Edit</a>
+                        
+                        {% if membership.is_active %}
+                        <a href="/admin/settings/users/{{ membership.id }}/deactivate" 
+                           class="btn btn-sm btn-danger"
+                           onclick="return confirm('Deactivate user?')">Deactivate</a>
+                        {% else %}
+                        <a href="/admin/settings/users/{{ membership.id }}/activate" 
+                           class="btn btn-sm btn-success">Reactivate</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="alert alert-info">No users in this organisation yet.</p>
+        {% endif %}
+    </div>
+    
+    <!-- Invite External User Section -->
+    <div class="section">
+        <h2>Invite Existing Platform User</h2>
+        <p>You can also invite users that already exist in the platform to join this organisation.</p>
+        <form method="post" action="/admin/settings/users/invite" class="form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="invite_username">Username:</label>
+                    <input type="text" id="invite_username" name="username" placeholder="username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="invite_role">Role:</label>
+                    <select id="invite_role" name="org_role" required>
+                        <option value="org_user">User</option>
+                        <option value="radiologist">Radiologist</option>
+                        <option value="org_admin">Organisation Admin</option>
+                    </select>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-secondary">Invite User</button>
+        </form>
+    </div>
+</div>
+
+<style>
+.container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+.section { margin-bottom: 2rem; padding: 1.5rem; border: 1px solid #ddd; border-radius: 4px; background: #fafafa; }
+.section h2 { margin-top: 0; color: #333; }
+
+.form { margin-top: 1rem; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+@media (max-width: 768px) {
+    .form-row { grid-template-columns: 1fr; }
+}
+
+.form-group { display: flex; flex-direction: column; }
+.form-group label { font-weight: bold; margin-bottom: 0.5rem; color: #333; }
+.form-group input, .form-group select { 
+    padding: 0.75rem; 
+    border: 1px solid #ccc; 
+    border-radius: 4px; 
+    font-size: 1rem;
+}
+.form-group input:focus, .form-group select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+}
+.form-group small { margin-top: 0.5rem; color: #666; font-size: 0.875rem; }
+
+.btn { 
+    padding: 0.5rem 1rem; 
+    text-decoration: none; 
+    border-radius: 4px; 
+    display: inline-block; 
+    cursor: pointer; 
+    border: none; 
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+.btn:hover { opacity: 0.9; }
+.btn-primary { background-color: #007bff; color: white; }
+.btn-secondary { background-color: #6c757d; color: white; }
+.btn-info { background-color: #17a2b8; color: white; }
+.btn-sm { padding: 0.25rem 0.75rem; font-size: 0.875rem; }
+
+.badge { 
+    padding: 0.35rem 0.65rem; 
+    border-radius: 4px; 
+    font-size: 0.875rem; 
+    font-weight: 500;
+    display: inline-block;
+}
+.badge-success { background-color: #28a745; color: white; }
+.badge-danger { background-color: #dc3545; color: white; }
+.role-badge-org_admin { background-color: #dc3545; color: white; }
+.role-badge-radiologist { background-color: #007bff; color: white; }
+.role-badge-org_user { background-color: #6c757d; color: white; }
+.role-badge-org_admin:before { content: "👑 "; }
+.role-badge-radiologist:before { content: "🏥 "; }
+
+.table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    margin-top: 1rem; 
+    background: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.table th, .table td { 
+    padding: 1rem 0.75rem; 
+    text-align: left; 
+    border-bottom: 1px solid #eee; 
+}
+.table th { 
+    background-color: #f8f9fa; 
+    font-weight: 600; 
+    color: #333;
+}
+.table tbody tr:hover { 
+    background-color: #f5f5f5; 
+}
+
+.alert { 
+    padding: 1rem; 
+    border-radius: 4px; 
+    margin-bottom: 1rem; 
+}
+.alert-info { 
+    background-color: #d1ecf1; 
+    color: #0c5460; 
+    border: 1px solid #bee5eb;
+}
+
+a { color: #007bff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+{% endblock %}

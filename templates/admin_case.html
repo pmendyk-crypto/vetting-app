@@ -31,7 +31,21 @@
     .page-footer p { margin: 0; }
     
     .wrapper { display: flex; flex-direction: column; min-height: 100vh; }
-    .container { flex: 1; }
+    .container { flex: 1; width: 100%; max-width: 100%; padding: 0 16px; box-sizing: border-box; }
+
+    .case-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; width: 100%; }
+    .case-grid .card { margin: 0; }
+
+    .preview-card { display: flex; flex-direction: column; }
+    .preview-body { flex: 1; min-height: 70vh; }
+    .preview-frame { width: 100%; height: 100%; border: 1px solid #ddd; border-radius: 6px; background: #fff; }
+
+    @media (max-width: 1200px) {
+      .case-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 800px) {
+      .case-grid { grid-template-columns: 1fr; }
+    }
 
     /* Step 2 + 3: add this at the bottom of the style block */
     @media (max-width: 700px) {
@@ -53,39 +67,67 @@
         <h1 style="margin:0;">Case details</h1>
       </div>
       <div class="actions">
-        {% if case['status'] == 'pending' %}
+        {% if case['status'] != 'vetted' or case['decision'] != 'Approve' %}
           <a class="btn" href="/admin/case/{{ case['id'] }}/edit">Edit Case</a>
+        {% endif %}
+        {% if case['status'] == 'vetted' or case['status'] == 'rejected' %}
+          <a class="btn" style="background: #f39c12;" href="/admin/case/{{ case['id'] }}/reopen">Reopen Case</a>
         {% endif %}
         <a class="btn secondary" href="/admin">Back to dashboard</a>
         <a class="btn secondary" href="/logout">Logout</a>
       </div>
     </div>
 
-    <div class="card">
-    <p><b>Case ID:</b> {{ case["id"] }}</p>
-    <p><b>Status:</b> {{ case["status"] }}</p>
-    <p><b>Created:</b> {{ case["created_at"] }}</p>
-    <p><b>Patient ID:</b> {{ case["patient_id"] }}</p>
-    <p><b>Study:</b> {{ case["study_description"] }}</p>
-    <p><b>Radiologist:</b> {{ case["radiologist"] }}</p>
-    <p><b>Admin notes:</b><br>{{ case["admin_notes"] or "" }}</p>
-    <p><b>Protocol:</b> {{ case["protocol"] or "" }}</p>
-    <p><b>Decision:</b> {{ case["decision"] or "" }}</p>
-    <p><b>Comment:</b><br>{{ case["decision_comment"] or "" }}</p>
+    <div class="case-grid">
+      <div class="card">
+        <h3 style="margin-top: 0;">Case Details</h3>
+        <p><b>Case ID:</b> {{ case["id"] }}</p>
+        <p><b>Status:</b> {{ case["status"] }}</p>
+        <p><b>Created:</b> {{ case["created_at"] }}</p>
+        <p><b>Patient ID:</b> {{ case["patient_id"] }}</p>
+        <p><b>Study:</b> {{ case["study_description"] }}</p>
+        <p><b>Radiologist:</b> {{ case["radiologist"] }}</p>
+        <p><b>Admin notes:</b><br>{{ case["admin_notes"] or "" }}</p>
+        <p><b>Protocol:</b> {{ case["protocol"] or "" }}</p>
+        <p><b>Decision:</b> {{ case["decision"] or "" }}</p>
+        <p><b>Comment:</b><br>{{ case["decision_comment"] or "" }}</p>
 
-</div>
-    <p class="small">
-      <a href="/case/{{ case['id'] }}/pdf" target="_blank">Open vetting Form</a>
-      {% if case["uploaded_filename"] %}
-        &nbsp;|&nbsp;
-        <a href="/case/{{ case['id'] }}/attachment" target="_blank">Download referral</a>
-      {% endif %}
-    </p>
+        <p class="small" style="margin-top: 12px;">
+          <a href="/case/{{ case['id'] }}/pdf" target="_blank">Open vetting Form</a>
+          {% if case["uploaded_filename"] %}
+            &nbsp;|&nbsp;
+            <a href="/case/{{ case['id'] }}/attachment" target="_blank">Download referral</a>
+          {% endif %}
+        </p>
+      </div>
+
+      <div class="card preview-card">
+        <h3 style="margin-top: 0;">Referral Preview</h3>
+        {% if case["uploaded_filename"] %}
+          <div class="preview-body">
+            <iframe src="/case/{{ case['id'] }}/attachment/inline#view=FitH" class="preview-frame"></iframe>
+          </div>
+        {% else %}
+          <p class="small">No referral attachment uploaded.</p>
+        {% endif %}
+      </div>
+
+      <div class="card preview-card">
+        <h3 style="margin-top: 0;">Vetted Form Preview</h3>
+        {% if case["status"] == "vetted" or case["status"] == "rejected" %}
+          <div class="preview-body">
+            <iframe src="/case/{{ case['id'] }}/pdf?inline=1#view=FitH" class="preview-frame"></iframe>
+          </div>
+        {% else %}
+          <p class="small">Vetting form will appear once the case is vetted.</p>
+        {% endif %}
+      </div>
+    </div>
     </div>
     </div>
 
     <div class="page-footer">
-      <p>Powered by <strong>Lumos Lab</strong> - Healthcare Applications</p>
+      <p>Powered by <strong>Vetting Suite</strong> - Healthcare Applications</p>
     </div>
   </div>
 </body>
