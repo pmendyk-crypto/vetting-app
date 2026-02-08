@@ -227,7 +227,161 @@ def using_postgres() -> bool:
 
 def init_db() -> None:
     if using_postgres():
+        conn = get_db()
+
+        # Core multi-tenant tables
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS organisations (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                slug TEXT NOT NULL UNIQUE,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                modified_at TEXT
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE,
+                email TEXT UNIQUE,
+                password_hash TEXT NOT NULL,
+                salt_hex TEXT NOT NULL,
+                is_superuser INTEGER NOT NULL DEFAULT 0,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                modified_at TEXT
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memberships (
+                id SERIAL PRIMARY KEY,
+                org_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                org_role TEXT NOT NULL DEFAULT 'org_user',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                modified_at TEXT,
+                UNIQUE(org_id, user_id)
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS radiologist_profiles (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE,
+                gmc TEXT,
+                specialty TEXT,
+                display_name TEXT,
+                created_at TEXT NOT NULL,
+                modified_at TEXT
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id SERIAL PRIMARY KEY,
+                org_id INTEGER,
+                user_id INTEGER,
+                action TEXT NOT NULL,
+                target_user_id INTEGER,
+                target_org_id INTEGER,
+                details TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+
+        # Legacy operational tables (used by main app)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS institutions (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                sla_hours INTEGER NOT NULL DEFAULT 48,
+                created_at TEXT NOT NULL,
+                modified_at TEXT,
+                org_id INTEGER
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cases (
+                id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                patient_first_name TEXT NOT NULL,
+                patient_surname TEXT NOT NULL,
+                patient_referral_id TEXT,
+                institution_id INTEGER,
+                study_description TEXT NOT NULL,
+                admin_notes TEXT,
+                radiologist TEXT NOT NULL,
+                uploaded_filename TEXT,
+                stored_filepath TEXT,
+                status TEXT NOT NULL,
+                protocol TEXT,
+                decision TEXT,
+                decision_comment TEXT,
+                vetted_at TEXT,
+                org_id INTEGER
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS protocols (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                institution_id INTEGER NOT NULL,
+                instructions TEXT,
+                last_modified TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                org_id INTEGER,
+                UNIQUE(name, institution_id)
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS radiologists (
+                name TEXT PRIMARY KEY,
+                first_name TEXT,
+                email TEXT,
+                surname TEXT,
+                gmc TEXT,
+                speciality TEXT
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS config (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """
+        )
+
+        conn.commit()
+        conn.close()
         return
+
     conn = get_db()
 
     # Institutions table
@@ -925,28 +1079,6 @@ def ensure_superadmin_user() -> None:
 
 
 # -------------------------
-# Init DB on startup
-# -------------------------
-try:
-    print("[startup] Initializing database...")
-    init_db()
-    ensure_cases_schema()
-    ensure_institutions_schema()
-    ensure_radiologists_schema()
-    ensure_users_schema()
-    ensure_protocols_schema()
-    ensure_seed_data()
-    ensure_superadmin_user()
-    ensure_default_protocols()
-    print("[startup] Database initialization complete")
-except Exception as e:
-    print(f"[ERROR] Database initialization failed: {e}")
-    import traceback
-    traceback.print_exc()
-    print("[ERROR] Application may not function correctly. Check DATABASE_URL environment variable.")
-
-
-# -------------------------
 # Institutions
 # -------------------------
 def list_institutions(org_id: int | None = None) -> list[dict]:
@@ -1172,6 +1304,28 @@ def get_request_org_id(request: Request) -> int | None:
 
 def redirect_to_login(role: str, next_path: str):
     return RedirectResponse(url=f"/login?role={role}&next={next_path}", status_code=303)
+
+
+# -------------------------
+# Init DB on startup
+# -------------------------
+try:
+    print("[startup] Initializing database...")
+    init_db()
+    ensure_cases_schema()
+    ensure_institutions_schema()
+    ensure_radiologists_schema()
+    ensure_users_schema()
+    ensure_protocols_schema()
+    ensure_seed_data()
+    ensure_superadmin_user()
+    ensure_default_protocols()
+    print("[startup] Database initialization complete")
+except Exception as e:
+    print(f"[ERROR] Database initialization failed: {e}")
+    import traceback
+    traceback.print_exc()
+    print("[ERROR] Application may not function correctly. Check DATABASE_URL environment variable.")
 
 
 # -------------------------
