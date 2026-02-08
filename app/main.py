@@ -207,6 +207,12 @@ def get_db() -> sqlite3.Connection:
                 except Exception:
                     pass
 
+            def rollback(self):
+                try:
+                    self._trans.rollback()
+                except Exception:
+                    pass
+
             def close(self):
                 try:
                     self._conn.close()
@@ -2175,18 +2181,46 @@ def settings_add_protocol(request: Request, name: str = Form(...), institution_i
     conn = get_db()
     try:
         if org_id and table_has_column("protocols", "org_id"):
-            conn.execute(
-                "INSERT OR REPLACE INTO protocols (name, institution_id, instructions, last_modified, is_active, org_id) VALUES (?, ?, ?, ?, ?, ?)",
-                (name.strip(), inst_id, instructions.strip(), datetime.now().isoformat(), 1, org_id)
-            )
+            if using_postgres():
+                conn.execute(
+                    """
+                    INSERT INTO protocols (name, institution_id, instructions, last_modified, is_active, org_id)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (name, institution_id) DO UPDATE SET
+                      instructions = EXCLUDED.instructions,
+                      last_modified = EXCLUDED.last_modified,
+                      is_active = EXCLUDED.is_active,
+                      org_id = EXCLUDED.org_id
+                    """,
+                    (name.strip(), inst_id, instructions.strip(), datetime.now().isoformat(), 1, org_id)
+                )
+            else:
+                conn.execute(
+                    "INSERT OR REPLACE INTO protocols (name, institution_id, instructions, last_modified, is_active, org_id) VALUES (?, ?, ?, ?, ?, ?)",
+                    (name.strip(), inst_id, instructions.strip(), datetime.now().isoformat(), 1, org_id)
+                )
         else:
-            conn.execute(
-                "INSERT OR REPLACE INTO protocols (name, institution_id, instructions, last_modified, is_active) VALUES (?, ?, ?, ?, ?)",
-                (name.strip(), inst_id, instructions.strip(), datetime.now().isoformat(), 1)
-            )
+            if using_postgres():
+                conn.execute(
+                    """
+                    INSERT INTO protocols (name, institution_id, instructions, last_modified, is_active)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT (name, institution_id) DO UPDATE SET
+                      instructions = EXCLUDED.instructions,
+                      last_modified = EXCLUDED.last_modified,
+                      is_active = EXCLUDED.is_active
+                    """,
+                    (name.strip(), inst_id, instructions.strip(), datetime.now().isoformat(), 1)
+                )
+            else:
+                conn.execute(
+                    "INSERT OR REPLACE INTO protocols (name, institution_id, instructions, last_modified, is_active) VALUES (?, ?, ?, ?, ?)",
+                    (name.strip(), inst_id, instructions.strip(), datetime.now().isoformat(), 1)
+                )
         conn.commit()
     except Exception as e:
-        conn.rollback()
+        if hasattr(conn, "rollback"):
+            conn.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to add protocol: {str(e)}")
     finally:
         conn.close()
