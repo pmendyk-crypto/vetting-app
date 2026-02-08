@@ -221,7 +221,13 @@ def get_db() -> sqlite3.Connection:
     return conn
 
 
+def using_postgres() -> bool:
+    return bool(os.environ.get("DATABASE_URL"))
+
+
 def init_db() -> None:
+    if using_postgres():
+        return
     conn = get_db()
 
     # Institutions table
@@ -325,6 +331,8 @@ def ensure_cases_schema() -> None:
     """
     Safe schema upgrades for older hub.db files.
     """
+    if using_postgres():
+        return
     conn = get_db()
     cur = conn.cursor()
 
@@ -363,6 +371,8 @@ def ensure_institutions_schema() -> None:
     """
     Safe schema upgrades for the institutions table (Bug 2: Add modified_at column).
     """
+    if using_postgres():
+        return
     conn = get_db()
     cur = conn.cursor()
 
@@ -385,6 +395,8 @@ def ensure_radiologists_schema() -> None:
     """
     Safe schema upgrades for the radiologists table.
     """
+    if using_postgres():
+        return
     conn = get_db()
     cur = conn.cursor()
 
@@ -413,6 +425,8 @@ def ensure_users_schema() -> None:
     """
     Safe schema upgrades for the users table.
     """
+    if using_postgres():
+        return
     conn = get_db()
     cur = conn.cursor()
 
@@ -439,6 +453,8 @@ def ensure_protocols_schema() -> None:
     """
     Safe schema upgrades for the protocols table.
     """
+    if using_postgres():
+        return
     conn = get_db()
     cur = conn.cursor()
 
@@ -549,6 +565,8 @@ DEFAULT_PROTOCOLS = [
 
 
 def ensure_default_protocols() -> None:
+    if using_postgres():
+        return
     conn = get_db()
     row = conn.execute("SELECT COUNT(*) AS c FROM protocols").fetchone()
     if row and row["c"] == 0:
@@ -613,7 +631,10 @@ def upsert_protocol(name: str) -> None:
     if not name:
         return
     conn = get_db()
-    conn.execute("INSERT OR IGNORE INTO protocols(name, is_active) VALUES(?, 1)", (name,))
+    if using_postgres():
+        conn.execute("INSERT INTO protocols(name, is_active) VALUES(?, 1)", (name,))
+    else:
+        conn.execute("INSERT OR IGNORE INTO protocols(name, is_active) VALUES(?, 1)", (name,))
     conn.execute("UPDATE protocols SET is_active = 1 WHERE name = ?", (name,))
     conn.commit()
     conn.close()
@@ -826,6 +847,8 @@ DEFAULT_INSTITUTIONS = [
 
 
 def ensure_seed_data() -> None:
+    if using_postgres():
+        return
     if not get_setting("system_initialized", ""):
         set_setting("system_initialized", "true")
 
@@ -867,17 +890,13 @@ def ensure_superadmin_user() -> None:
     Username: superadmin
     Password: admin 111
     """
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("PRAGMA table_info(users)")
-    cols = {row[1] for row in cur.fetchall()}
-
     username = "superadmin"
     password = "admin 111"
     email = "superadmin@lumoslab.com"
     now = utc_now_iso()
 
-    if "password_hash" in cols and "is_superuser" in cols:
+    if table_has_column("users", "password_hash") and table_has_column("users", "is_superuser"):
+        conn = get_db()
         salt = secrets.token_bytes(16)
         pw_hash = hash_password(password, salt)
         conn.execute(
@@ -897,8 +916,6 @@ def ensure_superadmin_user() -> None:
         conn.commit()
         conn.close()
         return
-
-    conn.close()
 
     # Legacy schema fallback
     try:
@@ -1103,6 +1120,14 @@ def require_radiologist(request: Request) -> dict:
 
 def table_exists(table_name: str) -> bool:
     conn = get_db()
+    if using_postgres():
+        row = conn.execute(
+            "SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = ?",
+            (table_name,),
+        ).fetchone()
+        conn.close()
+        return bool(row)
+
     row = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
         (table_name,),
@@ -1113,6 +1138,14 @@ def table_exists(table_name: str) -> bool:
 
 def table_has_column(table_name: str, column_name: str) -> bool:
     conn = get_db()
+    if using_postgres():
+        row = conn.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? AND column_name = ?",
+            (table_name, column_name),
+        ).fetchone()
+        conn.close()
+        return bool(row)
+
     cur = conn.cursor()
     cur.execute(f"PRAGMA table_info({table_name})")
     cols = {row[1] for row in cur.fetchall()}
