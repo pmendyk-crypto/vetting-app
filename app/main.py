@@ -254,7 +254,9 @@ def init_db() -> None:
                 is_superuser INTEGER NOT NULL DEFAULT 0,
                 is_active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
-                modified_at TEXT
+                modified_at TEXT,
+                first_name TEXT,
+                surname TEXT
             )
             """
         )
@@ -580,6 +582,12 @@ def ensure_users_schema() -> None:
     Safe schema upgrades for the users table.
     """
     if using_postgres():
+        conn = get_db()
+        conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT")
+        conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS surname TEXT")
+        conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT")
+        conn.commit()
+        conn.close()
         return
     conn = get_db()
     cur = conn.cursor()
@@ -2236,16 +2244,27 @@ def add_user(
 
         conn = get_db()
         try:
-            conn.execute(
-                """
-                INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname)
-                VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
-                """,
-                (username, email.strip(), pw_hash.hex(), salt.hex(), now, now, first_name.strip(), surname.strip()),
-            )
+            if using_postgres():
+                user_row = conn.execute(
+                    """
+                    INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname)
+                    VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
+                    RETURNING id
+                    """,
+                    (username, email.strip(), pw_hash.hex(), salt.hex(), now, now, first_name.strip(), surname.strip()),
+                ).fetchone()
+                user_id = user_row["id"] if isinstance(user_row, dict) else user_row[0]
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname)
+                    VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
+                    """,
+                    (username, email.strip(), pw_hash.hex(), salt.hex(), now, now, first_name.strip(), surname.strip()),
+                )
 
-            user_row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
-            user_id = user_row["id"] if user_row else None
+                user_row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+                user_id = user_row["id"] if user_row else None
             if not user_id:
                 raise HTTPException(status_code=500, detail="Failed to create user")
 
@@ -2260,20 +2279,38 @@ def add_user(
 
             if role == "radiologist":
                 display = radiologist_name or f"{first_name.strip()} {surname.strip()}".strip() or username
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO radiologists(name, first_name, email, surname, gmc, speciality)
-                    VALUES(?, ?, ?, ?, ?, ?)
-                    """,
-                    (display, first_name.strip(), email.strip(), surname.strip(), gmc, speciality),
-                )
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO radiologist_profiles(user_id, gmc, specialty, display_name, created_at, modified_at)
-                    VALUES(?, ?, ?, ?, ?, ?)
-                    """,
-                    (user_id, gmc or None, speciality or None, display, now, now),
-                )
+                if using_postgres():
+                    conn.execute(
+                        """
+                        INSERT INTO radiologists(name, first_name, email, surname, gmc, speciality)
+                        VALUES(?, ?, ?, ?, ?, ?)
+                        ON CONFLICT DO NOTHING
+                        """,
+                        (display, first_name.strip(), email.strip(), surname.strip(), gmc, speciality),
+                    )
+                    conn.execute(
+                        """
+                        INSERT INTO radiologist_profiles(user_id, gmc, specialty, display_name, created_at, modified_at)
+                        VALUES(?, ?, ?, ?, ?, ?)
+                        ON CONFLICT (user_id) DO NOTHING
+                        """,
+                        (user_id, gmc or None, speciality or None, display, now, now),
+                    )
+                else:
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO radiologists(name, first_name, email, surname, gmc, speciality)
+                        VALUES(?, ?, ?, ?, ?, ?)
+                        """,
+                        (display, first_name.strip(), email.strip(), surname.strip(), gmc, speciality),
+                    )
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO radiologist_profiles(user_id, gmc, specialty, display_name, created_at, modified_at)
+                        VALUES(?, ?, ?, ?, ?, ?)
+                        """,
+                        (user_id, gmc or None, speciality or None, display, now, now),
+                    )
 
             conn.commit()
         finally:
@@ -3784,16 +3821,27 @@ def mt_add_user_submit(
         salt = secrets.token_bytes(16)
         pw_hash = hash_password(password, salt)
 
-        conn.execute(
-            """
-            INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname)
-            VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
-            """,
-            (username, email, pw_hash.hex(), salt.hex(), now, now, first_name, surname),
-        )
+        if using_postgres():
+            user_row = conn.execute(
+                """
+                INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname)
+                VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
+                RETURNING id
+                """,
+                (username, email, pw_hash.hex(), salt.hex(), now, now, first_name, surname),
+            ).fetchone()
+            user_id = user_row["id"] if isinstance(user_row, dict) else user_row[0]
+        else:
+            conn.execute(
+                """
+                INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname)
+                VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
+                """,
+                (username, email, pw_hash.hex(), salt.hex(), now, now, first_name, surname),
+            )
 
-        user_row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
-        user_id = user_row["id"] if user_row else None
+            user_row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+            user_id = user_row["id"] if user_row else None
         if not user_id:
             raise HTTPException(status_code=500, detail="Failed to create user")
 
@@ -3807,20 +3855,38 @@ def mt_add_user_submit(
 
         if role == "radiologist":
             display = display_name or f"{first_name} {surname}".strip() or username
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO radiologists(name, first_name, email, surname, gmc, speciality)
-                VALUES(?, ?, ?, ?, ?, ?)
-                """,
-                (display, first_name, email, surname, gmc, speciality),
-            )
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO radiologist_profiles(user_id, gmc, specialty, display_name, created_at, modified_at)
-                VALUES(?, ?, ?, ?, ?, ?)
-                """,
-                (user_id, gmc or None, speciality or None, display, now, now),
-            )
+            if using_postgres():
+                conn.execute(
+                    """
+                    INSERT INTO radiologists(name, first_name, email, surname, gmc, speciality)
+                    VALUES(?, ?, ?, ?, ?, ?)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (display, first_name, email, surname, gmc, speciality),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO radiologist_profiles(user_id, gmc, specialty, display_name, created_at, modified_at)
+                    VALUES(?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (user_id) DO NOTHING
+                    """,
+                    (user_id, gmc or None, speciality or None, display, now, now),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO radiologists(name, first_name, email, surname, gmc, speciality)
+                    VALUES(?, ?, ?, ?, ?, ?)
+                    """,
+                    (display, first_name, email, surname, gmc, speciality),
+                )
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO radiologist_profiles(user_id, gmc, specialty, display_name, created_at, modified_at)
+                    VALUES(?, ?, ?, ?, ?, ?)
+                    """,
+                    (user_id, gmc or None, speciality or None, display, now, now),
+                )
 
         conn.commit()
         conn.close()
