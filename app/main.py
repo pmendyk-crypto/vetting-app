@@ -3347,15 +3347,27 @@ def mt_create_org_submit(
     conn = get_db()
     try:
         now = utc_now_iso()
-        conn.execute(
-            """
-            INSERT INTO organisations (name, slug, is_active, created_at, modified_at)
-            VALUES (?, ?, 1, ?, ?)
-            """,
-            (name, slug, now, now)
-        )
-        conn.commit()
-        org_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        if using_postgres():
+            row = conn.execute(
+                """
+                INSERT INTO organisations (name, slug, is_active, created_at, modified_at)
+                VALUES (?, ?, 1, ?, ?)
+                RETURNING id
+                """,
+                (name, slug, now, now),
+            ).fetchone()
+            org_id = row["id"] if isinstance(row, dict) else row[0]
+            conn.commit()
+        else:
+            conn.execute(
+                """
+                INSERT INTO organisations (name, slug, is_active, created_at, modified_at)
+                VALUES (?, ?, 1, ?, ?)
+                """,
+                (name, slug, now, now)
+            )
+            conn.commit()
+            org_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         
         # Create default institution with same name as org
         if table_has_column("institutions", "org_id"):
