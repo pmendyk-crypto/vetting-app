@@ -934,11 +934,7 @@ def verify_user(username: str, password: str) -> dict | None:
 def list_users(org_id: int | None = None) -> list[dict]:
     conn = get_db()
     # Check which table structure we have (old vs new)
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(users)")
-    columns = [col[1] for col in cursor.fetchall()]
-    
-    if "is_superuser" in columns:
+    if table_has_column("users", "is_superuser"):
         # New multi-tenant structure
         if org_id:
             rows = conn.execute(
