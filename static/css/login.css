@@ -12,7 +12,9 @@ body{
   margin:0;
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
   color: white;
-  background: linear-gradient(180deg,var(--bg-gradient-1),var(--bg-gradient-2));
+  background-image: url('/static/images/login-bg.png');
+  background-size: cover;
+  background-position: center center;
   background-attachment: fixed;
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
@@ -20,18 +22,19 @@ body{
   align-items:center;
   justify-content:center;
 }
-/* subtle SVG overlay evoking scan slices and network nodes */
+/* dark overlay so text stays legible over the photo */
 body::before{
   content:'';
   position:fixed;
   inset:0;
-  background-image: url('/static/images/login-bg.svg');
-  background-repeat:no-repeat;
-  background-position:center center;
-  background-size:cover;
+  background: linear-gradient(
+    135deg,
+    rgba(7,19,58,0.82) 0%,
+    rgba(15,23,36,0.72) 50%,
+    rgba(2,6,23,0.88) 100%
+  );
   pointer-events:none;
   z-index:0;
-  mix-blend-mode:overlay;
 }
 .container{
   width:100%;
@@ -50,11 +53,13 @@ body::before{
 .hero h1{font-size:32px;margin:0 0 12px 0;}
 .hero p{color:var(--text-muted);margin:0 0 18px 0;line-height:1.4}
 .login-card{
-  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
-  border:1px solid var(--card-border);
+  background: rgba(10,18,40,0.65);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border:1px solid rgba(255,255,255,0.12);
   padding:28px;
   border-radius:12px;
-  box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+  box-shadow: 0 8px 40px rgba(2,6,23,0.75);
 }
 .form-row{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
 label{font-size:13px;color:var(--text-muted)}

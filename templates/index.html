@@ -6,291 +6,139 @@
   <title>Vetting Suite</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
+    html, body { height: 100%; overflow: hidden; margin: 0; }
     body {
       display: flex;
       flex-direction: column;
-      min-height: 100vh;
-      margin: 0;
+      background-image: url('/static/images/login-bg.png');
+      background-size: cover;
+      background-position: center center;
+      position: relative;
+      font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     }
-
-    .header {
-      background: rgba(0,0,0,0.3);
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      padding: 16px 30px;
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(7,19,58,0.80) 0%, rgba(15,23,36,0.68) 50%, rgba(2,6,23,0.86) 100%);
+      pointer-events: none;
+      z-index: 0;
     }
-
-    .powered-by {
-      color: rgba(255,255,255,0.6);
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .header-logo {
-      height: 36px;
-      width: auto;
-      border-radius: 6px;
-    }
-
     .main-content {
+      position: relative;
+      z-index: 1;
       display: flex;
       flex: 1;
       justify-content: center;
+      align-items: center;
+      height: 100vh;
+      padding: 0 60px;
+      box-sizing: border-box;
+      gap: 0;
+      max-width: 1100px;
+      margin: 0 auto;
+      width: 100%;
     }
-
     .left-section {
       flex: 2;
-      padding: 80px 60px;
       display: flex;
       flex-direction: column;
-      justify-content: center;
+      gap: 24px;
+      padding-right: 48px;
+      border-right: 1px solid rgba(255,255,255,0.12);
     }
-
-    .logo-svg {
-      height: 140px;
-      width: 140px;
-      margin-bottom: 40px;
-    }
-
-    .left-section h1 {
-      font-size: 48px;
-      color: white;
-      margin: 0 0 12px 0;
-      font-weight: 400;
-      line-height: 1.2;
-    }
-
-    .left-section .company-name {
-      font-size: 16px;
-      color: #FFD700;
-      margin: 0 0 24px 0;
-      font-weight: 400;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-    }
-
-    .left-section p {
-      color: rgba(255,255,255,0.75);
-      font-size: 15px;
-      line-height: 1.7;
-      margin: 0 0 16px 0;
-      max-width: 550px;
-    }
-
-    .right-section {
-      flex: 0 1 520px;
+    .left-section img {
       width: 100%;
-      padding: 60px 40px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      background: rgba(255,255,255,0.02);
-      border-left: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .right-section h2 {
-      color: white;
-      font-size: 22px;
-      margin: 0 0 8px 0;
-      font-weight: 400;
-    }
-
-    .center-logo-wrap {
-      display: flex;
-      justify-content: center;
-      margin: 0 0 20px 0;
-    }
-
-    .center-logo {
-      width: min(280px, 70%);
+      max-width: 420px;
       height: auto;
-      border-radius: 8px;
-      border: none;
-      box-shadow: none;
-      background: transparent;
+      border-radius: 16px;
     }
-
-    .right-section .intro-text {
-      color: rgba(255,255,255,0.7);
-      font-size: 12px;
-      margin: 0 0 24px 0;
+    .taglines {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .taglines p {
+      margin: 0;
+      color: rgba(255,255,255,0.80);
+      font-size: 16px;
       line-height: 1.6;
+      font-weight: 300;
     }
-
+    @media (max-width: 900px) { .left-section { display: none; } }
+    .right-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding-left: 48px;
+    }
     .login-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      padding: 24px;
-      border-radius: 12px;
-    }
-
-    .form-row {
-      margin-bottom: 14px;
-    }
-
-    .form-row label {
-      display: block;
-      color: rgba(255,255,255,0.75);
-      font-size: 12px;
-      margin-bottom: 5px;
-      font-weight: 400;
-    }
-
-    .form-row input {
       width: 100%;
-      padding: 9px 11px;
-      border-radius: 6px;
+      max-width: 320px;
+      padding: 32px 28px;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(0,0,0,0.3);
-      color: white;
-      font-size: 13px;
-      box-sizing: border-box;
+      border-radius: 14px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
     }
-
-    .form-row input::placeholder {
-      color: rgba(255,255,255,0.4);
+    .right-section h2 { color: white; font-size: 22px; margin: 0 0 8px 0; font-weight: 400; }
+    .right-section .intro-text { color: rgba(255,255,255,0.6); font-size: 12px; margin: 0 0 24px 0; line-height: 1.6; }
+    .form-row { margin-bottom: 14px; }
+    .form-row label { display: block; color: rgba(255,255,255,0.75); font-size: 12px; margin-bottom: 5px; }
+    .form-row input {
+      width: 100%; padding: 9px 11px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.3); color: white; font-size: 13px; box-sizing: border-box;
     }
-
-    .form-row input:focus {
-      outline: none;
-      border-color: rgba(255,255,255,0.15);
-      background: rgba(0,0,0,0.4);
-    }
-
+    .form-row input:focus { outline: none; border-color: rgba(255,255,255,0.2); background: rgba(0,0,0,0.4); }
     .btn-signin {
-      width: 100%;
-      padding: 10px;
-      background: #1f6feb;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-weight: 400;
-      cursor: pointer;
-      font-size: 13px;
-      margin-top: 8px;
+      width: 100%; padding: 10px; background: #1f6feb; color: white;
+      border: none; border-radius: 6px; font-weight: 400; cursor: pointer; font-size: 13px; margin-top: 8px;
     }
-
-    .btn-signin:hover {
-      filter: brightness(1.05);
-    }
-
-    .err {
-      color: #ffb4b4;
-      background: rgba(255,180,180,0.08);
-      padding: 8px 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      margin-top: 8px;
-    }
-
-    @media (max-width: 1200px) {
-      .left-section {
-        padding: 60px 40px;
-      }
-    }
-
-    @media (max-width: 900px) {
-      .main-content {
-        flex-direction: column;
-      }
-
-      .left-section {
-        padding: 50px 30px;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
-      }
-
-      .right-section {
-        border-left: none;
-        padding: 50px 30px;
-      }
-
-      .left-section h1 {
-        font-size: 36px;
-      }
-
-      .logo-svg {
-        height: 100px;
-        width: 100px;
-        margin-bottom: 30px;
-      }
-    }
-
-    @media (max-width: 600px) {
-      .header {
-        padding: 12px 20px;
-      }
-
-      .left-section {
-        padding: 40px 20px;
-      }
-
-      .right-section {
-        padding: 40px 20px;
-      }
-
-      .left-section h1 {
-        font-size: 28px;
-        margin-bottom: 8px;
-      }
-
-      .left-section p {
-        font-size: 14px;
-      }
-
-      .logo-svg {
-        height: 80px;
-        width: 80px;
-      }
-    }
+    .btn-signin:hover { filter: brightness(1.07); }
+    .small { font-size: 12px; color: rgba(255,255,255,0.5); }
+    .err { color: #ffb4b4; background: rgba(255,180,180,0.08); padding: 8px 10px; border-radius: 6px; font-size: 12px; margin-top: 8px; }
+    @media (max-width: 600px) { .right-section { flex: 1; padding: 40px 20px; border-left: none; } }
   </style>
 </head>
 <body>
-  <!-- Main Content -->
   <div class="main-content">
-    <!-- RIGHT SECTION: Login Form -->
-    <div class="right-section">
-      <div class="center-logo-wrap">
-          <img class="center-logo" src="/static/images/logo-light.png" alt="Lumos Lab"
-             onerror="this.style.display='none';">
+    <div class="left-section">
+      <img src="/static/images/logo-light.png" alt="Lumos Lab" onerror="this.style.display='none'">
+      <div class="taglines">
+        <p>One platform for referrals and real-time justification, built for modern radiology workflows.</p>
+        <p>Faster triage, consistent decisions, and smoother turnaround across every modality.</p>
+        <p>Designed to keep teams aligned, speed up decision-making, and support a safer, more efficient patient pathway.</p>
       </div>
-      <h2>Sign In</h2>
-      <p class="intro-text">
-        Enter your credentials to access the Vetting Suite. Your role determines your access level.
-      </p>
-
+    </div>
+    <div class="right-section">
       <div class="login-card">
-        <form method="post" action="/login">
-          <input type="hidden" name="next" value="/">
-
-          <div class="form-row">
-            <label for="username">Username</label>
-            <input id="username" name="username" type="text" required autofocus>
-          </div>
-
-          <div class="form-row">
-            <label for="password">Password</label>
-            <input id="password" name="password" type="password" required>
-          </div>
-
-          <button type="submit" class="btn-signin">Sign In</button>
-
-          <div style="margin-top: 10px; text-align: right;">
-            <a class="small" href="/forgot-password">Forgot password?</a>
-          </div>
-
-          {% if expired == '1' %}
-            <div class="err" style="background: rgba(234,179,8,0.15); border-color: rgba(234,179,8,0.4); color: #fde68a;">
-              Your session has expired due to inactivity. Please sign in again.
-            </div>
-          {% endif %}
-          {% if error %}
-            <div class="err">{{ error }}</div>
-          {% endif %}
-        </form>
+      <h2>Sign In</h2>
+      <p class="intro-text">Enter your credentials to access the Vetting Suite. Your role determines your access level.</p>
+      <form method="post" action="/login">
+        <input type="hidden" name="next" value="/">
+        <div class="form-row">
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" required autofocus>
+        </div>
+        <div class="form-row">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" required>
+        </div>
+        <button type="submit" class="btn-signin">Sign In</button>
+        <div style="margin-top:10px;text-align:right;">
+          <a class="small" href="/forgot-password">Forgot password?</a>
+        </div>
+        {% if expired == '1' %}
+          <div class="err" style="background:rgba(234,179,8,0.12);color:#fde68a;">Your session has expired. Please sign in again.</div>
+        {% endif %}
+        {% if error %}
+          <div class="err">{{ error }}</div>
+        {% endif %}
+      </form>
       </div>
     </div>
   </div>
