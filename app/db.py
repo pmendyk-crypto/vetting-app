@@ -112,18 +112,12 @@ def get_db_sqlalchemy(database_url: str) -> sqlite3.Connection:
                     param_map[f"p{i}"] = params[i]
                 named.append(parts[-1])
                 sql_named = "".join(named)
-                try:
-                    res = self._conn.execute(text(sql_named), param_map)
-                    return SAResult(res)
-                except Exception:
-                    return SAResult(self._conn.execute(text(sql)))
+                res = self._conn.execute(text(sql_named), param_map)
+                return SAResult(res)
             else:
                 if isinstance(params, (list, tuple)):
                     param_map = {f"p{i}": v for i, v in enumerate(params)}
-                    try:
-                        return SAResult(self._conn.execute(text(sql), param_map))
-                    except Exception:
-                        return SAResult(self._conn.execute(text(sql)))
+                    return SAResult(self._conn.execute(text(sql), param_map))
                 else:
                     return SAResult(self._conn.execute(text(sql), params or {}))
         

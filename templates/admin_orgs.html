@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Users</title>
+  <title>Organisations</title>
   <link rel="stylesheet" href="/static/css/site.css">
 </head>
 <body>
   <div class="container" style="max-width: 1200px; margin: 20px auto;">
     <div class="topbar">
-      <h1>Users</h1>
+      <h1>Organisations</h1>
       <div class="actions">
         <a class="btn" href="/mt">Back to Dashboard</a>
         <a class="btn secondary" href="/logout">Logout</a>
@@ -20,22 +20,20 @@
       <thead>
         <tr>
           <th>ID</th>
-          <th>Username</th>
-          <th>Email</th>
-          <th>Org Role</th>
-          <th>Org</th>
+          <th>Name</th>
+          <th>Slug</th>
           <th>Active</th>
+          <th>Members</th>
         </tr>
       </thead>
       <tbody>
-        {% for u in users %}
+        {% for org in orgs %}
         <tr>
-          <td>{{ u.user_id }}</td>
-          <td>{{ u.username }}</td>
-          <td>{{ u.email or "-" }}</td>
-          <td>{{ u.org_role or "-" }}</td>
-          <td>{{ u.org_name or "-" }}</td>
-          <td>{{ "Yes" if u.is_active else "No" }}</td>
+          <td>{{ org.id }}</td>
+          <td>{{ org.name }}</td>
+          <td>{{ org.slug }}</td>
+          <td>{{ "Yes" if org.is_active else "No" }}</td>
+          <td>{{ org.member_count }}</td>
         </tr>
         {% endfor %}
       </tbody>

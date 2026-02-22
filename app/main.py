@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException
-from fastapi.responses import RedirectResponse, FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import RedirectResponse, FileResponse, HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 
@@ -16,7 +16,7 @@ except ImportError:
 
 from pathlib import Path
 from uuid import uuid4
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import sqlite3
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -31,6 +31,9 @@ import string
 
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+import urllib.request
+import urllib.parse
+import json as _json
 
 
 # -------------------------
@@ -40,6 +43,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = Path(os.environ.get("DB_PATH", str(BASE_DIR / "hub.db")))
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", str(BASE_DIR / "uploads")))
 UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
+
+# Storage TTL constants (in days)
+REFERRAL_FILE_TTL_DAYS = int(os.environ.get("REFERRAL_FILE_TTL_DAYS", "7"))   # delete uploaded file after 7 days
+CASE_RECORD_TTL_DAYS   = int(os.environ.get("CASE_RECORD_TTL_DAYS",   "28"))  # keep case record/PDF for 28 days
+
+# SMTP notification settings
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+
+# iRefer API settings
+IREFER_API_KEY = os.environ.get("IREFER_API_KEY", "")
+_irefer_guidelines_cache: list = []  # in-memory cache, populated on first request
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER)
 
 # Log paths at startup for debugging persistence issues
 print(f"[startup] BASE_DIR={BASE_DIR}, DB_PATH={DB_PATH}, UPLOAD_DIR={UPLOAD_DIR}")
@@ -61,6 +79,18 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 APP_SECRET = os.environ.get("APP_SECRET", "dev-secret-change-me")
 SESSION_TIMEOUT_MINUTES = 30  # Session expires after 30 minutes of inactivity
 
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8000")
+SMTP_HOST = os.environ.get("SMTP_HOST")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
+SMTP_FROM = os.environ.get("SMTP_FROM") or SMTP_USER
+AUTO_PROVISION_SUPERADMIN = os.environ.get("AUTO_PROVISION_SUPERADMIN", "false").strip().lower() in ("1", "true", "yes", "on")
+SUPERADMIN_USERNAME = os.environ.get("SUPERADMIN_USERNAME", "superadmin").strip() or "superadmin"
+SUPERADMIN_EMAIL = os.environ.get("SUPERADMIN_EMAIL", "superadmin@lumoslab.com").strip() or "superadmin@lumoslab.com"
+SUPERADMIN_PASSWORD = os.environ.get("SUPERADMIN_PASSWORD", "").strip()
+LOGO_DARK_URL = os.environ.get("LOGO_DARK_URL", "/static/images/logo-light.png")
+
 # Warn if using default secret in production
 if APP_SECRET == "dev-secret-change-me":
     print("[WARNING] Using default APP_SECRET! Set APP_SECRET environment variable in production!")
@@ -80,6 +110,27 @@ class NoCacheMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(NoCacheMiddleware)
+
+
+# Global 401/403 handler — redirect to login instead of showing a raw error
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    if exc.status_code in (401, 403):
+        # For AJAX / JSON requests keep the status code
+        accept = request.headers.get("accept", "")
+        if "application/json" in accept:
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+        return RedirectResponse(url=f"/login?expired=1&next={request.url.path}", status_code=303)
+    # For other HTTP errors return a simple styled error page
+    return HTMLResponse(
+        content=f"""<!DOCTYPE html><html><head><title>Error {exc.status_code}</title>
+        <style>body{{font-family:sans-serif;background:#0f1724;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}}
+        .box{{text-align:center;}}.btn{{margin-top:20px;padding:10px 20px;background:#1f6feb;color:#fff;border:none;border-radius:6px;text-decoration:none;cursor:pointer;font-size:14px;}}
+        </style></head><body><div class="box"><h2>{exc.status_code}</h2><p>{exc.detail}</p>
+        <a class="btn" href="/">Go Home</a>&nbsp;<a class="btn" href="/login">Login</a></div></body></html>""",
+        status_code=exc.status_code,
+    )
+
 
 # Multi-tenant routes disabled for now - using existing login system
 # if MULTITENANT_ENABLED:
@@ -311,6 +362,39 @@ def init_db() -> None:
             """
         )
 
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                token_hash TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                used_at TEXT,
+                created_at TEXT NOT NULL,
+                requested_ip TEXT,
+                requested_ua TEXT
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS case_events (
+                id SERIAL PRIMARY KEY,
+                case_id TEXT NOT NULL,
+                org_id INTEGER,
+                event_type TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                user_id INTEGER,
+                username TEXT,
+                org_role TEXT,
+                decision TEXT,
+                protocol TEXT,
+                comment TEXT
+            )
+            """
+        )
+
         # Legacy operational tables (used by main app)
         conn.execute(
             """
@@ -333,6 +417,7 @@ def init_db() -> None:
                 patient_first_name TEXT NOT NULL,
                 patient_surname TEXT NOT NULL,
                 patient_referral_id TEXT,
+                patient_dob TEXT,
                 institution_id INTEGER,
                 study_description TEXT NOT NULL,
                 admin_notes TEXT,
@@ -344,7 +429,9 @@ def init_db() -> None:
                 decision TEXT,
                 decision_comment TEXT,
                 vetted_at TEXT,
-                org_id INTEGER
+                org_id INTEGER,
+                contrast_required TEXT,
+                contrast_details TEXT
             )
             """
         )
@@ -413,6 +500,7 @@ def init_db() -> None:
             patient_first_name TEXT NOT NULL,
             patient_surname TEXT NOT NULL,
             patient_referral_id TEXT,
+            patient_dob TEXT,
             institution_id INTEGER,
             study_description TEXT NOT NULL,
             admin_notes TEXT,
@@ -485,6 +573,41 @@ def init_db() -> None:
         """
     )
 
+    # Password reset tokens
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token_hash TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            used_at TEXT,
+            created_at TEXT NOT NULL,
+            requested_ip TEXT,
+            requested_ua TEXT
+        )
+        """
+    )
+
+    # Case event history
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS case_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id TEXT NOT NULL,
+            org_id INTEGER,
+            event_type TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            user_id INTEGER,
+            username TEXT,
+            org_role TEXT,
+            decision TEXT,
+            protocol TEXT,
+            comment TEXT
+        )
+        """
+    )
+
     conn.commit()
     conn.close()
 
@@ -522,8 +645,14 @@ def ensure_cases_schema() -> None:
         cur.execute("ALTER TABLE cases ADD COLUMN patient_surname TEXT")
     if "patient_referral_id" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN patient_referral_id TEXT")
+    if "patient_dob" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN patient_dob TEXT")
     if "institution_id" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN institution_id INTEGER")
+    if "contrast_required" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN contrast_required TEXT")
+    if "contrast_details" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN contrast_details TEXT")
 
     conn.commit()
     conn.close()
@@ -636,9 +765,56 @@ def ensure_protocols_schema() -> None:
 
     if "institution_id" not in cols:
         cur.execute("ALTER TABLE protocols ADD COLUMN institution_id INTEGER")
+    if "org_id" not in cols:
+        cur.execute("ALTER TABLE protocols ADD COLUMN org_id INTEGER")
 
     conn.commit()
     conn.close()
+
+
+def cleanup_old_files() -> None:
+    """
+    Storage TTL enforcement:
+    - Referral attachment files (stored_filepath) are deleted from disk after REFERRAL_FILE_TTL_DAYS days.
+      The case record and DB row are kept; stored_filepath is set to NULL so the viewing link shows
+      a "file no longer available" message instead of an error.
+    - The case DB record itself is retained for CASE_RECORD_TTL_DAYS days before being archived/deleted.
+      (Phase 1: only file deletion is implemented; DB record retention can be added later.)
+    """
+    if using_postgres():
+        return  # Postgres / cloud deployments handle file lifecycle separately
+
+    try:
+        conn = get_db()
+        cutoff_referral = (datetime.now() - timedelta(days=REFERRAL_FILE_TTL_DAYS)).isoformat()
+        # Find cases whose upload file should be deleted (created more than TTL days ago and still have a stored path)
+        rows = conn.execute(
+            "SELECT id, stored_filepath FROM cases WHERE created_at < ? AND stored_filepath IS NOT NULL AND stored_filepath != ''",
+            (cutoff_referral,)
+        ).fetchall()
+
+        deleted_count = 0
+        for row in rows:
+            filepath = row["stored_filepath"]
+            try:
+                p = Path(filepath)
+                if p.exists():
+                    p.unlink()
+                    deleted_count += 1
+            except Exception as e:
+                print(f"[TTL] Could not delete file {filepath}: {e}")
+            # Null out the stored path so UI shows 'unavailable' gracefully
+            conn.execute(
+                "UPDATE cases SET stored_filepath = NULL WHERE id = ?",
+                (row["id"],)
+            )
+
+        if rows:
+            conn.commit()
+            print(f"[TTL] Referral file cleanup: deleted {deleted_count}/{len(rows)} files older than {REFERRAL_FILE_TTL_DAYS} days.")
+        conn.close()
+    except Exception as e:
+        print(f"[TTL] cleanup_old_files error: {e}")
 
 
 def get_setting(key: str, default: str) -> str:
@@ -858,25 +1034,6 @@ def create_user(username: str, password: str, role: str, radiologist_name: str |
 
 def verify_user(username: str, password: str) -> dict | None:
     normalized_username = username.strip()
-    # Ensure superadmin always exists for multi-tenant oversight
-    if normalized_username.lower() == "superadmin":
-        normalized_username = "superadmin"
-        ensure_superadmin_user()
-
-        # Allow fixed superadmin credentials for dashboard access
-        normalized_password = " ".join(password.split())
-        if normalized_password == "admin 111" or normalized_password == "admin111":
-            conn = get_db()
-            row = conn.execute("SELECT * FROM users WHERE username = ?", (normalized_username,)).fetchone()
-            conn.close()
-            if row:
-                user_dict = dict(row)
-                row_keys = row.keys()
-                if "is_superuser" in row_keys:
-                    user_dict["role"] = "admin"
-                    user_dict["is_superuser"] = True
-                    user_dict["radiologist_name"] = None
-                return user_dict
 
     conn = get_db()
     row = conn.execute("SELECT * FROM users WHERE username = ?", (normalized_username,)).fetchone()
@@ -1051,12 +1208,18 @@ def ensure_seed_data() -> None:
 def ensure_superadmin_user() -> None:
     """
     Ensure a dedicated superadmin user exists for multi-tenant dashboard access.
-    Username: superadmin
-    Password: admin 111
+    Controlled by environment variables to avoid hardcoded credentials.
     """
-    username = "superadmin"
-    password = "admin 111"
-    email = "superadmin@lumoslab.com"
+    if not AUTO_PROVISION_SUPERADMIN:
+        return
+
+    if not SUPERADMIN_PASSWORD:
+        print("[WARNING] AUTO_PROVISION_SUPERADMIN is enabled but SUPERADMIN_PASSWORD is empty. Skipping superadmin bootstrap.")
+        return
+
+    username = SUPERADMIN_USERNAME
+    password = SUPERADMIN_PASSWORD
+    email = SUPERADMIN_EMAIL
     now = utc_now_iso()
 
     if table_has_column("users", "password_hash") and table_has_column("users", "is_superuser"):
@@ -1067,13 +1230,7 @@ def ensure_superadmin_user() -> None:
             """
             INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at)
             VALUES(?, ?, ?, ?, 1, 1, ?, ?)
-            ON CONFLICT(username) DO UPDATE SET
-              email=excluded.email,
-              password_hash=excluded.password_hash,
-              salt_hex=excluded.salt_hex,
-              is_superuser=1,
-              is_active=1,
-              modified_at=excluded.modified_at
+                        ON CONFLICT(username) DO NOTHING
             """,
             (username, email, pw_hash.hex(), salt.hex(), now, now),
         )
@@ -1207,16 +1364,56 @@ def require_login(request: Request) -> dict:
     return user
 
 
+def get_current_org_context(request: Request) -> tuple[int | None, bool, int | None, str | None]:
+    user = get_session_user(request) or {}
+    user_id = user.get("id")
+    is_superuser = bool(user.get("is_superuser"))
+    org_id = user.get("org_id")
+    org_role = user.get("org_role") or user.get("role")
+
+    if user_id and table_exists("memberships"):
+        membership = get_user_primary_membership(user_id)
+        if membership:
+            org_id = membership.get("org_id") or org_id
+            org_role = membership.get("org_role") or org_role
+            if not user.get("org_id"):
+                user["org_id"] = org_id
+            if not user.get("org_role") and org_role:
+                user["org_role"] = org_role
+            request.session["user"] = user
+
+    return user_id, is_superuser, org_id, org_role
+
+
 def require_admin(request: Request) -> dict:
     user = require_login(request)
+    _user_id, is_superuser, _org_id, org_role = get_current_org_context(request)
+    if is_superuser:
+        return user
+    if table_exists("memberships"):
+        if org_role in ("org_admin", "radiology_admin"):
+            return user
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     return user
 
 
+def require_superuser(request: Request) -> dict:
+    user = require_admin(request)
+    if not user.get("is_superuser"):
+        raise HTTPException(status_code=403, detail="Superuser only")
+    return user
+
+
 def require_radiologist(request: Request) -> dict:
     user = require_login(request)
-    if user.get("role") != "radiologist":
+    _user_id, is_superuser, _org_id, org_role = get_current_org_context(request)
+    if is_superuser:
+        raise HTTPException(status_code=403, detail="Radiologist only")
+    if table_exists("memberships"):
+        if org_role != "radiologist":
+            raise HTTPException(status_code=403, detail="Radiologist only")
+    elif user.get("role") != "radiologist":
         raise HTTPException(status_code=403, detail="Radiologist only")
     
     # Populate radiologist_name from radiologist profile if not already set
@@ -1258,6 +1455,63 @@ def require_radiologist(request: Request) -> dict:
             pass
     
     return user
+
+
+def generate_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token: str) -> str:
+    import hmac
+    digest = hmac.new(APP_SECRET.encode("utf-8"), token.encode("utf-8"), hashlib.sha256)
+    return digest.hexdigest()
+
+
+def send_email(to_address: str, subject: str, body: str) -> bool:
+    if not SMTP_HOST or not SMTP_FROM:
+        print("[email] SMTP not configured. Email content below:")
+        print(f"To: {to_address}\nSubject: {subject}\n\n{body}")
+        return False
+
+    import smtplib
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    msg["From"] = SMTP_FROM
+    msg["To"] = to_address
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+    try:
+        server.starttls()
+        if SMTP_USER and SMTP_PASSWORD:
+            server.login(SMTP_USER, SMTP_PASSWORD)
+        server.send_message(msg)
+        return True
+    finally:
+        try:
+            server.quit()
+        except Exception:
+            pass
+
+
+def get_user_by_email(email: str) -> dict | None:
+    if not email:
+        return None
+    conn = get_db()
+    if table_has_column("users", "is_active"):
+        row = conn.execute(
+            "SELECT * FROM users WHERE email = ? AND is_active = 1",
+            (email.strip().lower(),),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT * FROM users WHERE email = ?",
+            (email.strip().lower(),),
+        ).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def table_exists(table_name: str) -> bool:
@@ -1316,6 +1570,40 @@ def redirect_to_login(role: str, next_path: str):
     return RedirectResponse(url=f"/login?role={role}&next={next_path}", status_code=303)
 
 
+def insert_case_event(
+    case_id: str,
+    org_id: int | None,
+    event_type: str,
+    user: dict | None = None,
+    decision: str | None = None,
+    protocol: str | None = None,
+    comment: str | None = None,
+) -> None:
+    if not table_exists("case_events"):
+        return
+
+    now = utc_now_iso()
+    user_id = None
+    username = None
+    org_role = None
+
+    if user:
+        user_id = user.get("id")
+        username = user.get("username")
+        org_role = user.get("org_role") or user.get("role")
+
+    conn = get_db()
+    conn.execute(
+        """
+        INSERT INTO case_events (case_id, org_id, event_type, created_at, user_id, username, org_role, decision, protocol, comment)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (case_id, org_id, event_type, now, user_id, username, org_role, decision, protocol, comment),
+    )
+    conn.commit()
+    conn.close()
+
+
 # -------------------------
 # Init DB on startup
 # -------------------------
@@ -1330,6 +1618,7 @@ try:
     ensure_seed_data()
     ensure_superadmin_user()
     ensure_default_protocols()
+    cleanup_old_files()
     print("[startup] Database initialization complete")
 except Exception as e:
     print(f"[ERROR] Database initialization failed: {e}")
@@ -1342,7 +1631,7 @@ except Exception as e:
 # Landing + login/logout
 # -------------------------
 @app.get("/", response_class=HTMLResponse)
-def landing(request: Request):
+def landing(request: Request, expired: str = ""):
     user = get_session_user(request)
     if user:
         if user.get("is_superuser"):
@@ -1350,11 +1639,11 @@ def landing(request: Request):
         if user.get("role") == "admin":
             return RedirectResponse(url="/admin", status_code=303)
         return RedirectResponse(url="/radiologist", status_code=303)
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("index.html", {"request": request, "expired": expired})
 
 
 @app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
+def login_page(request: Request, expired: str = ""):
     # Redirect to home if already logged in
     user = get_session_user(request)
     if user:
@@ -1363,7 +1652,7 @@ def login_page(request: Request):
         if user.get("role") == "admin":
             return RedirectResponse(url="/admin", status_code=303)
         return RedirectResponse(url="/radiologist", status_code=303)
-    return RedirectResponse(url="/", status_code=303)
+    return templates.TemplateResponse("index.html", {"request": request, "expired": expired})
 
 
 @app.post("/login")
@@ -1437,15 +1726,161 @@ def forgot_password_page(request: Request, role: str = "admin"):
 
 
 @app.post("/forgot-password", response_class=HTMLResponse)
-def forgot_password_submit(request: Request, role: str = Form("admin"), username: str = Form(...)):
+def forgot_password_submit(request: Request, role: str = Form("admin"), email: str = Form(...)):
     role = (role or "admin").strip().lower()
     if role not in ("admin", "radiologist"):
         role = "admin"
+
+    email = (email or "").strip().lower()
+    user = get_user_by_email(email)
+
+    if user and user.get("id"):
+        token = generate_token()
+        token_hash = hash_token(token)
+        now = utc_now_iso()
+        expires_at = (datetime.now(timezone.utc) + timedelta(minutes=60)).isoformat()
+
+        requested_ip = request.client.host if request.client else None
+        requested_ua = request.headers.get("user-agent")
+
+        conn = get_db()
+        conn.execute(
+            """
+            INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, used_at, created_at, requested_ip, requested_ua)
+            VALUES (?, ?, ?, NULL, ?, ?, ?)
+            """,
+            (user.get("id"), token_hash, expires_at, now, requested_ip, requested_ua),
+        )
+        conn.commit()
+        conn.close()
+
+        reset_link = f"{APP_BASE_URL}/reset-password?token={token}"
+        send_email(
+            to_address=email,
+            subject="Password reset request",
+            body=f"Use this link to reset your password (valid for 60 minutes):\n{reset_link}",
+        )
 
     return templates.TemplateResponse(
         "forgot_password.html",
         {"request": request, "role": role, "submitted": True},
     )
+
+
+@app.get("/reset-password", response_class=HTMLResponse)
+def reset_password_page(request: Request, token: str = ""):
+    token = (token or "").strip()
+    if not token:
+        return templates.TemplateResponse(
+            "reset_password.html",
+            {"request": request, "token": "", "error": "Invalid or expired reset link."},
+            status_code=400,
+        )
+
+    token_hash = hash_token(token)
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM password_reset_tokens WHERE token_hash = ?",
+        (token_hash,),
+    ).fetchone()
+    conn.close()
+
+    if not row:
+        return templates.TemplateResponse(
+            "reset_password.html",
+            {"request": request, "token": "", "error": "Invalid or expired reset link."},
+            status_code=400,
+        )
+
+    if row.get("used_at"):
+        return templates.TemplateResponse(
+            "reset_password.html",
+            {"request": request, "token": "", "error": "Reset link already used."},
+            status_code=400,
+        )
+
+    expires_at = parse_iso_dt(row.get("expires_at"))
+    if not expires_at or expires_at < datetime.now(timezone.utc):
+        return templates.TemplateResponse(
+            "reset_password.html",
+            {"request": request, "token": "", "error": "Reset link expired."},
+            status_code=400,
+        )
+
+    return templates.TemplateResponse(
+        "reset_password.html",
+        {"request": request, "token": token},
+    )
+
+
+@app.post("/reset-password", response_class=HTMLResponse)
+def reset_password_submit(request: Request, token: str = Form(""), password: str = Form("")):
+    token = (token or "").strip()
+    if not token or not password:
+        return templates.TemplateResponse(
+            "reset_password.html",
+            {"request": request, "token": token, "error": "Token and password are required."},
+            status_code=400,
+        )
+
+    token_hash = hash_token(token)
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM password_reset_tokens WHERE token_hash = ?",
+        (token_hash,),
+    ).fetchone()
+
+    if not row or row.get("used_at"):
+        conn.close()
+        return templates.TemplateResponse(
+            "reset_password.html",
+            {"request": request, "token": "", "error": "Invalid or expired reset link."},
+            status_code=400,
+        )
+
+    expires_at = parse_iso_dt(row.get("expires_at"))
+    if not expires_at or expires_at < datetime.now(timezone.utc):
+        conn.close()
+        return templates.TemplateResponse(
+            "reset_password.html",
+            {"request": request, "token": "", "error": "Reset link expired."},
+            status_code=400,
+        )
+
+    user_id = row.get("user_id")
+    if not user_id:
+        conn.close()
+        return templates.TemplateResponse(
+            "reset_password.html",
+            {"request": request, "token": "", "error": "Invalid or expired reset link."},
+            status_code=400,
+        )
+
+    salt = secrets.token_bytes(16)
+    pw_hash = hash_password(password, salt)
+    now = utc_now_iso()
+
+    if table_has_column("users", "password_hash"):
+        conn.execute(
+            "UPDATE users SET password_hash = ?, salt_hex = ?, modified_at = ? WHERE id = ?",
+            (pw_hash.hex(), salt.hex(), now, user_id),
+        )
+    else:
+        conn.close()
+        return templates.TemplateResponse(
+            "reset_password.html",
+            {"request": request, "token": "", "error": "Password reset not supported for this user schema."},
+            status_code=400,
+        )
+
+    conn.execute(
+        "UPDATE password_reset_tokens SET used_at = ? WHERE id = ?",
+        (now, row.get("id")),
+    )
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url="/login", status_code=303)
 
 
 @app.get("/logout")
@@ -1562,6 +1997,27 @@ def admin_dashboard(
     conn = get_db()
     rows = conn.execute(sql, params).fetchall()
     conn.close()
+
+    case_ids = [r["id"] for r in rows]
+    events_map: dict[str, list[dict]] = {}
+    if case_ids and table_exists("case_events"):
+        placeholders = ",".join(["?"] * len(case_ids))
+        conn = get_db()
+        ev_rows = conn.execute(
+            f"SELECT * FROM case_events WHERE case_id IN ({placeholders}) ORDER BY created_at",
+            case_ids,
+        ).fetchall()
+        conn.close()
+        for e in ev_rows:
+            d = dict(e)
+            events_map.setdefault(d["case_id"], []).append(d)
+
+    org_names: dict[int, str] = {}
+    if table_exists("organisations"):
+        conn = get_db()
+        org_rows = conn.execute("SELECT id, name FROM organisations").fetchall()
+        conn.close()
+        org_names = {r["id"]: r["name"] for r in org_rows}
 
     # Dashboard counts
     conn = get_db()
@@ -1693,26 +2149,82 @@ def admin_dashboard_csv(
         buf = io.StringIO()
         w = csv.writer(buf)
 
-        w.writerow(["ID", "Status", "Created", "Patient First", "Patient Surname", "Referral ID", "Institution", "Study", "Radiologist", "TAT (mins)", "Vetted At"])
+        w.writerow([
+            "Case ID",
+            "Org ID",
+            "Org Name",
+            "Submitted At",
+            "Reopened",
+            "Reopened At",
+            "Reopened By",
+            "Latest Decision",
+            "Latest Decision At",
+            "Latest Vetted By",
+            "Latest Protocol",
+            "Latest Protocol At",
+            "Current Status",
+            "Radiologist",
+            "Patient ID",
+            "Patient DOB",
+            "Study",
+        ])
         yield buf.getvalue()
         buf.seek(0)
         buf.truncate(0)
 
         for r in rows:
             d = dict(r)
-            secs = tat_seconds(d.get("created_at"), d.get("vetted_at"))
+            events = events_map.get(d.get("id"), [])
+
+            submitted_at = ""
+            reopened = "N"
+            reopened_at = ""
+            reopened_by = ""
+            latest_decision = ""
+            latest_decision_at = ""
+            latest_vetted_by = ""
+            latest_protocol = ""
+            latest_protocol_at = ""
+
+            if events:
+                submitted = next((e for e in events if e.get("event_type") == "SUBMITTED"), None)
+                if submitted:
+                    submitted_at = submitted.get("created_at") or ""
+
+                reopened_events = [e for e in events if e.get("event_type") == "REOPENED"]
+                if reopened_events:
+                    reopened = "Y"
+                    last_reopen = reopened_events[-1]
+                    reopened_at = last_reopen.get("created_at") or ""
+                    reopened_by = last_reopen.get("username") or ""
+
+                vetted_events = [e for e in events if e.get("event_type") == "VETTED"]
+                if vetted_events:
+                    last_vet = vetted_events[-1]
+                    latest_decision = last_vet.get("decision") or ""
+                    latest_decision_at = last_vet.get("created_at") or ""
+                    latest_vetted_by = last_vet.get("username") or ""
+                    latest_protocol = last_vet.get("protocol") or ""
+                    latest_protocol_at = last_vet.get("created_at") or ""
+
             w.writerow([
                 d.get("id", ""),
+                d.get("org_id", ""),
+                org_names.get(d.get("org_id"), ""),
+                submitted_at,
+                reopened,
+                reopened_at,
+                reopened_by,
+                latest_decision,
+                latest_decision_at,
+                latest_vetted_by,
+                latest_protocol,
+                latest_protocol_at,
                 d.get("status", ""),
-                d.get("created_at", ""),
-                d.get("patient_first_name", ""),
-                d.get("patient_surname", ""),
-                d.get("patient_referral_id", ""),
-                d.get("institution_name", ""),
-                d.get("study_description", ""),
                 d.get("radiologist", ""),
-                secs // 60,
-                d.get("vetted_at", ""),
+                d.get("patient_referral_id", ""),
+                d.get("patient_dob", "") or "",
+                d.get("study_description", ""),
             ])
             yield buf.getvalue()
             buf.seek(0)
@@ -1720,6 +2232,177 @@ def admin_dashboard_csv(
 
     filename = f"cases_{tab}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     return StreamingResponse(iter_csv(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@app.get("/admin.events.csv")
+def admin_events_csv(request: Request):
+    user = require_admin(request)
+    org_id = user.get("org_id")
+
+    if not table_exists("case_events"):
+        raise HTTPException(status_code=404, detail="case_events table not found")
+
+    conn = get_db()
+    if org_id and not user.get("is_superuser"):
+        rows = conn.execute(
+            "SELECT * FROM case_events WHERE org_id = ? ORDER BY created_at",
+            (org_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM case_events ORDER BY created_at").fetchall()
+    conn.close()
+
+    def iter_csv():
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow([
+            "Case ID",
+            "Org ID",
+            "Event",
+            "Created At",
+            "User ID",
+            "Username",
+            "Org Role",
+            "Decision",
+            "Protocol",
+            "Comment",
+        ])
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate(0)
+
+        for r in rows:
+            d = dict(r)
+            w.writerow([
+                d.get("case_id", ""),
+                d.get("org_id", ""),
+                d.get("event_type", ""),
+                d.get("created_at", ""),
+                d.get("user_id", ""),
+                d.get("username", ""),
+                d.get("org_role", ""),
+                d.get("decision", ""),
+                d.get("protocol", ""),
+                d.get("comment", ""),
+            ])
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate(0)
+
+    filename = f"case_events_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return StreamingResponse(iter_csv(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@app.get("/admin/notify-radiologist", response_class=HTMLResponse)
+def notify_radiologist_page(request: Request, name: str = "", sent: str = "", error: str = ""):
+    try:
+        user = require_admin(request)
+    except HTTPException:
+        return redirect_to_login("admin", "/admin/notify-radiologist")
+
+    _uid, _su, org_id, _role = get_current_org_context(request)
+    rads = list_radiologists(org_id)
+
+    # Build pending count per radiologist
+    conn = get_db()
+    pending_counts: dict[str, int] = {}
+    rad_emails: dict[str, str] = {}
+    for r in rads:
+        rname = r["name"]
+        if org_id:
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM cases WHERE radiologist = ? AND status IN ('pending','reopened') AND org_id = ?",
+                (rname, org_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM cases WHERE radiologist = ? AND status IN ('pending','reopened')",
+                (rname,),
+            ).fetchone()
+        pending_counts[rname] = row["c"] if row else 0
+        rad_emails[rname] = r.get("email") or ""
+    conn.close()
+
+    return templates.TemplateResponse(
+        "notify_radiologist.html",
+        {
+            "request": request,
+            "radiologists": rads,
+            "pending_counts": pending_counts,
+            "rad_emails": rad_emails,
+            "selected_name": name,
+            "sent": sent,
+            "error": error,
+            "smtp_configured": bool(SMTP_HOST),
+            "current_user": get_session_user(request),
+        },
+    )
+
+
+@app.post("/admin/notify-radiologist")
+def notify_radiologist_send(
+    request: Request,
+    radiologist_name: str = Form(...),
+    channel: str = Form(...),
+    recipient: str = Form(""),
+    message: str = Form(...),
+):
+    try:
+        require_admin(request)
+    except HTTPException:
+        return redirect_to_login("admin", "/admin/notify-radiologist")
+
+    if channel == "email":
+        if not recipient or "@" not in recipient:
+            return RedirectResponse(
+                url=f"/admin/notify-radiologist?name={radiologist_name}&error=no_email", status_code=303
+            )
+        if not SMTP_HOST:
+            return RedirectResponse(
+                url=f"/admin/notify-radiologist?name={radiologist_name}&error=smtp_not_configured", status_code=303
+            )
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "Cases Awaiting Your Review — Vetting Suite"
+        msg["From"] = SMTP_FROM or SMTP_USER
+        msg["To"] = recipient.strip()
+
+        html_body = f"""
+        <div style="font-family:Arial,sans-serif;max-width:500px;padding:24px;background:#f9f9f9;border-radius:8px;">
+          <h2 style="color:#1a1a2e;margin-top:0;">Cases Awaiting Your Review</h2>
+          <p style="color:#333;white-space:pre-wrap;">{message}</p>
+          <p style="font-size:12px;color:#888;margin-top:24px;">Sent via Vetting Suite &middot; Healthcare Applications</p>
+        </div>
+        """
+        msg.attach(MIMEText(message, "plain"))
+        msg.attach(MIMEText(html_body, "html"))
+
+        try:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
+                smtp.ehlo()
+                smtp.starttls()
+                if SMTP_USER:
+                    smtp.login(SMTP_USER, SMTP_PASS)
+                smtp.sendmail(msg["From"], [recipient.strip()], msg.as_string())
+        except Exception as exc:
+            print(f"[NOTIFY] Email send failed: {exc}")
+            return RedirectResponse(
+                url=f"/admin/notify-radiologist?name={radiologist_name}&error=send_failed", status_code=303
+            )
+        return RedirectResponse(
+            url=f"/admin/notify-radiologist?name={radiologist_name}&sent=1", status_code=303
+        )
+
+    elif channel == "sms":
+        # SMS requires Twilio — not yet configured
+        return RedirectResponse(
+            url=f"/admin/notify-radiologist?name={radiologist_name}&error=sms_not_configured", status_code=303
+        )
+
+    return RedirectResponse(url="/admin/notify-radiologist", status_code=303)
 
 
 @app.get("/admin/case/{case_id}", response_class=HTMLResponse)
@@ -1731,12 +2414,30 @@ def admin_case_view(request: Request, case_id: str):
 
     conn = get_db()
     org_id = user.get("org_id")
+    org_name = None
     if org_id and not user.get("is_superuser"):
         row = conn.execute("SELECT * FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
     else:
         row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
+    case_dict = None
+    if row is not None:
+        case_dict = row if isinstance(row, dict) else dict(row)
+
+    if case_dict and case_dict.get("org_id"):
+        org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (case_dict.get("org_id"),)).fetchone()
+        if org_row:
+            org_name = org_row.get("name") if isinstance(org_row, dict) else org_row[0]
+
+    events = []
+    if case_dict and table_exists("case_events"):
+        event_rows = conn.execute(
+            "SELECT * FROM case_events WHERE case_id = ? ORDER BY created_at ASC",
+            (case_id,),
+        ).fetchall()
+        events = [dict(e) for e in event_rows]
+
     conn.close()
-    if not row:
+    if not case_dict:
         raise HTTPException(status_code=404, detail="Case not found")
     # Summary counts for dashboard cards
     conn = get_db()
@@ -1754,7 +2455,10 @@ def admin_case_view(request: Request, case_id: str):
     vetted_count = counts.get("vetted", counts.get("VETTED", 0))
     total_count = pending_count + vetted_count
 
-    return templates.TemplateResponse("admin_case.html", {"request": request, "case": row})
+    return templates.TemplateResponse(
+        "admin_case.html",
+        {"request": request, "case": case_dict, "org_name": org_name, "events": events},
+    )
 
 # -------------------------
 # Case edit
@@ -1803,6 +2507,7 @@ def admin_case_edit_save(
     patient_first_name: str = Form(""),
     patient_surname: str = Form(""),
     patient_referral_id: str = Form(""),
+    patient_dob: str = Form(""),
     institution_id: str = Form(""),
     study_description: str = Form(""),
     admin_notes: str = Form(""),
@@ -1833,7 +2538,7 @@ def admin_case_edit_save(
     # Update case with new values
     conn.execute(
         """UPDATE cases 
-           SET patient_first_name = ?, patient_surname = ?, patient_referral_id = ?, 
+           SET patient_first_name = ?, patient_surname = ?, patient_referral_id = ?, patient_dob = ?,
                institution_id = ?, study_description = ?, admin_notes = ?, 
                radiologist = ?, protocol = ?
            WHERE id = ?""",
@@ -1841,6 +2546,7 @@ def admin_case_edit_save(
             patient_first_name.strip(),
             patient_surname.strip(),
             patient_referral_id.strip(),
+            patient_dob.strip() or None,
             institution_id.strip() or None,
             study_description.strip(),
             admin_notes.strip(),
@@ -1852,7 +2558,57 @@ def admin_case_edit_save(
     conn.commit()
     conn.close()
 
+    insert_case_event(
+        case_id=case_id,
+        org_id=org_id,
+        event_type="EDITED",
+        user=user,
+        comment=admin_notes.strip() or None,
+    )
+
     return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
+
+
+@app.post("/admin/case/{case_id}/assign-radiologist")
+def assign_radiologist(request: Request, case_id: str, radiologist: str = Form("")):
+    user = require_admin(request)
+    org_id = user.get("org_id")
+
+    radiologist = (radiologist or "").strip()
+
+    conn = get_db()
+    if org_id and not user.get("is_superuser"):
+        case = conn.execute("SELECT id, radiologist, org_id FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
+    else:
+        case = conn.execute("SELECT id, radiologist, org_id FROM cases WHERE id = ?", (case_id,)).fetchone()
+
+    if not case:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    valid_rads = {r["name"] for r in list_radiologists(org_id)}
+    if radiologist and radiologist not in valid_rads:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid radiologist selection")
+
+    old_rad = case["radiologist"] if isinstance(case, dict) else case[1]
+    conn.execute(
+        "UPDATE cases SET radiologist = ? WHERE id = ?",
+        (radiologist or None, case_id),
+    )
+    conn.commit()
+    conn.close()
+
+    comment = f"{old_rad or 'unassigned'} -> {radiologist or 'unassigned'}"
+    insert_case_event(
+        case_id=case_id,
+        org_id=case["org_id"] if isinstance(case, dict) else case[2],
+        event_type="ASSIGNED",
+        user=user,
+        comment=comment,
+    )
+
+    return RedirectResponse(url="/admin", status_code=303)
 
 
 @app.get("/admin/case/{case_id}/reopen", response_class=HTMLResponse)
@@ -2001,7 +2757,7 @@ def radiologist_dashboard(request: Request, tab: str = "all"):
 # Settings (admin)
 # -------------------------
 @app.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request):
+def settings_page(request: Request, error: str = ""):
     try:
         require_admin(request)
     except HTTPException:
@@ -2049,6 +2805,7 @@ def settings_page(request: Request):
             "rad_names": rad_names,
             "protocols": protocols,
             "current_user": get_session_user(request),
+            "error": error,
         },
     )
 
@@ -2249,7 +3006,11 @@ def add_user(
     speciality: str = Form(""),
 ):
     user = require_admin(request)
-    org_id = user.get("org_id")
+    # get_current_org_context is already called inside require_admin; fetch org_id from it
+    # to ensure we always have it even if the session dict wasn't updated yet.
+    _uid, _su, org_id, _role = get_current_org_context(request)
+    if not org_id:
+        org_id = user.get("org_id")
     username = username.strip()
     role = role.strip()
     radiologist_name = radiologist_name.strip() or None
@@ -2274,6 +3035,7 @@ def add_user(
 
         conn = get_db()
         try:
+            email_val = email.strip() or None  # store NULL not '' to avoid UNIQUE constraint clashes
             if using_postgres():
                 user_row = conn.execute(
                     """
@@ -2281,17 +3043,25 @@ def add_user(
                     VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
                     RETURNING id
                     """,
-                    (username, email.strip(), pw_hash.hex(), salt.hex(), now, now, first_name.strip(), surname.strip()),
+                    (username, email_val, pw_hash.hex(), salt.hex(), now, now, first_name.strip(), surname.strip()),
                 ).fetchone()
                 user_id = user_row["id"] if isinstance(user_row, dict) else user_row[0]
             else:
-                conn.execute(
-                    """
-                    INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname)
-                    VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
-                    """,
-                    (username, email.strip(), pw_hash.hex(), salt.hex(), now, now, first_name.strip(), surname.strip()),
-                )
+                try:
+                    conn.execute(
+                        """
+                        INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname)
+                        VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
+                        """,
+                        (username, email_val, pw_hash.hex(), salt.hex(), now, now, first_name.strip(), surname.strip()),
+                    )
+                except Exception as _insert_err:
+                    _msg = str(_insert_err).lower()
+                    if "unique" in _msg and "username" in _msg:
+                        return RedirectResponse(url="/settings?error=username_taken", status_code=303)
+                    if "unique" in _msg and "email" in _msg:
+                        return RedirectResponse(url="/settings?error=email_taken", status_code=303)
+                    raise
 
                 user_row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
                 user_id = user_row["id"] if user_row else None
@@ -2345,6 +3115,24 @@ def add_user(
             conn.commit()
         finally:
             conn.close()
+    elif table_has_column("users", "is_superuser"):
+        # New schema but no org_id context — create user only (no membership row)
+        salt = secrets.token_bytes(16)
+        pw_hash = hash_password(password, salt)
+        now = utc_now_iso()
+        conn = get_db()
+        email_val = email.strip() or None
+        try:
+            conn.execute(
+                """
+                INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname)
+                VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
+                """,
+                (username, email_val, pw_hash.hex(), salt.hex(), now, now, first_name.strip(), surname.strip()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
     else:
         create_user(username, password, role, radiologist_name, first_name, surname, email)
     return RedirectResponse(url="/settings", status_code=303)
@@ -2382,21 +3170,49 @@ def edit_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Resolve current email to avoid false UniqueViolation when email is unchanged
+    current_email = (user["email"] if isinstance(user, dict) else dict(user).get("email", "")) or ""
+    new_email = email.strip()
+    email_changed = new_email and new_email != current_email
+
+    if email_changed:
+        # Check if new email is already taken by another user
+        conn2 = get_db()
+        conflict = conn2.execute(
+            "SELECT id FROM users WHERE email = ? AND username != ?",
+            (new_email, username),
+        ).fetchone()
+        conn2.close()
+        if conflict:
+            return RedirectResponse(url="/settings?error=email_taken", status_code=303)
+    
     if table_has_column("users", "is_superuser"):
         # Multi-tenant schema
         conn = get_db()
         if password.strip():
             salt = secrets.token_bytes(16)
             pw_hash = hash_password(password, salt)
-            conn.execute(
-                "UPDATE users SET first_name = ?, surname = ?, email = ?, password_hash = ?, salt_hex = ? WHERE username = ?",
-                (first_name.strip(), surname.strip(), email.strip(), pw_hash.hex(), salt.hex(), username)
-            )
+            if email_changed:
+                conn.execute(
+                    "UPDATE users SET first_name = ?, surname = ?, email = ?, password_hash = ?, salt_hex = ? WHERE username = ?",
+                    (first_name.strip(), surname.strip(), new_email, pw_hash.hex(), salt.hex(), username)
+                )
+            else:
+                conn.execute(
+                    "UPDATE users SET first_name = ?, surname = ?, password_hash = ?, salt_hex = ? WHERE username = ?",
+                    (first_name.strip(), surname.strip(), pw_hash.hex(), salt.hex(), username)
+                )
         else:
-            conn.execute(
-                "UPDATE users SET first_name = ?, surname = ?, email = ? WHERE username = ?",
-                (first_name.strip(), surname.strip(), email.strip(), username)
-            )
+            if email_changed:
+                conn.execute(
+                    "UPDATE users SET first_name = ?, surname = ?, email = ? WHERE username = ?",
+                    (first_name.strip(), surname.strip(), new_email, username)
+                )
+            else:
+                conn.execute(
+                    "UPDATE users SET first_name = ?, surname = ? WHERE username = ?",
+                    (first_name.strip(), surname.strip(), username)
+                )
 
         if org_id and table_exists("memberships"):
             org_role = "org_admin" if role == "admin" else "radiologist" if role == "radiologist" else "org_user"
@@ -2413,16 +3229,28 @@ def edit_user(
             salt = secrets.token_bytes(16)
             pw_hash = hash_password(password, salt)
             conn = get_db()
-            conn.execute(
-                "UPDATE users SET first_name = ?, surname = ?, email = ?, role = ?, radiologist_name = ?, salt_hex = ?, pw_hash_hex = ? WHERE username = ?",
-                (first_name.strip(), surname.strip(), email.strip(), role, radiologist_name, salt.hex(), pw_hash.hex(), username)
-            )
+            if email_changed:
+                conn.execute(
+                    "UPDATE users SET first_name = ?, surname = ?, email = ?, role = ?, radiologist_name = ?, salt_hex = ?, pw_hash_hex = ? WHERE username = ?",
+                    (first_name.strip(), surname.strip(), new_email, role, radiologist_name, salt.hex(), pw_hash.hex(), username)
+                )
+            else:
+                conn.execute(
+                    "UPDATE users SET first_name = ?, surname = ?, role = ?, radiologist_name = ?, salt_hex = ?, pw_hash_hex = ? WHERE username = ?",
+                    (first_name.strip(), surname.strip(), role, radiologist_name, salt.hex(), pw_hash.hex(), username)
+                )
         else:
             conn = get_db()
-            conn.execute(
-                "UPDATE users SET first_name = ?, surname = ?, email = ?, role = ?, radiologist_name = ? WHERE username = ?",
-                (first_name.strip(), surname.strip(), email.strip(), role, radiologist_name, username)
-            )
+            if email_changed:
+                conn.execute(
+                    "UPDATE users SET first_name = ?, surname = ?, email = ?, role = ?, radiologist_name = ? WHERE username = ?",
+                    (first_name.strip(), surname.strip(), new_email, role, radiologist_name, username)
+                )
+            else:
+                conn.execute(
+                    "UPDATE users SET first_name = ?, surname = ?, role = ?, radiologist_name = ? WHERE username = ?",
+                    (first_name.strip(), surname.strip(), role, radiologist_name, username)
+                )
     
     conn.commit()
     conn.close()
@@ -2519,6 +3347,101 @@ def delete_protocol_route(request: Request, protocol_id: int):
 # -------------------------
 # Admin submit
 # -------------------------
+@app.get("/intake/{org_id}", response_class=HTMLResponse)
+def intake_form(request: Request, org_id: int, token: str = ""):
+    token = (token or "").strip()
+    expected = get_setting(f"intake_token:{org_id}", "")
+    if not expected or token != expected:
+        raise HTTPException(status_code=403, detail="Invalid intake token")
+
+    institutions = list_institutions(org_id)
+    return templates.TemplateResponse(
+        "intake_submit.html",
+        {"request": request, "institutions": institutions},
+    )
+
+
+@app.post("/intake/{org_id}")
+async def intake_submit(
+    request: Request,
+    org_id: int,
+    token: str = "",
+    patient_first_name: str = Form(...),
+    patient_surname: str = Form(...),
+    patient_referral_id: str = Form(...),
+    patient_dob: str = Form(""),
+    institution_id: str = Form(...),
+    study_description: str = Form(...),
+    admin_notes: str = Form(""),
+    attachment: UploadFile | None = File(...),
+):
+    token = (token or request.query_params.get("token") or "").strip()
+    expected = get_setting(f"intake_token:{org_id}", "")
+    if not expected or token != expected:
+        raise HTTPException(status_code=403, detail="Invalid intake token")
+
+    try:
+        inst_id = int(institution_id)
+        inst = get_institution(inst_id, org_id)
+        if not inst:
+            raise HTTPException(status_code=400, detail="Invalid institution selection")
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid institution ID")
+
+    if not attachment or not attachment.filename:
+        raise HTTPException(status_code=400, detail="Attachment is required")
+
+    case_id = generate_case_id()
+    original_name = attachment.filename
+    safe_name = f"{case_id}_{Path(original_name).name}"
+    stored_path = str(UPLOAD_DIR / safe_name)
+
+    file_bytes = await attachment.read()
+    with open(stored_path, "wb") as f:
+        f.write(file_bytes)
+
+    created_at = utc_now_iso()
+    conn = get_db()
+    conn.execute(
+        """
+        INSERT INTO cases (
+            id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob,
+            institution_id, study_description, admin_notes,
+            radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            case_id,
+            created_at,
+            patient_first_name.strip(),
+            patient_surname.strip(),
+            patient_referral_id.strip(),
+            patient_dob.strip() or None,
+            inst_id,
+            study_description.strip(),
+            admin_notes.strip(),
+            "",
+            original_name,
+            stored_path,
+            "pending",
+            None,
+            org_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    insert_case_event(
+        case_id=case_id,
+        org_id=org_id,
+        event_type="SUBMITTED",
+        user={"username": "external"},
+        comment=admin_notes.strip() or None,
+    )
+
+    return RedirectResponse(url="/", status_code=303)
+
+
 @app.get("/submit", response_class=HTMLResponse)
 def submit_form(request: Request):
     try:
@@ -2545,6 +3468,7 @@ async def submit_case(
     patient_first_name: str = Form(...),
     patient_surname: str = Form(...),
     patient_referral_id: str = Form(...),
+    patient_dob: str = Form(""),
     institution_id: str = Form(...),
     study_description: str = Form(...),
     admin_notes: str = Form(""),
@@ -2596,10 +3520,10 @@ async def submit_case(
     conn.execute(
         """
         INSERT INTO cases (
-            id, created_at, patient_first_name, patient_surname, patient_referral_id,
+            id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob,
             institution_id, study_description, admin_notes,
             radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             case_id,
@@ -2607,6 +3531,7 @@ async def submit_case(
             patient_first_name.strip(),
             patient_surname.strip(),
             patient_referral_id.strip(),
+            patient_dob.strip() or None,
             inst_id,
             study_description.strip(),
             admin_notes.strip(),
@@ -2644,6 +3569,70 @@ def submitted(request: Request, case_id: str):
 
 
 # -------------------------
+# iRefer Guidelines lookup (radiologist only)
+# -------------------------
+
+@app.get("/irefer/search")
+def irefer_search(request: Request, q: str = ""):
+    """Proxy iRefer guidelines search. Results are cached in memory after first fetch."""
+    require_radiologist(request)  # radiologist-only endpoint
+
+    global _irefer_guidelines_cache
+
+    # Fetch and cache on first call
+    if not _irefer_guidelines_cache and IREFER_API_KEY:
+        try:
+            url = "https://api.irefer.org.uk/prod-irefer/guidelines?language=en"
+            req = urllib.request.Request(url, headers={"Ocp-Apim-Subscription-Key": IREFER_API_KEY})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = _json.loads(resp.read().decode())
+                _irefer_guidelines_cache = data.get("value", [])
+        except Exception as exc:
+            return JSONResponse({"error": f"iRefer API error: {exc}", "results": []})
+
+    if not _irefer_guidelines_cache:
+        return JSONResponse({
+            "error": "iRefer API key not configured. Set IREFER_API_KEY environment variable.",
+            "results": []
+        })
+
+    # Filter by query
+    q_lower = q.lower().strip()
+    matches = []
+    for g in _irefer_guidelines_cache:
+        haystack = " ".join(filter(None, [
+            g.get("ClinicalDiagnosticIssue", ""),
+            g.get("SearchTerms", ""),
+            " ".join(g.get("Section", []))
+        ])).lower()
+        if not q_lower or q_lower in haystack:
+            investigations = [
+                {
+                    "investigation": inv.get("Investigation", ""),
+                    "recommendation": inv.get("Recommendation", ""),
+                    "grade": inv.get("Grade", ""),
+                    "min_dose": inv.get("MinDose", ""),
+                    "max_dose": inv.get("MaxDose", ""),
+                    "comment": inv.get("Comment", ""),
+                }
+                for inv in g.get("Investigations", [])
+            ]
+            matches.append({
+                "id": g.get("Id", ""),
+                "code": g.get("Code", ""),
+                "title": g.get("ClinicalDiagnosticIssue", ""),
+                "section": g.get("Section", []),
+                "body": g.get("Body", ""),
+                "last_updated": g.get("LastUpdated", ""),
+                "investigations": investigations,
+            })
+            if len(matches) >= 10:  # cap results for performance
+                break
+
+    return JSONResponse({"results": matches})
+
+
+# -------------------------
 # Vet (radiologist)
 # -------------------------
 @app.get("/vet/{case_id}", response_class=HTMLResponse)
@@ -2651,6 +3640,7 @@ def vet_form(request: Request, case_id: str):
     user = require_radiologist(request)
     rad_name = user.get("radiologist_name")
     org_id = user.get("org_id")
+    org_name = None
 
     conn = get_db()
     if org_id:
@@ -2688,6 +3678,13 @@ def vet_form(request: Request, case_id: str):
         # Fallback to active protocols if no institution
         protocols = list_protocols(active_only=True, org_id=org_id)
 
+    if org_id:
+        conn = get_db()
+        org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
+        conn.close()
+        if org_row:
+            org_name = org_row.get("name") if isinstance(org_row, dict) else org_row[0]
+
     return templates.TemplateResponse(
         "vet.html",
         {
@@ -2695,6 +3692,7 @@ def vet_form(request: Request, case_id: str):
             "case": case,
             "decisions": DECISIONS,
             "protocols": protocols,
+            "org_name": org_name,
         },
     )
 
@@ -2706,6 +3704,8 @@ def vet_submit(
     protocol: str = Form(""),
     decision: str = Form(...),
     decision_comment: str = Form(""),
+    contrast_required: str = Form(""),
+    contrast_details: str = Form(""),
 ):
     user = require_radiologist(request)
     rad_name = user.get("radiologist_name")
@@ -2749,13 +3749,26 @@ def vet_submit(
             protocol = ?,
             decision = ?,
             decision_comment = ?,
-            vetted_at = ?
+            vetted_at = ?,
+            contrast_required = ?,
+            contrast_details = ?
         WHERE id = ?
         """,
-        (case_status, protocol.strip(), decision, decision_comment.strip(), utc_now_iso(), case_id),
+        (case_status, protocol.strip(), decision, decision_comment.strip(), utc_now_iso(),
+         contrast_required.strip() or None, contrast_details.strip() or None, case_id),
     )
     conn.commit()
     conn.close()
+
+    insert_case_event(
+        case_id=case_id,
+        org_id=org_id,
+        event_type="VETTED",
+        user=user,
+        decision=decision,
+        protocol=protocol.strip() or None,
+        comment=decision_comment.strip() or None,
+    )
 
     return RedirectResponse(url="/radiologist", status_code=303)
 
@@ -2772,22 +3785,31 @@ def download_attachment(request: Request, case_id: str):
 
     conn = get_db()
     row = conn.execute(
-        "SELECT stored_filepath, uploaded_filename, radiologist FROM cases WHERE id = ?",
+        "SELECT stored_filepath, uploaded_filename, radiologist, org_id FROM cases WHERE id = ?",
         (case_id,),
     ).fetchone()
     conn.close()
 
-    if not row or not row["stored_filepath"]:
+    if not row:
         raise HTTPException(status_code=404, detail="No attachment found")
 
-    if user["role"] == "radiologist" and row["radiologist"] != user.get("radiologist_name"):
+    case_data = row if isinstance(row, dict) else dict(row)
+
+    if not case_data.get("stored_filepath"):
+        raise HTTPException(status_code=410, detail="Referral file has expired and is no longer available (7-day retention policy).")
+
+    if user.get("role") == "radiologist" and case_data.get("radiologist") != user.get("radiologist_name"):
         raise HTTPException(status_code=403, detail="Not your case")
 
-    path = row["stored_filepath"]
+    org_id = user.get("org_id")
+    if org_id and not user.get("is_superuser") and case_data.get("org_id") and case_data.get("org_id") != org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    path = case_data.get("stored_filepath")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File missing on disk")
 
-    return FileResponse(path, filename=row["uploaded_filename"] or Path(path).name)
+    return FileResponse(path, filename=case_data.get("uploaded_filename") or Path(path).name)
 
 
 @app.get("/case/{case_id}/attachment/inline")
@@ -2796,22 +3818,31 @@ def view_attachment_inline(request: Request, case_id: str):
 
     conn = get_db()
     row = conn.execute(
-        "SELECT stored_filepath, uploaded_filename, radiologist FROM cases WHERE id = ?",
+        "SELECT stored_filepath, uploaded_filename, radiologist, org_id FROM cases WHERE id = ?",
         (case_id,),
     ).fetchone()
     conn.close()
 
-    if not row or not row["stored_filepath"]:
+    if not row:
         raise HTTPException(status_code=404, detail="No attachment found")
 
-    if user["role"] == "radiologist" and row["radiologist"] != user.get("radiologist_name"):
+    case_data = row if isinstance(row, dict) else dict(row)
+
+    if not case_data.get("stored_filepath"):
+        raise HTTPException(status_code=410, detail="Referral file has expired and is no longer available (7-day retention policy).")
+
+    if user.get("role") == "radiologist" and case_data.get("radiologist") != user.get("radiologist_name"):
         raise HTTPException(status_code=403, detail="Not your case")
 
-    path = row["stored_filepath"]
+    org_id = user.get("org_id")
+    if org_id and not user.get("is_superuser") and case_data.get("org_id") and case_data.get("org_id") != org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    path = case_data.get("stored_filepath")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File missing on disk")
 
-    filename = row["uploaded_filename"] or Path(path).name
+    filename = case_data.get("uploaded_filename") or Path(path).name
     media_type, _ = mimetypes.guess_type(filename)
     headers = {"Content-Disposition": f'inline; filename="{filename}"'}
 
@@ -2828,9 +3859,14 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
         conn.close()
         if not row:
             raise HTTPException(status_code=404, detail="Case not found")
+        if user.get("role") == "radiologist":
+            raise HTTPException(status_code=403, detail="Radiologists are not allowed to download PDFs")
 
-        if user["role"] == "radiologist" and row["radiologist"] != user.get("radiologist_name"):
-            raise HTTPException(status_code=403, detail="Not your case")
+        org_id = user.get("org_id")
+        case_data = row if isinstance(row, dict) else dict(row)
+
+        if org_id and not user.get("is_superuser") and case_data.get("org_id") and case_data.get("org_id") != org_id:
+            raise HTTPException(status_code=403, detail="Access denied")
 
         pdf_path = UPLOAD_DIR / f"{case_id}_vetting.pdf"
 
@@ -2864,10 +3900,43 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
         else:
             case_data = dict(row)
 
-        # Get radiologist details (for GNC number)
+        # Organisation name
+        org_name = ""
+        if case_data.get("org_id"):
+            conn = get_db()
+            org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (case_data.get("org_id"),)).fetchone()
+            conn.close()
+            if org_row:
+                org_name = org_row.get("name") if isinstance(org_row, dict) else org_row[0]
+
+        # Radiologist details (profile + GMC)
         rad_name = case_data.get("radiologist", "")
+        rad_display = rad_name
         rad_gmc = ""
-        if rad_name:
+        rad_position = ""
+        if rad_name and table_exists("radiologist_profiles") and table_exists("users"):
+            conn = get_db()
+            params = [rad_name, rad_name]
+            sql = (
+                "SELECT rp.display_name, rp.gmc, rp.specialty, u.username, u.first_name, u.surname "
+                "FROM radiologist_profiles rp "
+                "JOIN users u ON u.id = rp.user_id "
+            )
+            if table_exists("memberships") and case_data.get("org_id"):
+                sql += "LEFT JOIN memberships m ON m.user_id = u.id "
+                sql += "WHERE (rp.display_name = ? OR u.username = ?) AND m.org_id = ? "
+                params.append(case_data.get("org_id"))
+            else:
+                sql += "WHERE rp.display_name = ? OR u.username = ? "
+            sql += "LIMIT 1"
+            prof = conn.execute(sql, params).fetchone()
+            conn.close()
+            if prof:
+                prof = dict(prof)
+                rad_display = prof.get("display_name") or rad_display
+                rad_gmc = prof.get("gmc") or ""
+                rad_position = prof.get("specialty") or ""
+        elif rad_name:
             rad = get_radiologist(rad_name)
             if rad:
                 rad_gmc = rad.get("gmc", "")
@@ -2889,6 +3958,9 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
         y -= 15
         c.setFont("Helvetica", 10)
 
+        if org_name:
+            line("Organisation", org_name)
+
         line("Case ID", case_data.get("id", ""))
         
         # Created timestamp in DD-MM-YYYY HH:MM format
@@ -2900,17 +3972,24 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
         line("Patient Name", patient_name)
         
         if case_data.get("patient_referral_id"):
-            line("Referral ID", case_data.get("patient_referral_id", ""))
+            line("Patient ID", case_data.get("patient_referral_id", ""))
+
+        if case_data.get("patient_dob"):
+            line("Patient DOB", case_data.get("patient_dob", ""))
 
         # Institution
         line("Institution", institution_name or "N/A")
 
         # Radiologist
-        line("Radiologist", rad_name or "N/A")
+        line("Radiologist", rad_display or "N/A")
+        if rad_position:
+            line("Position", rad_position)
 
         # GNC Number (if available)
         if rad_gmc:
             line("GMC/GNC Number", rad_gmc)
+        elif rad_name:
+            line("GMC/GNC Number", "MISSING")
 
         # Study Description
         if case_data.get("study_description"):
@@ -3029,8 +4108,12 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
             return FileResponse(str(pdf_path), media_type="application/pdf", headers=headers)
 
         return FileResponse(str(pdf_path), filename=f"vetting_{case_id}.pdf")
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"PDF generation error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {e}")
 
 
 # -------------------------
@@ -3174,17 +4257,41 @@ def mt_dashboard(request: Request):
                 gap: 12px; 
                 margin-bottom: 24px; 
             }}
+            .page-header {{
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 24px;
+                margin-bottom: 24px;
+            }}
+            .page-header-left {{
+                flex: 1;
+            }}
+            .brand-logo {{
+                width: 180px;
+                max-width: 100%;
+                height: auto;
+                display: block;
+                border-radius: 10px;
+                flex-shrink: 0;
+            }}
         </style>
     </head>
     <body>
         <div class="container">
-            <h1 class="page-title">Multi-Tenant Management Dashboard</h1>
-            <p class="page-subtitle">Welcome, <strong>{user['username']}</strong> (Superuser)</p>
-            
-            <div class="topbar">
-                <a href="/logout" class="btn secondary">Logout</a>
-                <a href="/mt/create-org" class="btn">Create Organisation</a>
-                <a href="/mt/users" class="btn">View All Superusers</a>
+            <div class="page-header">
+                <div class="page-header-left">
+                    <h1 class="page-title">Multi-Tenant Management Dashboard</h1>
+                    <p class="page-subtitle">Welcome, <strong>{user['username']}</strong> (Superuser)</p>
+                    <div class="topbar">
+                        <a href="/logout" class="btn secondary">Logout</a>
+                        <a href="/mt/create-org" class="btn">Create Organisation</a>
+                        <a href="/mt/users" class="btn">View All Superusers</a>
+                        <a href="/mt/protocols" class="btn">Protocol Templates</a>
+                    </div>
+                </div>
+                <img class="brand-logo" src="{LOGO_DARK_URL}" alt="Lumos Lab"
+                     onerror="this.style.display='none';">
             </div>
             
             <h2 class="section-title">Platform Statistics</h2>
@@ -3249,6 +4356,115 @@ def mt_dashboard(request: Request):
     """
     
     return HTMLResponse(content=html)
+
+
+@app.get("/super/orgs", response_class=HTMLResponse)
+def super_orgs_page(request: Request):
+    require_superuser(request)
+    conn = get_db()
+    orgs = conn.execute(
+        """
+        SELECT o.id, o.name, o.slug, o.is_active,
+               COUNT(DISTINCT m.user_id) as member_count
+        FROM organisations o
+        LEFT JOIN memberships m ON o.id = m.org_id AND m.is_active = 1
+        GROUP BY o.id
+        ORDER BY o.name
+        """
+    ).fetchall()
+    conn.close()
+    orgs = [dict(o) for o in orgs]
+    return templates.TemplateResponse("admin_orgs.html", {"request": request, "orgs": orgs})
+
+
+@app.get("/super/users", response_class=HTMLResponse)
+def super_users_page(request: Request):
+    require_superuser(request)
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT u.id as user_id, u.username, u.email, u.is_active,
+               m.org_role as org_role,
+               o.name as org_name
+        FROM users u
+        LEFT JOIN memberships m ON m.user_id = u.id AND m.is_active = 1
+        LEFT JOIN organisations o ON o.id = m.org_id
+        ORDER BY u.username
+        """
+    ).fetchall()
+    conn.close()
+    users = [dict(r) for r in rows]
+    return templates.TemplateResponse("admin_users.html", {"request": request, "users": users})
+
+
+@app.get("/super/billing", response_class=HTMLResponse)
+def super_billing_page(request: Request):
+    require_superuser(request)
+    return templates.TemplateResponse("admin_billing.html", {"request": request})
+
+
+@app.get("/super/billing.csv")
+def super_billing_csv(request: Request, from_date: str = "", to_date: str = ""):
+    require_superuser(request)
+    if not from_date or not to_date:
+        raise HTTPException(status_code=400, detail="from and to dates are required")
+
+    try:
+        start_dt = datetime.fromisoformat(from_date).replace(tzinfo=timezone.utc)
+        end_dt = datetime.fromisoformat(to_date).replace(tzinfo=timezone.utc)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+
+    if not table_exists("case_events"):
+        raise HTTPException(status_code=404, detail="case_events table not found")
+
+    conn = get_db()
+    events = conn.execute(
+        """
+        SELECT org_id, event_type, created_at
+        FROM case_events
+        WHERE created_at >= ? AND created_at <= ?
+        """,
+        (start_dt.isoformat(), end_dt.isoformat()),
+    ).fetchall()
+
+    orgs = conn.execute("SELECT id, name FROM organisations").fetchall()
+    conn.close()
+
+    org_names = {o["id"]: o["name"] for o in orgs}
+    submitted_counts: dict[int, int] = {}
+    vetted_counts: dict[int, int] = {}
+
+    for e in events:
+        org_id = e.get("org_id")
+        if e.get("event_type") == "SUBMITTED":
+            submitted_counts[org_id] = submitted_counts.get(org_id, 0) + 1
+        elif e.get("event_type") == "VETTED":
+            vetted_counts[org_id] = vetted_counts.get(org_id, 0) + 1
+
+    def iter_csv():
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["org_id", "org_name", "submitted_count", "vetted_count", "period_from", "period_to"])
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate(0)
+
+        for org_id, org_name in org_names.items():
+            w.writerow([
+                org_id,
+                org_name,
+                submitted_counts.get(org_id, 0),
+                vetted_counts.get(org_id, 0),
+                from_date,
+                to_date,
+            ])
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate(0)
+
+    filename = f"billing_{from_date}_{to_date}.csv"
+    return StreamingResponse(iter_csv(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @app.get("/mt/create-org", response_class=HTMLResponse)
@@ -3330,10 +4546,24 @@ def mt_create_org_page(request: Request):
                 gap: 12px;
                 margin-bottom: 30px;
             }}
+            .brand-wrap {{
+                margin-bottom: 16px;
+            }}
+            .brand-logo {{
+                width: 220px;
+                max-width: 100%;
+                height: auto;
+                display: block;
+                border-radius: 10px;
+            }}
         </style>
     </head>
     <body>
         <div class="container">
+            <div class="brand-wrap">
+                <img class="brand-logo" src="{LOGO_DARK_URL}" alt="Lumos Lab"
+                     onerror="this.style.display='none';">
+            </div>
             <div class="topbar">
                 <a href="/mt" class="btn secondary">← Back to Dashboard</a>
                 <a href="/logout" class="btn secondary">🚪 Logout</a>
@@ -3851,6 +5081,7 @@ def mt_add_user_submit(
         salt = secrets.token_bytes(16)
         pw_hash = hash_password(password, salt)
 
+        email_val = email or None  # store NULL not '' to avoid UNIQUE constraint clashes
         if using_postgres():
             user_row = conn.execute(
                 """
@@ -3858,7 +5089,7 @@ def mt_add_user_submit(
                 VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
                 RETURNING id
                 """,
-                (username, email, pw_hash.hex(), salt.hex(), now, now, first_name, surname),
+                (username, email_val, pw_hash.hex(), salt.hex(), now, now, first_name, surname),
             ).fetchone()
             user_id = user_row["id"] if isinstance(user_row, dict) else user_row[0]
         else:
@@ -3867,7 +5098,7 @@ def mt_add_user_submit(
                 INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname)
                 VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
                 """,
-                (username, email, pw_hash.hex(), salt.hex(), now, now, first_name, surname),
+                (username, email_val, pw_hash.hex(), salt.hex(), now, now, first_name, surname),
             )
 
             user_row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
@@ -4674,6 +5905,624 @@ def mt_test(request: Request):
     </html>
     """
     return HTMLResponse(content=html)
+
+
+# ─────────────────────────────────────────────
+# My Account — self-service user profile edit
+# ─────────────────────────────────────────────
+
+@app.get("/account", response_class=HTMLResponse)
+def account_page(request: Request, msg: str = "", error: str = ""):
+    """Any authenticated user can view/edit their own profile (name, email, password)."""
+    user = get_session_user(request)
+    if not user:
+        return RedirectResponse(url="/login?expired=1", status_code=303)
+
+    conn = get_db()
+    db_user = conn.execute(
+        "SELECT id, username, first_name, surname, email FROM users WHERE username = ?",
+        (user["username"],)
+    ).fetchone()
+    conn.close()
+
+    if not db_user:
+        return RedirectResponse(url="/login?expired=1", status_code=303)
+
+    db_user = dict(db_user)
+    if user.get("is_superuser"):
+        back_url = "/mt"
+    elif user.get("org_role") in ("org_admin",) or user.get("role") in ("admin",):
+        back_url = "/admin"
+    else:
+        back_url = "/radiologist"
+
+    msg_html = ""
+    if msg == "saved":
+        msg_html = '<div style="background:rgba(74,222,128,0.12);border:1px solid rgba(74,222,128,0.3);color:#4ade80;padding:12px 16px;border-radius:8px;margin-bottom:16px;">✅ Your profile has been updated.</div>'
+    elif msg == "pw_changed":
+        msg_html = '<div style="background:rgba(74,222,128,0.12);border:1px solid rgba(74,222,128,0.3);color:#4ade80;padding:12px 16px;border-radius:8px;margin-bottom:16px;">✅ Password changed successfully.</div>'
+
+    error_html = ""
+    if error == "email_taken":
+        error_html = '<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;padding:12px 16px;border-radius:8px;margin-bottom:16px;">⚠️ That email address is already in use by another account.</div>'
+    elif error == "pw_mismatch":
+        error_html = '<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;padding:12px 16px;border-radius:8px;margin-bottom:16px;">⚠️ New passwords do not match. Please try again.</div>'
+    elif error == "pw_wrong":
+        error_html = '<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;padding:12px 16px;border-radius:8px;margin-bottom:16px;">⚠️ Current password is incorrect.</div>'
+    elif error == "pw_short":
+        error_html = '<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;padding:12px 16px;border-radius:8px;margin-bottom:16px;">⚠️ New password must be at least 8 characters.</div>'
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>My Account</title>
+    <link rel="stylesheet" href="/static/css/site.css">
+    <style>
+        .account-wrap {{ max-width: 600px; margin: 0 auto; padding: 40px 20px; }}
+        .page-title {{ font-size: 2em; color: white; margin-bottom: 6px; }}
+        .page-sub {{ color: var(--muted); margin-bottom: 28px; }}
+        .card {{
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }}
+        .card h3 {{ margin-top: 0; color: rgba(255,255,255,0.9); font-size: 1.15em; }}
+        .form-group {{ display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px; }}
+        .form-group label {{ font-size: 0.88em; color: rgba(255,255,255,0.65); font-weight: 500; }}
+        .form-group input {{
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 6px;
+            color: #fff;
+            padding: 9px 12px;
+            font-size: 0.95em;
+        }}
+        .form-group input:focus {{ outline: none; border-color: rgba(31,111,235,0.6); }}
+        .topbar {{ display: flex; gap: 10px; margin-bottom: 24px; }}
+        .read-only {{ color: rgba(255,255,255,0.5); font-size: 0.92em; padding: 8px 0; }}
+    </style>
+</head>
+<body>
+<div id="session-expiry-warning" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;
+    background:rgba(234,179,8,0.95);color:#1a1200;text-align:center;padding:10px 16px;font-weight:600;font-size:14px;">
+    ⚠️ Your session will expire soon due to inactivity.
+    <button onclick="document.getElementById('session-expiry-warning').style.display='none'"
+        style="margin-left:16px;background:rgba(0,0,0,0.15);border:none;border-radius:4px;padding:4px 10px;cursor:pointer;font-weight:600;">
+        Dismiss
+    </button>
+</div>
+<div class="account-wrap">
+    <div class="topbar">
+        <a href="{back_url}" class="btn secondary">&larr; Back</a>
+        <a href="/logout" class="btn secondary">Logout</a>
+    </div>
+    <h1 class="page-title">My Account</h1>
+    <p class="page-sub">Edit your personal details. Role and permissions are managed by your administrator.</p>
+
+    {msg_html}{error_html}
+
+    <!-- Profile Details -->
+    <div class="card">
+        <h3>Personal Details</h3>
+        <form method="POST" action="/account/edit">
+            <div style="display:flex;gap:16px;">
+                <div class="form-group" style="flex:1;">
+                    <label>First Name</label>
+                    <input type="text" name="first_name" value="{db_user.get('first_name') or ''}">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Surname</label>
+                    <input type="text" name="surname" value="{db_user.get('surname') or ''}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" name="email" value="{db_user.get('email') or ''}">
+            </div>
+            <div class="form-group">
+                <label>Username <span style="color:var(--muted);font-weight:400;">(cannot be changed)</span></label>
+                <div class="read-only">{db_user['username']}</div>
+            </div>
+            <button type="submit" class="btn btn-primary">Save Details</button>
+        </form>
+    </div>
+
+    <!-- Change Password -->
+    <div class="card">
+        <h3>Change Password</h3>
+        <form method="POST" action="/account/change-password">
+            <div class="form-group">
+                <label>Current Password</label>
+                <input type="password" name="current_password" required autocomplete="current-password">
+            </div>
+            <div class="form-group">
+                <label>New Password</label>
+                <input type="password" name="new_password" required autocomplete="new-password"
+                       minlength="8" placeholder="At least 8 characters">
+            </div>
+            <div class="form-group">
+                <label>Confirm New Password</label>
+                <input type="password" name="confirm_password" required autocomplete="new-password">
+            </div>
+            <button type="submit" class="btn btn-primary">Change Password</button>
+        </form>
+    </div>
+</div>
+<script src="/static/js/session.js"></script>
+</body>
+</html>"""
+
+    return HTMLResponse(content=html)
+
+
+@app.post("/account/edit")
+def account_edit(
+    request: Request,
+    first_name: str = Form(""),
+    surname: str = Form(""),
+    email: str = Form(""),
+):
+    """Any authenticated user: update own name/email (not role)."""
+    user = get_session_user(request)
+    if not user:
+        return RedirectResponse(url="/login?expired=1", status_code=303)
+
+    username = user["username"]
+    new_email = email.strip()
+
+    conn = get_db()
+    db_user = conn.execute("SELECT email FROM users WHERE username = ?", (username,)).fetchone()
+    conn.close()
+    if not db_user:
+        return RedirectResponse(url="/login?expired=1", status_code=303)
+
+    current_email = db_user["email"] or ""
+    email_changed = new_email and new_email != current_email
+
+    if email_changed:
+        conn2 = get_db()
+        conflict = conn2.execute(
+            "SELECT id FROM users WHERE email = ? AND username != ?", (new_email, username)
+        ).fetchone()
+        conn2.close()
+        if conflict:
+            return RedirectResponse(url="/account?error=email_taken", status_code=303)
+
+    conn = get_db()
+    if email_changed:
+        conn.execute(
+            "UPDATE users SET first_name = ?, surname = ?, email = ? WHERE username = ?",
+            (first_name.strip(), surname.strip(), new_email, username),
+        )
+    else:
+        conn.execute(
+            "UPDATE users SET first_name = ?, surname = ? WHERE username = ?",
+            (first_name.strip(), surname.strip(), username),
+        )
+    conn.commit()
+    conn.close()
+
+    # Update session display name if changed
+    if first_name.strip() or surname.strip():
+        user["first_name"] = first_name.strip()
+        user["surname"] = surname.strip()
+        request.session["user"] = user
+
+    return RedirectResponse(url="/account?msg=saved", status_code=303)
+
+
+@app.post("/account/change-password")
+def account_change_password(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+):
+    """Any authenticated user: change own password with current-password verification."""
+    user = get_session_user(request)
+    if not user:
+        return RedirectResponse(url="/login?expired=1", status_code=303)
+
+    username = user["username"]
+
+    if new_password != confirm_password:
+        return RedirectResponse(url="/account?error=pw_mismatch", status_code=303)
+
+    if len(new_password) < 8:
+        return RedirectResponse(url="/account?error=pw_short", status_code=303)
+
+    # Verify current password
+    conn = get_db()
+    db_user = conn.execute(
+        "SELECT salt_hex, password_hash FROM users WHERE username = ?", (username,)
+    ).fetchone()
+    conn.close()
+
+    if not db_user or not db_user["salt_hex"]:
+        return RedirectResponse(url="/account?error=pw_wrong", status_code=303)
+
+    try:
+        salt = bytes.fromhex(db_user["salt_hex"])
+        expected_hash = db_user["password_hash"]
+        actual_hash = hash_password(current_password, salt).hex()
+        if actual_hash != expected_hash:
+            return RedirectResponse(url="/account?error=pw_wrong", status_code=303)
+    except Exception:
+        return RedirectResponse(url="/account?error=pw_wrong", status_code=303)
+
+    # Set new password
+    new_salt = secrets.token_bytes(16)
+    new_hash = hash_password(new_password, new_salt)
+
+    conn = get_db()
+    conn.execute(
+        "UPDATE users SET salt_hex = ?, password_hash = ? WHERE username = ?",
+        (new_salt.hex(), new_hash.hex(), username),
+    )
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url="/account?msg=pw_changed", status_code=303)
+
+
+@app.get("/mt/protocols", response_class=HTMLResponse)
+def mt_protocols_page(request: Request):
+    """Superuser: Manage protocol templates across all organisations"""
+    try:
+        require_admin(request)
+    except HTTPException:
+        return redirect_to_login("admin", "/mt/protocols")
+
+    user = get_session_user(request)
+    conn = get_db()
+
+    row = conn.execute("SELECT is_superuser FROM users WHERE username = ?", (user["username"],)).fetchone()
+    if not row or not row["is_superuser"]:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Superuser access required")
+
+    # Fetch all protocols joined with org name
+    protocols = conn.execute(
+        """
+        SELECT p.id, p.name, p.instructions, p.last_modified, p.is_active,
+               p.org_id, o.name as org_name
+        FROM protocols p
+        LEFT JOIN organisations o ON p.org_id = o.id
+        ORDER BY COALESCE(o.name, ''), p.name
+        """
+    ).fetchall()
+    protocols = [dict(r) for r in protocols]
+
+    # Fetch all organisations for the add-form org selector
+    orgs = conn.execute("SELECT id, name FROM organisations WHERE is_active = 1 ORDER BY name").fetchall()
+    orgs = [dict(r) for r in orgs]
+
+    conn.close()
+
+    # Format last_modified
+    from datetime import datetime as _dt
+    for p in protocols:
+        if p.get("last_modified"):
+            try:
+                p["last_modified"] = _dt.fromisoformat(p["last_modified"]).strftime("%d-%m-%Y %H:%M")
+            except Exception:
+                pass
+
+    def _proto_rows_html():
+        if not protocols:
+            return '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px;">No protocol templates found</td></tr>'
+        out = ""
+        for p in protocols:
+            org_label = p["org_name"] if p["org_name"] else '<span style="color:var(--muted);">Global</span>'
+            status_color = "#4ade80" if p["is_active"] else "rgba(255,255,255,0.4)"
+            status_label = "Active" if p["is_active"] else "Inactive"
+            instr_preview = (p["instructions"] or "")[:80]
+            if p["instructions"] and len(p["instructions"]) > 80:
+                instr_preview += "…"
+            modified = p["last_modified"] if p["last_modified"] else "—"
+            edit_js = (
+                f"editMtProtocol({p['id']}, {_js_str(p['name'])}, "
+                f"{p['org_id'] or 'null'}, {_js_str(p['instructions'] or '')}, "
+                f"{1 if p['is_active'] else 0})"
+            )
+            out += f"""
+            <tr>
+                <td><strong>{p['name']}</strong></td>
+                <td>{org_label}</td>
+                <td style="color:{status_color};font-weight:500;">{status_label}</td>
+                <td style="font-size:0.9em;color:var(--muted);">{instr_preview}</td>
+                <td>{modified}</td>
+                <td>
+                    <div style="display:flex;gap:6px;">
+                        <button class="btn btn-secondary btn-small" onclick="{edit_js}">Edit</button>
+                        <form method="POST" action="/mt/protocols/delete/{p['id']}" style="display:inline;"
+                              onsubmit="return confirm('Delete this protocol template?')">
+                            <button type="submit" class="btn btn-danger btn-small">Delete</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>"""
+        return out
+
+    def _org_options(selected_id=None):
+        out = '<option value="">Global (all orgs)</option>'
+        for o in orgs:
+            sel = 'selected' if selected_id and o["id"] == selected_id else ''
+            out += f'<option value="{o["id"]}" {sel}>{o["name"]}</option>'
+        return out
+
+    rows_html = _proto_rows_html()
+    org_options = _org_options()
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Protocol Templates - MT Dashboard</title>
+    <link rel="stylesheet" href="/static/css/site.css">
+    <style>
+        .page-title {{ font-size: 2.2em; color: white; margin-bottom: 8px; }}
+        .page-subtitle {{ color: var(--muted); font-size: 1.1em; margin-bottom: 24px; }}
+        .topbar {{ display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }}
+        .section-card {{
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 24px;
+            border-radius: 10px;
+            margin-bottom: 28px;
+        }}
+        .section-card h3 {{ margin-top: 0; color: rgba(255,255,255,0.9); }}
+        .form-row {{ display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }}
+        .form-group {{ display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 200px; }}
+        .form-group label {{ font-size: 0.9em; color: rgba(255,255,255,0.7); font-weight: 500; }}
+        .form-group input, .form-group select, .form-group textarea {{
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 6px;
+            color: #fff;
+            padding: 9px 12px;
+            font-size: 0.95em;
+            color-scheme: dark;
+        }}
+        .form-group select option {{
+            background: #1a1d27;
+            color: #fff;
+        }}
+        .form-group textarea {{ resize: vertical; min-height: 90px; }}
+        .proto-table {{ width:100%; border-collapse:collapse; margin-top:10px; }}
+        .proto-table th {{ padding:12px 10px; text-align:left; background:rgba(255,255,255,0.05);
+                           border-bottom:1px solid rgba(31,111,235,0.3); font-size:0.85em; text-transform:uppercase; letter-spacing:0.5px; }}
+        .proto-table td {{ padding:12px 10px; border-bottom:1px solid rgba(255,255,255,0.05); vertical-align:top; }}
+        .modal-overlay {{
+            display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7);
+            z-index:1000; align-items:center; justify-content:center;
+        }}
+        .modal-overlay.open {{ display:flex; }}
+        .modal-box {{
+            background:#1a1d27; border:1px solid var(--card-border);
+            border-radius:12px; padding:28px; width:100%; max-width:560px;
+        }}
+        .modal-box h3 {{ margin-top:0; color:white; }}
+        .modal-footer {{ display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }}
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="brand-wrap">
+        <img class="brand-logo" src="{LOGO_DARK_URL}" alt="Lumos Lab" onerror="this.style.display='none';"
+             style="width:180px;max-width:100%;height:auto;border-radius:8px;display:block;margin-bottom:10px;">
+    </div>
+    <h1 class="page-title">Protocol Templates</h1>
+    <p class="page-subtitle">Define and manage imaging protocol templates for each organisation.</p>
+
+    <div class="topbar">
+        <a href="/mt" class="btn secondary">&larr; Back to Dashboard</a>
+        <a href="/logout" class="btn secondary">Logout</a>
+    </div>
+
+    <!-- Add Protocol Form -->
+    <div class="section-card">
+        <h3>Add New Protocol Template</h3>
+        <form method="POST" action="/mt/protocols/add">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Protocol Name</label>
+                    <input type="text" name="name" required placeholder="e.g., CT Head Standard">
+                </div>
+                <div class="form-group">
+                    <label>Organisation</label>
+                    <select name="org_id">
+                        {org_options}
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="flex:1;">
+                    <label>Instructions <span style="color:var(--muted);font-weight:400;">(optional)</span></label>
+                    <textarea name="instructions" placeholder="Detailed instructions for radiologists using this protocol..."></textarea>
+                </div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;">
+                <button type="submit" class="btn btn-primary">Add Protocol</button>
+                <label style="display:flex;align-items:center;gap:6px;font-size:0.9em;color:rgba(255,255,255,0.7);cursor:pointer;">
+                    <input type="checkbox" name="is_active" value="1" checked style="width:auto;"> Active
+                </label>
+            </div>
+        </form>
+    </div>
+
+    <!-- Protocol List -->
+    <div class="section-card">
+        <h3>All Protocol Templates ({len(protocols)})</h3>
+        <table class="proto-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Organisation</th>
+                    <th>Status</th>
+                    <th>Instructions Preview</th>
+                    <th>Last Modified</th>
+                    <th style="width:140px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="editModal" class="modal-overlay">
+    <div class="modal-box">
+        <h3>Edit Protocol Template</h3>
+        <form method="POST" id="editProtoForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Protocol Name</label>
+                    <input type="text" id="editProtoName" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label>Organisation</label>
+                    <select id="editProtoOrg" name="org_id">
+                        {org_options}
+                    </select>
+                </div>
+            </div>
+            <div class="form-group" style="margin-bottom:14px;">
+                <label>Instructions</label>
+                <textarea id="editProtoInstr" name="instructions" rows="5"></textarea>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;color:rgba(255,255,255,0.7);cursor:pointer;margin-bottom:14px;">
+                <input type="checkbox" id="editProtoActive" name="is_active" value="1" style="width:auto;"> Active
+            </label>
+            <div class="modal-footer">
+                <button type="button" class="btn secondary" onclick="closeEditModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editMtProtocol(id, name, orgId, instructions, isActive) {{
+    document.getElementById('editProtoName').value = name;
+    document.getElementById('editProtoInstr').value = instructions;
+    document.getElementById('editProtoActive').checked = (isActive === 1);
+    var sel = document.getElementById('editProtoOrg');
+    for (var i = 0; i < sel.options.length; i++) {{
+        sel.options[i].selected = (orgId && sel.options[i].value == orgId);
+        if (!orgId && sel.options[i].value === '') {{ sel.options[i].selected = true; }}
+    }}
+    document.getElementById('editProtoForm').action = '/mt/protocols/edit/' + id;
+    document.getElementById('editModal').classList.add('open');
+}}
+function closeEditModal() {{
+    document.getElementById('editModal').classList.remove('open');
+}}
+document.getElementById('editModal').addEventListener('click', function(e) {{
+    if (e.target === this) closeEditModal();
+}});
+</script>
+</body>
+</html>"""
+
+    return HTMLResponse(content=html)
+
+
+def _js_str(s: str) -> str:
+    """Escape a Python string for safe inline JS string literal (single-quoted)."""
+    import json
+    return json.dumps(s)
+
+
+@app.post("/mt/protocols/add")
+def mt_protocols_add(
+    request: Request,
+    name: str = Form(...),
+    org_id: str = Form(""),
+    instructions: str = Form(""),
+    is_active: str = Form(""),
+):
+    """Superuser: Add a new protocol template"""
+    try:
+        require_admin(request)
+    except HTTPException:
+        return redirect_to_login("admin", "/mt/protocols")
+
+    user = get_session_user(request)
+    if not user.get("is_superuser"):
+        raise HTTPException(status_code=403, detail="Superuser access required")
+
+    org_id_val = int(org_id) if org_id.strip().isdigit() else None
+    active = 1 if is_active == "1" else 0
+
+    conn = get_db()
+    if org_id_val:
+        conn.execute(
+            "INSERT INTO protocols (name, instructions, is_active, org_id, last_modified) VALUES (?, ?, ?, ?, ?)",
+            (name.strip(), instructions.strip() or None, active, org_id_val, datetime.now().isoformat()),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO protocols (name, instructions, is_active, last_modified) VALUES (?, ?, ?, ?)",
+            (name.strip(), instructions.strip() or None, active, datetime.now().isoformat()),
+        )
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/mt/protocols", status_code=303)
+
+
+@app.post("/mt/protocols/edit/{protocol_id}")
+def mt_protocols_edit(
+    request: Request,
+    protocol_id: int,
+    name: str = Form(...),
+    org_id: str = Form(""),
+    instructions: str = Form(""),
+    is_active: str = Form(""),
+):
+    """Superuser: Edit a protocol template"""
+    try:
+        require_admin(request)
+    except HTTPException:
+        return redirect_to_login("admin", "/mt/protocols")
+
+    user = get_session_user(request)
+    if not user.get("is_superuser"):
+        raise HTTPException(status_code=403, detail="Superuser access required")
+
+    org_id_val = int(org_id) if org_id.strip().isdigit() else None
+    active = 1 if is_active == "1" else 0
+
+    conn = get_db()
+    conn.execute(
+        "UPDATE protocols SET name = ?, instructions = ?, is_active = ?, org_id = ?, last_modified = ? WHERE id = ?",
+        (name.strip(), instructions.strip() or None, active, org_id_val, datetime.now().isoformat(), protocol_id),
+    )
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/mt/protocols", status_code=303)
+
+
+@app.post("/mt/protocols/delete/{protocol_id}")
+def mt_protocols_delete(request: Request, protocol_id: int):
+    """Superuser: Delete a protocol template"""
+    try:
+        require_admin(request)
+    except HTTPException:
+        return redirect_to_login("admin", "/mt/protocols")
+
+    user = get_session_user(request)
+    if not user.get("is_superuser"):
+        raise HTTPException(status_code=403, detail="Superuser access required")
+
+    conn = get_db()
+    conn.execute("DELETE FROM protocols WHERE id = ?", (protocol_id,))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/mt/protocols", status_code=303)
 
 
 if __name__ == "__main__":

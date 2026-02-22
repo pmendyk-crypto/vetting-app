@@ -30,9 +30,16 @@
       gap: 8px;
     }
 
+    .header-logo {
+      height: 36px;
+      width: auto;
+      border-radius: 6px;
+    }
+
     .main-content {
       display: flex;
       flex: 1;
+      justify-content: center;
     }
 
     .left-section {
@@ -53,7 +60,7 @@
       font-size: 48px;
       color: white;
       margin: 0 0 12px 0;
-      font-weight: 700;
+      font-weight: 400;
       line-height: 1.2;
     }
 
@@ -61,7 +68,7 @@
       font-size: 16px;
       color: #FFD700;
       margin: 0 0 24px 0;
-      font-weight: 600;
+      font-weight: 400;
       text-transform: uppercase;
       letter-spacing: 2px;
     }
@@ -75,7 +82,8 @@
     }
 
     .right-section {
-      flex: 1;
+      flex: 0 1 520px;
+      width: 100%;
       padding: 60px 40px;
       display: flex;
       flex-direction: column;
@@ -88,7 +96,22 @@
       color: white;
       font-size: 22px;
       margin: 0 0 8px 0;
-      font-weight: 700;
+      font-weight: 400;
+    }
+
+    .center-logo-wrap {
+      display: flex;
+      justify-content: center;
+      margin: 0 0 20px 0;
+    }
+
+    .center-logo {
+      width: min(280px, 70%);
+      height: auto;
+      border-radius: 8px;
+      border: none;
+      box-shadow: none;
+      background: transparent;
     }
 
     .right-section .intro-text {
@@ -114,7 +137,7 @@
       color: rgba(255,255,255,0.75);
       font-size: 12px;
       margin-bottom: 5px;
-      font-weight: 500;
+      font-weight: 400;
     }
 
     .form-row input {
@@ -145,7 +168,7 @@
       color: white;
       border: none;
       border-radius: 6px;
-      font-weight: 600;
+      font-weight: 400;
       cursor: pointer;
       font-size: 13px;
       margin-top: 8px;
@@ -226,50 +249,14 @@
   </style>
 </head>
 <body>
-  <!-- Header -->
-  <div class="header">
-    <div class="powered-by">
-      <span>Healthcare Vetting Solutions</span>
-    </div>
-  </div>
-
-  <!-- Main Content: Left + Right -->
+  <!-- Main Content -->
   <div class="main-content">
-    <!-- LEFT SECTION (2/3): App Info & Branding -->
-    <div class="left-section">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" class="logo-svg">
-        <g stroke="#FFFFFF" stroke-width="8" stroke-linecap="round">
-          <line x1="100" y1="10" x2="100" y2="40" />
-          <line x1="100" y1="160" x2="100" y2="190" />
-          <line x1="10" y1="100" x2="40" y2="100" />
-          <line x1="160" y1="100" x2="190" y2="100" />
-          <line x1="30" y1="30" x2="55" y2="55" />
-          <line x1="145" y1="145" x2="170" y2="170" />
-          <line x1="170" y1="30" x2="145" y2="55" />
-          <line x1="55" y1="145" x2="30" y2="170" />
-          <line x1="40" y1="20" x2="65" y2="45" />
-          <line x1="135" y1="155" x2="160" y2="180" />
-          <line x1="180" y1="65" x2="155" y2="40" />
-          <line x1="45" y1="160" x2="20" y2="135" />
-        </g>
-        <circle cx="100" cy="100" r="38" fill="#FFD700" />
-        <circle cx="100" cy="100" r="32" fill="#FFC700" />
-      </svg>
-
-      <h1>Vetting Suite</h1>
-      <p class="company-name">Vetting Suite</p>
-
-      <p>
-        Professional-grade platform for medical imaging vetting and quality assurance. Streamline case management, coordinate workflows, and maintain comprehensive audit trails across your radiology department.
-      </p>
-
-      <p>
-        Built for clinical efficiency. Support collaborative review, standardized protocols, and real-time case tracking to ensure timely delivery of critical imaging assessments.
-      </p>
-    </div>
-
-    <!-- RIGHT SECTION (1/3): Single Login Form -->
+    <!-- RIGHT SECTION: Login Form -->
     <div class="right-section">
+      <div class="center-logo-wrap">
+          <img class="center-logo" src="/static/images/logo-light.png" alt="Lumos Lab"
+             onerror="this.style.display='none';">
+      </div>
       <h2>Sign In</h2>
       <p class="intro-text">
         Enter your credentials to access the Vetting Suite. Your role determines your access level.
@@ -295,6 +282,11 @@
             <a class="small" href="/forgot-password">Forgot password?</a>
           </div>
 
+          {% if expired == '1' %}
+            <div class="err" style="background: rgba(234,179,8,0.15); border-color: rgba(234,179,8,0.4); color: #fde68a;">
+              Your session has expired due to inactivity. Please sign in again.
+            </div>
+          {% endif %}
           {% if error %}
             <div class="err">{{ error }}</div>
           {% endif %}

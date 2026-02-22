@@ -6,39 +6,58 @@
   <title>Vetting App | Admin</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; display: flex; flex-direction: column; min-height: 100vh; }
+    body { margin: 24px; display: flex; flex-direction: column; min-height: 100vh; }
     table { border-collapse: collapse; width: 100%; }
-    th, td { border-bottom: 1px solid #ddd; padding: 10px; vertical-align: top; }
-    th { text-align: left; background: #f6f6f6; }
-    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #eee; }
+    th, td { border-bottom: 1px solid rgba(255,255,255,0.08); padding: 10px; vertical-align: top; color: rgba(255,255,255,0.85); }
+    th { text-align: left; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.6); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,0.12); }
     .row-actions a { margin-right: 10px; }
     .filters { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0 18px; }
-    .filters label { font-size: 12px; color: #444; display: block; margin-bottom: 4px; }
-    .filters input, .filters select { padding: 8px; min-width: 180px; }
+    .filters label { font-size: 12px; color: rgba(255,255,255,0.6); display: block; margin-bottom: 4px; }
+    .filters input, .filters select { padding: 8px; min-width: 180px; background: rgba(255,255,255,0.07); color: #fff; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; }
     .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
     .btn { display: inline-block; padding: 10px 14px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; }
-    .btn.secondary { background: #555; }
+    .btn.secondary { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.8); }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-    .small { font-size: 12px; color: #666; }
-    
+    .small { font-size: 12px; color: rgba(255,255,255,0.5); }
+    .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 20px; }
+
     .header-with-logo { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
-    .logo-container { width: 50px; height: 50px; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #333; font-size: 24px; }
-    .logo-text h2 { margin: 0; font-size: 18px; }
-    .logo-text p { margin: 2px 0 0 0; font-size: 12px; color: #666; }
-    
+    .logo-text h2 { margin: 0; font-size: 18px; color: rgba(255,255,255,0.9); }
+    .logo-text p { margin: 2px 0 0 0; font-size: 12px; color: rgba(255,255,255,0.5); }
+
     .main-content { flex: 1; }
-    .page-footer { text-align: center; padding: 30px 20px; border-top: 1px solid #ddd; margin-top: 50px; color: #666; font-size: 13px; }
+    .page-footer { text-align: center; padding: 30px 20px; border-top: 1px solid rgba(255,255,255,0.07); margin-top: 50px; color: rgba(255,255,255,0.4); font-size: 13px; }
     .page-footer p { margin: 0; }
-    
+
     .wrapper { display: flex; flex-direction: column; min-height: 100vh; }
     .container { flex: 1; width: 100%; max-width: 100%; padding: 0 16px; box-sizing: border-box; }
 
     .case-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; width: 100%; }
     .case-grid .card { margin: 0; }
+    .card-full-width { grid-column: 1 / -1; }
 
     .preview-card { display: flex; flex-direction: column; }
     .preview-body { flex: 1; min-height: 70vh; }
-    .preview-frame { width: 100%; height: 100%; border: 1px solid #ddd; border-radius: 6px; background: #fff; }
+    .preview-frame { width: 100%; height: 100%; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; background: #fff; }
+
+    /* Timeline */
+    .timeline-table { width: 100%; border-collapse: collapse; }
+    .timeline-table thead th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(255,255,255,0.45); border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .timeline-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .timeline-table tbody tr:last-child { border-bottom: none; }
+    .timeline-table tbody td { padding: 10px 12px; font-size: 13px; vertical-align: top; color: rgba(255,255,255,0.82); }
+    .timeline-table .ts { font-size: 11px; color: rgba(255,255,255,0.45); white-space: nowrap; }
+    .ev-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 400; letter-spacing: 0.3px; white-space: nowrap; }
+    .ev-SUBMITTED  { background: rgba(31,111,235,0.2);  color: #93c5fd; border: 1px solid rgba(31,111,235,0.4); }
+    .ev-ASSIGNED   { background: rgba(139,92,246,0.18); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.4); }
+    .ev-VETTED     { background: rgba(16,185,129,0.18); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.4); }
+    .ev-REJECTED   { background: rgba(239,68,68,0.18);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
+    .ev-REOPENED   { background: rgba(234,179,8,0.18);  color: #fde68a; border: 1px solid rgba(234,179,8,0.4); }
+    .ev-EDITED     { background: rgba(234,88,12,0.18);  color: #fdba74; border: 1px solid rgba(234,88,12,0.4); }
+    .ev-OTHER      { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.15); }
+    .detail-row { margin: 2px 0; font-size: 12px; color: rgba(255,255,255,0.6); }
+    .detail-row span { color: rgba(255,255,255,0.4); }
 
     @media (max-width: 1200px) {
       .case-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -46,8 +65,6 @@
     @media (max-width: 800px) {
       .case-grid { grid-template-columns: 1fr; }
     }
-
-    /* Step 2 + 3: add this at the bottom of the style block */
     @media (max-width: 700px) {
       body { margin: 14px; font-size: 16px; }
       table { display: block; overflow-x: auto; white-space: nowrap; }
@@ -60,6 +77,7 @@
   </style>
 </head>
 <body>
+  <div id="session-expiry-warning">⚠️ Your session will expire in 5 minutes due to inactivity. <a href="/login" style="color:#fde68a;font-weight:400;">Sign in again</a> to continue.</div>
   <div class="wrapper">
     <div class="main-content container">
     <div class="topbar">
@@ -82,30 +100,48 @@
       <div class="card">
         <h3 style="margin-top: 0;">Case Details</h3>
         <p><b>Case ID:</b> {{ case["id"] }}</p>
+        {% if org_name %}
+          <p><b>Organisation:</b> {{ org_name }}</p>
+        {% endif %}
         <p><b>Status:</b> {{ case["status"] }}</p>
         <p><b>Created:</b> {{ case["created_at"] }}</p>
-        <p><b>Patient ID:</b> {{ case["patient_id"] }}</p>
+        <p><b>Patient ID:</b> {{ case["patient_referral_id"] or "—" }}</p>
+        <p><b>Patient DOB:</b> {{ case["patient_dob"] or "—" }}</p>
         <p><b>Study:</b> {{ case["study_description"] }}</p>
         <p><b>Radiologist:</b> {{ case["radiologist"] }}</p>
         <p><b>Admin notes:</b><br>{{ case["admin_notes"] or "" }}</p>
         <p><b>Protocol:</b> {{ case["protocol"] or "" }}</p>
+        {% if case.get("contrast_required") %}
+          <p><b>Contrast Required:</b> {{ case["contrast_required"] }}
+            {% if case["contrast_required"] == "Yes" and case.get("contrast_details") %}
+              — {{ case["contrast_details"] }}
+            {% endif %}
+          </p>
+        {% endif %}
         <p><b>Decision:</b> {{ case["decision"] or "" }}</p>
         <p><b>Comment:</b><br>{{ case["decision_comment"] or "" }}</p>
-
-        <p class="small" style="margin-top: 12px;">
-          <a href="/case/{{ case['id'] }}/pdf" target="_blank">Open vetting Form</a>
-          {% if case["uploaded_filename"] %}
-            &nbsp;|&nbsp;
-            <a href="/case/{{ case['id'] }}/attachment" target="_blank">Download referral</a>
-          {% endif %}
-        </p>
       </div>
 
       <div class="card preview-card">
-        <h3 style="margin-top: 0;">Referral Preview</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <h3 style="margin: 0;">Referral Preview</h3>
+          {% if case["uploaded_filename"] and case["stored_filepath"] %}
+            <a href="/case/{{ case['id'] }}/attachment" class="btn" style="padding:6px 12px;font-size:12px;">⬇ Download Referral</a>
+          {% elif case["uploaded_filename"] %}
+            <span style="font-size:12px;color:rgba(255,255,255,0.4);">File expired</span>
+          {% endif %}
+        </div>
         {% if case["uploaded_filename"] %}
           <div class="preview-body">
-            <iframe src="/case/{{ case['id'] }}/attachment/inline#view=FitH" class="preview-frame"></iframe>
+            {% if case["stored_filepath"] %}
+              <iframe src="/case/{{ case['id'] }}/attachment/inline#view=FitH" class="preview-frame"></iframe>
+            {% else %}
+              <div style="display:flex;align-items:center;justify-content:center;height:200px;color:rgba(255,255,255,0.4);font-size:0.95em;flex-direction:column;gap:8px;">
+                <span style="font-size:1.8em;">🗂️</span>
+                <span>Referral file expired — no longer available</span>
+                <span style="font-size:0.85em;">(Referral attachments are retained for 7 days)</span>
+              </div>
+            {% endif %}
           </div>
         {% else %}
           <p class="small">No referral attachment uploaded.</p>
@@ -113,13 +149,61 @@
       </div>
 
       <div class="card preview-card">
-        <h3 style="margin-top: 0;">Vetted Form Preview</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <h3 style="margin: 0;">Decision Report Preview</h3>
+          {% if case["status"] in ["vetted", "rejected"] %}
+            <a href="/case/{{ case['id'] }}/pdf" target="_blank" class="btn" style="padding:6px 12px;font-size:12px;">⬇ Download Decision Report</a>
+          {% endif %}
+        </div>
         {% if case["status"] == "vetted" or case["status"] == "rejected" %}
           <div class="preview-body">
             <iframe src="/case/{{ case['id'] }}/pdf?inline=1#view=FitH" class="preview-frame"></iframe>
           </div>
         {% else %}
-          <p class="small">Vetting form will appear once the case is vetted.</p>
+          <p class="small">Decision report will appear once the case is vetted.</p>
+        {% endif %}
+      </div>
+
+      <div class="card card-full-width">
+        <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Case Timeline</h3>
+        {% if events and events|length > 0 %}
+          <table class="timeline-table">
+            <thead>
+              <tr>
+                <th>Date / Time (UTC)</th>
+                <th>Action</th>
+                <th>User</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in events %}
+                {% set ev = e["event_type"] | upper %}
+                <tr>
+                  <td class="ts">{{ e["created_at"] }}</td>
+                  <td>
+                    <span class="ev-badge ev-{% if ev in ['SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','EDITED'] %}{{ ev }}{% else %}OTHER{% endif %}">
+                      {{ ev }}
+                    </span>
+                  </td>
+                  <td style="font-size:13px;">{{ e["username"] or "-" }}</td>
+                  <td>
+                    {% if e["decision"] %}
+                      <div class="detail-row"><span>Decision: </span>{{ e["decision"] }}</div>
+                    {% endif %}
+                    {% if e["protocol"] %}
+                      <div class="detail-row"><span>Protocol: </span>{{ e["protocol"] }}</div>
+                    {% endif %}
+                    {% if e["comment"] %}
+                      <div class="detail-row"><span>Note: </span>{{ e["comment"] }}</div>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="small">No event history available.</p>
         {% endif %}
       </div>
     </div>
@@ -130,5 +214,6 @@
       <p>Powered by <strong>Vetting Suite</strong> - Healthcare Applications</p>
     </div>
   </div>
+  <script src="/static/js/session.js"></script>
 </body>
 </html>

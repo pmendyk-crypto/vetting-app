@@ -6,6 +6,11 @@
     <title>My Cases - Vetting Suite</title>
     <link rel="stylesheet" href="/static/css/site.css">
     <style>
+        body {
+            background: linear-gradient(180deg, var(--bg-1), var(--bg-2));
+            color: var(--muted);
+        }
+
         .dashboard-container {
             max-width: 1400px;
             margin: 0 auto;
@@ -27,6 +32,14 @@
             color: rgba(255, 255, 255, 0.98);
         }
 
+        .brand-logo {
+            width: 52px;
+            height: 52px;
+            border-radius: 8px;
+            object-fit: cover;
+            flex: 0 0 auto;
+        }
+
         .header-info {
             color: rgba(255, 255, 255, 0.6);
             margin: 5px 0 0 0;
@@ -44,7 +57,7 @@
             border: none;
             border-radius: 6px;
             font-size: 14px;
-            font-weight: 500;
+            font-weight: 400;
             cursor: pointer;
             text-decoration: none;
             display: inline-block;
@@ -80,37 +93,29 @@
             border-bottom: 1px solid rgba(31, 111, 235, 0.2);
         }
 
-        .tab-btn {
-            padding: 12px 20px;
-            border: none;
-            background: transparent;
-            color: rgba(255, 255, 255, 0.6);
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s ease;
-        }
+        .tab-btn { padding: 10px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; color: rgba(255,255,255,0.85); cursor: pointer; font-weight: 400; font-size: 13px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+        .tab-btn:hover { background: rgba(255,255,255,0.12); }
+        .tab-count { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 400; }
 
-        .tab-btn.active {
-            color: #1f6feb;
-            border-bottom-color: #1f6feb;
-        }
+        .tab-btn-all .tab-count { background: rgba(31,111,235,0.25); color: #7eb8ff; border: 1px solid rgba(31,111,235,0.4); }
+        .tab-btn-all.active { background: rgba(31,111,235,0.2); border-color: #1f6feb; color: #fff; }
+        .tab-btn-all.active .tab-count { background: #1f6feb; color: #fff; border-color: #1f6feb; }
 
-        .tab-btn:hover {
-            color: rgba(255, 255, 255, 0.85);
-        }
+        .tab-btn-pending .tab-count { background: rgba(245,158,11,0.2); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4); }
+        .tab-btn-pending.active { background: rgba(245,158,11,0.15); border-color: #f59e0b; color: #fbbf24; }
+        .tab-btn-pending.active .tab-count { background: #f59e0b; color: #1a0e00; border-color: #f59e0b; }
 
-        .tab-stats {
-            display: inline-block;
-            margin-left: 8px;
-            padding: 2px 8px;
-            background: rgba(31, 111, 235, 0.15);
-            border-radius: 12px;
-            font-size: 12px;
-            color: #1f6feb;
-            font-weight: 600;
-        }
+        .tab-btn-reopened .tab-count { background: rgba(234,88,12,0.2); color: #fdba74; border: 1px solid rgba(234,88,12,0.4); }
+        .tab-btn-reopened.active { background: rgba(234,88,12,0.15); border-color: #ea580c; color: #fdba74; }
+        .tab-btn-reopened.active .tab-count { background: #ea580c; color: #fff; border-color: #ea580c; }
+
+        .tab-btn-vetted .tab-count { background: rgba(34,197,94,0.2); color: #4ade80; border: 1px solid rgba(34,197,94,0.4); }
+        .tab-btn-vetted.active { background: rgba(34,197,94,0.15); border-color: #22c55e; color: #4ade80; }
+        .tab-btn-vetted.active .tab-count { background: #22c55e; color: #052e16; border-color: #22c55e; }
+
+        .tab-btn-rejected .tab-count { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
+        .tab-btn-rejected.active { background: rgba(239,68,68,0.15); border-color: #ef4444; color: #fca5a5; }
+        .tab-btn-rejected.active .tab-count { background: #ef4444; color: #fff; border-color: #ef4444; }
 
         /* Table Styles */
         .data-table {
@@ -131,7 +136,7 @@
             padding: 12px 16px;
             text-align: left;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 400;
             color: #1f6feb;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -157,7 +162,7 @@
             padding: 4px 10px;
             border-radius: 4px;
             font-size: 11px;
-            font-weight: 600;
+            font-weight: 400;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -183,7 +188,7 @@
         }
 
         .tat-display {
-            font-weight: 500;
+            font-weight: 400;
             font-family: 'Courier New', monospace;
         }
 
@@ -201,7 +206,7 @@
             color: #1f6feb;
             text-decoration: none;
             font-size: 13px;
-            font-weight: 500;
+            font-weight: 400;
             transition: all 0.2s ease;
         }
 
@@ -258,41 +263,48 @@
     </style>
 </head>
 <body>
+  <div id="session-expiry-warning">⚠️ Your session will expire in 5 minutes due to inactivity. <a href="/login" style="color:#fde68a;font-weight:400;">Sign in again</a> to continue.</div>
     <div class="dashboard-container">
         <div class="dashboard-header">
             <div style="display: flex; align-items: center; gap: 16px;">
+                 <img class="brand-logo" src="/static/images/logo-light.png" alt="Lumos Lab"
+                     onerror="this.style.display='none';">
                 <div>
                     <h1>My Cases</h1>
                     <p class="header-info">Cases assigned for vetting</p>
                 </div>
             </div>
             <div class="header-actions">
+                <a href="/account" class="btn btn-secondary">My Account</a>
                 <a href="/logout" class="btn btn-secondary">Logout</a>
             </div>
         </div>
 
         <!-- Tab Navigation -->
         <div class="tabs">
-            <button class="tab-btn {% if tab == 'all' %}active{% endif %}" onclick="switchTab('all')">
-                All
-                <span class="tab-stats">{{ cases|length }}</span>
+            <button class="tab-btn tab-btn-all {% if tab == 'all' %}active{% endif %}" onclick="switchTab('all')">
+                All <span class="tab-count">{{ cases|length }}</span>
             </button>
-            <button class="tab-btn {% if tab == 'pending' %}active{% endif %}" onclick="switchTab('pending')">
-                Pending
-                <span class="tab-stats">{{ cases|selectattr('status', 'in', ['pending', 'reopened'])|list|length }}</span>
+            <button class="tab-btn tab-btn-pending {% if tab == 'pending' %}active{% endif %}" onclick="switchTab('pending')">
+                Pending <span class="tab-count">{{ cases|selectattr('status', 'in', ['pending', 'reopened'])|list|length }}</span>
             </button>
-            <button class="tab-btn {% if tab == 'reopened' %}active{% endif %}" onclick="switchTab('reopened')">
-                Reopened
-                <span class="tab-stats">{{ cases|selectattr('status', 'equalto', 'reopened')|list|length }}</span>
+            <button class="tab-btn tab-btn-reopened {% if tab == 'reopened' %}active{% endif %}" onclick="switchTab('reopened')">
+                Reopened <span class="tab-count">{{ cases|selectattr('status', 'equalto', 'reopened')|list|length }}</span>
             </button>
-            <button class="tab-btn {% if tab == 'vetted' %}active{% endif %}" onclick="switchTab('vetted')">
-                Vetted
-                <span class="tab-stats">{{ cases|selectattr('status', 'equalto', 'vetted')|list|length }}</span>
+            <button class="tab-btn tab-btn-vetted {% if tab == 'vetted' %}active{% endif %}" onclick="switchTab('vetted')">
+                Vetted <span class="tab-count">{{ cases|selectattr('status', 'equalto', 'vetted')|list|length }}</span>
             </button>
-            <button class="tab-btn {% if tab == 'rejected' %}active{% endif %}" onclick="switchTab('rejected')">
-                Rejected
-                <span class="tab-stats">{{ cases|selectattr('status', 'equalto', 'rejected')|list|length }}</span>
+            <button class="tab-btn tab-btn-rejected {% if tab == 'rejected' %}active{% endif %}" onclick="switchTab('rejected')">
+                Rejected <span class="tab-count">{{ cases|selectattr('status', 'equalto', 'rejected')|list|length }}</span>
             </button>
+        </div>
+
+        <!-- Search -->
+        <div style="margin-bottom: 18px;">
+            <input id="caseSearch" type="search" placeholder="Search by patient name, ID or study description…"
+                   oninput="filterCases()"
+                   style="width:100%;max-width:480px;padding:9px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:14px;outline:none;box-sizing:border-box;">
+            <span id="searchCount" style="margin-left:12px;font-size:12px;color:rgba(255,255,255,0.45);"></span>
         </div>
 
         <!-- Cases Table -->
@@ -302,7 +314,7 @@
             <div class="empty-state-text">No cases found</div>
         </div>
         {% else %}
-        <table class="data-table">
+        <table class="data-table" id="casesTable">
             <thead>
                 <tr>
                     <th>Status</th>
@@ -315,7 +327,7 @@
             </thead>
             <tbody>
                 {% for c in cases %}
-                <tr>
+                <tr class="case-row">
                     <td>
                         <span class="status-badge status-{{ c.status|lower }}">
                             {{ c.status }}
@@ -341,13 +353,13 @@
                     <td>
                         <div class="action-links">
                             <a href="/vet/{{ c.id }}">Open</a>
-                            <a href="/case/{{ c.id }}/pdf">PDF</a>
                         </div>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+        <div id="noSearchResults" style="display:none;text-align:center;padding:30px;color:rgba(255,255,255,0.45);">No cases match your search.</div>
         {% endif %}
 
         <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(31,111,235,0.2);">
@@ -364,6 +376,23 @@
             const url = '/radiologist' + (params.toString() ? '?' + params.toString() : '');
             window.location.href = url;
         }
+
+        function filterCases() {
+            const q = document.getElementById('caseSearch').value.toLowerCase().trim();
+            const rows = document.querySelectorAll('#casesTable .case-row');
+            let visible = 0;
+            rows.forEach(function(row) {
+                const text = row.innerText.toLowerCase();
+                const match = !q || text.includes(q);
+                row.style.display = match ? '' : 'none';
+                if (match) visible++;
+            });
+            const count = document.getElementById('searchCount');
+            const noRes = document.getElementById('noSearchResults');
+            if (count) count.textContent = q ? visible + ' result' + (visible !== 1 ? 's' : '') : '';
+            if (noRes) noRes.style.display = (q && visible === 0) ? 'block' : 'none';
+        }
     </script>
+    <script src="/static/js/session.js"></script>
 </body>
 </html>

@@ -13,7 +13,7 @@
     .form-section { background: var(--card-bg); border: 1px solid var(--card-border); padding: 20px; border-radius: 8px; margin-bottom: 20px; }
     .form-section h2 { color: white; font-size: 16px; margin: 0 0 16px 0; }
     .form-row { margin-bottom: 16px; }
-    .form-row label { display: block; color: rgba(255,255,255,0.8); font-size: 13px; margin-bottom: 6px; font-weight: 500; }
+    .form-row label { display: block; color: rgba(255,255,255,0.8); font-size: 13px; margin-bottom: 6px; font-weight: 400; }
     .required::after { content: " *"; color: #ff9999; }
     .form-row input, .form-row select, .form-row textarea { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); color: white; font-size: 13px; box-sizing: border-box; }
     .form-row input::placeholder, .form-row textarea::placeholder { color: rgba(255,255,255,0.4); }
@@ -22,7 +22,7 @@
     .form-row.full { grid-column: 1 / -1; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .actions { display: flex; gap: 12px; margin-top: 20px; }
-    .btn { display: inline-block; padding: 10px 16px; background: #1f6feb; color: white; border: none; border-radius: 6px; text-decoration: none; font-weight: 600; cursor: pointer; }
+    .btn { display: inline-block; padding: 10px 16px; background: #1f6feb; color: white; border: none; border-radius: 6px; text-decoration: none; font-weight: 400; cursor: pointer; }
     .btn:hover { filter: brightness(1.05); }
     .btn.secondary { background: rgba(255,255,255,0.08); }
     .btn.secondary:hover { background: rgba(255,255,255,0.12); }
@@ -31,7 +31,7 @@
     .form-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     
     .header-with-logo { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
-    .logo-container { width: 50px; height: 50px; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #333; font-size: 24px; }
+    .logo-container { width: 50px; height: 50px; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 400; color: #333; font-size: 24px; }
     .logo-text h2 { margin: 0; font-size: 18px; }
     .logo-text p { margin: 2px 0 0 0; font-size: 12px; color: rgba(255,255,255,0.6); }
     
@@ -46,7 +46,8 @@
 </head>
 <body>
   <div class="header-with-logo" style="padding: 20px 0 0 0; max-width: 800px; margin: 0 auto; padding-left: 20px; padding-right: 20px;">
-    <object data="/static/images/logo.svg" type="image/svg+xml" style="width: 50px; height: 50px;" alt="Lumos Lab Logo"></object>
+    <img src="/static/images/logo-light.png" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;" alt="Lumos Lab Logo"
+        onerror="this.style.display='none';">
     <div class="logo-text">
       <h2>Lumos Lab</h2>
       <p>Healthcare Applications</p>
@@ -77,8 +78,12 @@
         </div>
 
         <div class="form-row">
-          <label class="required">Patient / Referral ID</label>
+          <label class="required">Patient ID</label>
           <input name="patient_referral_id" type="text" required>
+        </div>
+        <div class="form-row">
+          <label>Patient DOB</label>
+          <input name="patient_dob" type="date">
         </div>
       </div>
 

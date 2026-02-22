@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Case Intake</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+</head>
+<body>
+  <div class="container" style="max-width: 900px; margin: 20px auto;">
+    <h1>Case Intake</h1>
+    <p class="small">Submit a new case to the organisation intake queue.</p>
+
+    {% if error %}
+      <div class="err">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Patient first name</label>
+          <input name="patient_first_name" required>
+        </div>
+        <div class="form-row">
+          <label>Patient surname</label>
+          <input name="patient_surname" required>
+        </div>
+        <div class="form-row">
+          <label>Referral ID</label>
+          <input name="patient_referral_id" required>
+        </div>
+        <div class="form-row">
+          <label>Institution</label>
+          <select name="institution_id" required>
+            <option value="">Select</option>
+            {% for inst in institutions %}
+              <option value="{{ inst.id }}">{{ inst.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label>Study description</label>
+        <textarea name="study_description" required></textarea>
+      </div>
+
+      <div class="form-row">
+        <label>Notes (optional)</label>
+        <textarea name="admin_notes"></textarea>
+      </div>
+
+      <div class="form-row">
+        <label>Referral attachment</label>
+        <input type="file" name="attachment" required>
+      </div>
+
+      <button type="submit" class="btn">Submit case</button>
+    </form>
+  </div>
+</body>
+</html>

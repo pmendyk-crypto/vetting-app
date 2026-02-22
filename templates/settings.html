@@ -29,7 +29,7 @@
 
         .section-title {
             font-size: 18px;
-            font-weight: 600;
+            font-weight: 400;
             color: #1f6feb;
             margin-bottom: 20px;
             padding-bottom: 10px;
@@ -65,7 +65,7 @@
 
         .form-group label {
             font-size: 13px;
-            font-weight: 500;
+            font-weight: 400;
             color: rgba(255, 255, 255, 0.75);
             margin-bottom: 6px;
             text-transform: uppercase;
@@ -115,7 +115,7 @@
             border: none;
             border-radius: 6px;
             font-size: 14px;
-            font-weight: 500;
+            font-weight: 400;
             cursor: pointer;
             transition: all 0.2s ease;
             text-decoration: none;
@@ -177,7 +177,7 @@
             padding: 12px 16px;
             text-align: left;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 400;
             color: #1f6feb;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -223,7 +223,7 @@
             padding: 4px 8px;
             border-radius: 4px;
             font-size: 11px;
-            font-weight: 600;
+            font-weight: 400;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -270,7 +270,7 @@
 
         .modal-header {
             font-size: 18px;
-            font-weight: 600;
+            font-weight: 400;
             color: rgba(255, 255, 255, 0.98);
             margin-bottom: 20px;
         }
@@ -297,7 +297,7 @@
             color: rgba(255, 255, 255, 0.6);
             cursor: pointer;
             font-size: 14px;
-            font-weight: 500;
+            font-weight: 400;
             border-bottom: 2px solid transparent;
             transition: all 0.2s ease;
             white-space: nowrap;
@@ -364,17 +364,12 @@
             padding-top: 10px;
         }
 
-        .logo-container {
+        .logo-image {
             width: 50px;
             height: 50px;
-            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
             border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            color: #333;
-            font-size: 24px;
+            object-fit: cover;
+            flex: 0 0 auto;
         }
 
         .logo-text h2 {
@@ -419,16 +414,28 @@
     </style>
 </head>
 <body>
+  <div id="session-expiry-warning">⚠️ Your session will expire in 5 minutes due to inactivity. <a href="/login" style="color:#fde68a;font-weight:400;">Sign in again</a> to continue.</div>
     <div class="page-wrapper">
         <div class="settings-container">
         <div class="main-content">
+        <div class="header-with-logo">
+              <img class="logo-image" src="/static/images/logo-light.png" alt="Lumos Lab"
+                  onerror="this.style.display='none';">
+            <div class="logo-text">
+                <h2>Lumos Lab</h2>
+                <p>Healthcare Applications</p>
+            </div>
+        </div>
         <div class="settings-header">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <h1>Settings</h1>
                     <p style="color: rgba(255,255,255,0.6); margin: 0;">Manage institutions, radiologists, users, and protocols</p>
                 </div>
-                <a href="/admin" class="btn btn-secondary" style="margin-top: 0;">Back to Dashboard</a>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <a href="/account" class="btn btn-secondary" style="margin-top: 0;">My Account</a>
+                    <a href="/admin" class="btn btn-secondary" style="margin-top: 0;">Back to Dashboard</a>
+                </div>
             </div>
         </div>
 
@@ -438,6 +445,18 @@
             <button class="tab-btn" onclick="switchTab('users', this)">Users</button>
             <button class="tab-btn" onclick="switchTab('protocols', this)">Protocols</button>
         </div>
+
+        {% if error == 'email_taken' %}
+        <div style="background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px;">
+            ⚠️ That email address is already in use by another account. Please choose a different email.
+        </div>
+        {% endif %}
+
+        {% if error == 'username_taken' %}
+        <div style="background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px;">
+            ⚠️ That username is already taken. Please choose a different username.
+        </div>
+        {% endif %}
 
         <!-- ===================== INSTITUTIONS TAB ===================== -->
         <div id="institutions" class="tab-content active">
@@ -684,7 +703,7 @@
                                 <td>{{ proto.name }}</td>
                                 <td>{{ proto.institution_name if proto.institution_name else 'Unassigned' }}</td>
                                 <td>
-                                    <span style="color: {% if proto.is_active %}#4ade80{% else %}rgba(255,255,255,0.5){% endif %}; font-weight: 500;">
+                                    <span style="color: {% if proto.is_active %}#4ade80{% else %}rgba(255,255,255,0.5){% endif %}; font-weight: 400;">
                                         {{ 'Active' if proto.is_active else 'Inactive' }}
                                     </span>
                                 </td>
@@ -1025,5 +1044,6 @@
             <p>Powered by <strong>Vetting Suite</strong> - Healthcare Applications</p>
         </div>
     </div>
+  <script src="/static/js/session.js"></script>
 </body>
 </html>

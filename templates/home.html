@@ -6,10 +6,34 @@
   <title>Vetting App | Admin</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    .tab-buttons { display: flex; gap: 8px; margin-bottom: 16px; }
-    .tab-btn { padding: 10px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; color: rgba(255,255,255,0.7); cursor: pointer; font-weight: 500; font-size: 13px; transition: all 0.2s; }
-    .tab-btn.active { background: #1f6feb; color: white; border-color: #1f6feb; }
+    .brand-logo {
+      width: 52px;
+      height: 52px;
+      border-radius: 8px;
+      object-fit: cover;
+      flex: 0 0 auto;
+    }
+
+    .tab-buttons { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .tab-btn { padding: 10px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; color: rgba(255,255,255,0.85); cursor: pointer; font-weight: 400; font-size: 13px; transition: all 0.2s; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
     .tab-btn:hover { background: rgba(255,255,255,0.12); }
+    .tab-count { display: inline-block; border-radius: 999px; font-size: 11px; font-weight: 400; padding: 2px 8px; min-width: 22px; text-align: center; }
+    /* All — blue */
+    .tab-btn-all .tab-count { background: rgba(31,111,235,0.25); color: #7eb8ff; border: 1px solid rgba(31,111,235,0.4); }
+    .tab-btn-all.active { background: rgba(31,111,235,0.2); border-color: #1f6feb; color: #fff; }
+    .tab-btn-all.active .tab-count { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+    /* Pending — amber */
+    .tab-btn-pending .tab-count { background: rgba(245,158,11,0.2); color: #fbbf24; border: 1px solid rgba(245,158,11,0.4); }
+    .tab-btn-pending.active { background: rgba(245,158,11,0.15); border-color: #f59e0b; color: #fbbf24; }
+    .tab-btn-pending.active .tab-count { background: #f59e0b; color: #1a0e00; border-color: #f59e0b; }
+    /* Vetted — green */
+    .tab-btn-vetted .tab-count { background: rgba(34,197,94,0.2); color: #4ade80; border: 1px solid rgba(34,197,94,0.4); }
+    .tab-btn-vetted.active { background: rgba(34,197,94,0.15); border-color: #22c55e; color: #4ade80; }
+    .tab-btn-vetted.active .tab-count { background: #22c55e; color: #052e16; border-color: #22c55e; }
+    /* Rejected — red */
+    .tab-btn-rejected .tab-count { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
+    .tab-btn-rejected.active { background: rgba(239,68,68,0.15); border-color: #ef4444; color: #fca5a5; }
+    .tab-btn-rejected.active .tab-count { background: #ef4444; color: #fff; border-color: #ef4444; }
     .filters-section { background: var(--card-bg); border: 1px solid var(--card-border); padding: 16px; border-radius: 8px; margin-bottom: 16px; }
     .filters-content { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 12px; align-items: flex-end; }
     .filter-group { display: flex; flex-direction: column; }
@@ -20,6 +44,38 @@
     table th.sortable::after { content: " ↕"; opacity: 0.5; font-size: 11px; }
     table th.sort-asc::after { content: " ↑"; opacity: 1; }
     table th.sort-desc::after { content: " ↓"; opacity: 1; }
+    table { table-layout: fixed; width: 100%; }
+    table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    table td.row-actions { overflow: visible; white-space: nowrap; }
+    /* resize handle */
+    .col-resize-handle {
+        position: absolute;
+        right: 0; top: 20%; bottom: 20%;
+        width: 5px;
+        cursor: col-resize;
+        z-index: 10;
+        border-radius: 3px;
+        background: rgba(180,190,210,0.45);
+        transition: background 0.15s, width 0.1s;
+    }
+    .col-resize-handle::before {
+        content: '';
+        position: absolute;
+        left: 50%; top: 25%; bottom: 25%;
+        width: 2px;
+        transform: translateX(-50%);
+        border-left: 1px dotted rgba(120,140,175,0.7);
+        border-right: 1px dotted rgba(120,140,175,0.7);
+    }
+    .col-resize-handle:hover,
+    .col-resize-handle.dragging {
+        background: rgba(31,111,235,0.7);
+        width: 6px;
+    }
+    .col-resize-handle:hover::before,
+    .col-resize-handle.dragging::before {
+        border-color: transparent;
+    }
     @media (max-width: 1200px) {
       .filters-content { grid-template-columns: 1fr 1fr; }
     }
@@ -30,31 +86,43 @@
   </style>
 </head>
 <body>
+  <div id="session-expiry-warning">⚠️ Your session will expire in 5 minutes due to inactivity. <a href="/login" style="color:#fde68a;font-weight:400;">Sign in again</a> to continue.</div>
   <div class="topbar">
     <div style="display: flex; align-items: center; gap: 16px;">
+      <img class="brand-logo" src="/static/images/logo-light.png" alt="Lumos Lab"
+        onerror="this.style.display='none';">
       <div>
         <h1 style="margin:0;">{{ org_name if org_name else 'Admin Dashboard' }}</h1>
-        <p style="margin:6px 0 0; color: rgba(255,255,255,0.6); font-size: 13px;">All: {{ total_count }} | Pending: {{ pending_count }} | Vetted: {{ vetted_count }} | Rejected: {{ rejected_count }}</p>
-        {% if current_user %}
-          <div class="small">Logged in as: {{ current_user["username"] }} ({{ current_user["role"] }})</div>
-        {% endif %}
       </div>
     </div>
 
-    <div class="actions">
-      <a class="btn" href="/submit">Submit New Case</a>
-      <a class="btn secondary" href="/settings">Settings</a>
-      <a class="btn secondary" href="/logout">Logout</a>
+    <div class="actions" style="flex-direction: column; align-items: flex-end; gap: 14px;">
+      {% if current_user %}
+        <a href="/account" style="display:flex; align-items:center; gap:12px; text-decoration:none; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:10px 16px; width:100%; box-sizing:border-box; margin-bottom:6px;">
+          <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#1f6feb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:400;color:#fff;flex-shrink:0;">
+            {{ current_user["username"][0] | upper }}
+          </div>
+          <div style="line-height:1.4;">
+            <div style="font-size:13px;font-weight:400;color:rgba(255,255,255,0.9);">{{ current_user["username"] }}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.45);text-transform:capitalize;">{{ current_user["role"] }}</div>
+          </div>
+        </a>
+      {% endif %}
+      <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; width:100%;">
+        <a class="btn secondary" href="/admin.csv?tab={{ tab }}" style="padding:8px 16px; font-size:13px;">⬇ Download STAT</a>
+        <a class="btn secondary" href="/settings" style="padding:8px 16px; font-size:13px;">Settings</a>
+        <a class="btn secondary" href="/logout" style="padding:8px 16px; font-size:13px;">Logout</a>
+      </div>
     </div>
   </div>
 
   <!-- Status Tabs -->
   <div class="tab-buttons">
-    <a href="/admin?tab=all&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="tab-btn {% if tab == 'all' %}active{% endif %}">All</a>
-    <a href="/admin?tab=pending&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="tab-btn {% if tab == 'pending' %}active{% endif %}">Pending</a>
-    <a href="/admin?tab=vetted&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="tab-btn {% if tab == 'vetted' %}active{% endif %}">Vetted</a>
-    <a href="/admin?tab=rejected&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="tab-btn {% if tab == 'rejected' %}active{% endif %}">Rejected</a>
-    <span style="margin-left:auto;"><a href="/admin.csv?tab={{ tab }}" style="color: #1f6feb; text-decoration: none; font-size: 13px;">Download CSV</a></span>
+    <a href="/admin?tab=all&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="tab-btn tab-btn-all {% if tab == 'all' %}active{% endif %}">All <span class="tab-count">{{ total_count }}</span></a>
+    <a href="/admin?tab=pending&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="tab-btn tab-btn-pending {% if tab == 'pending' %}active{% endif %}">Pending <span class="tab-count">{{ pending_count }}</span></a>
+    <a href="/admin?tab=vetted&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="tab-btn tab-btn-vetted {% if tab == 'vetted' %}active{% endif %}">Vetted <span class="tab-count">{{ vetted_count }}</span></a>
+    <a href="/admin?tab=rejected&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="tab-btn tab-btn-rejected {% if tab == 'rejected' %}active{% endif %}">Rejected <span class="tab-count">{{ rejected_count }}</span></a>
+
   </div>
 
   <!-- Filters -->
@@ -67,7 +135,7 @@
       <div class="filters-content">
         <div class="filter-group">
           <label>Institution</label>
-          <select name="institution">
+          <select name="institution" onchange="this.form.submit()">
             <option value="">All Institutions</option>
             {% for inst in institutions %}
               <option value="{{ inst.id }}" {% if selected_institution == inst.id|string %}selected{% endif %}>{{ inst.name }}</option>
@@ -77,7 +145,7 @@
 
         <div class="filter-group">
           <label>Radiologist</label>
-          <select name="radiologist">
+          <select name="radiologist" onchange="this.form.submit()">
             <option value="">All Radiologists</option>
             {% for r in radiologists %}
               <option value="{{ r }}" {% if selected_radiologist == r %}selected{% endif %}>{{ r }}</option>
@@ -90,9 +158,11 @@
           <input name="q" value="{{ q }}" placeholder="Search...">
         </div>
 
-        <div style="display: flex; gap: 8px;">
-          <button type="submit" class="btn" style="margin: 0;">Apply</button>
-          <a href="/admin?tab={{ tab }}" class="btn secondary" style="margin: 0; text-decoration: none;">Reset</a>
+        <div style="display: flex; gap: 8px; align-items: flex-end;">
+          <button type="submit" class="btn" style="margin:0; padding:8px 16px; font-size:13px; white-space:nowrap;">Apply</button>
+          <a href="/admin?tab={{ tab }}" class="btn secondary" style="margin:0; padding:8px 16px; font-size:13px; white-space:nowrap; text-decoration:none;">Reset</a>
+          <a href="/submit" class="btn" style="margin:0; padding:8px 16px; font-size:13px; white-space:nowrap; text-decoration:none;">Submit New Case</a>
+          <a href="/admin/notify-radiologist" class="btn" style="margin:0; padding:8px 16px; font-size:13px; white-space:nowrap; background:rgba(139,92,246,0.85); border-color:rgba(139,92,246,0.6); text-decoration:none;">🔔 Notify Radiologist</a>
         </div>
       </div>
     </form>
@@ -102,6 +172,19 @@
     <p style="color: rgba(255,255,255,0.6); text-align: center; padding: 40px;">No cases found.</p>
   {% else %}
     <table>
+      <colgroup>
+        <col id="col-status">
+        <col id="col-created">
+        <col id="col-tat">
+        <col id="col-fname">
+        <col id="col-sname">
+        <col id="col-pid">
+        <col id="col-dob">
+        <col id="col-inst">
+        <col id="col-study">
+        <col id="col-rad">
+        <col id="col-actions">
+      </colgroup>
       <thead>
         <tr>
           <th class="sortable" onclick="updateSort('status')">Status</th>
@@ -109,9 +192,10 @@
           <th class="sortable" onclick="updateSort('tat')">TAT</th>
           <th class="sortable" onclick="updateSort('patient_first_name')">First Name</th>
           <th class="sortable" onclick="updateSort('patient_surname')">Surname</th>
-          <th class="sortable" onclick="updateSort('patient_referral_id')">Referral ID</th>
+          <th class="sortable" onclick="updateSort('patient_referral_id')">Patient ID</th>
+          <th>Patient DOB</th>
           <th class="sortable" onclick="updateSort('institution_id')">Institution</th>
-          <th class="sortable" onclick="updateSort('study_description')">Study</th>
+          <th class="sortable" onclick="updateSort('study_description')">Study Description</th>
           <th class="sortable" onclick="updateSort('radiologist')">Radiologist</th>
           <th>Actions</th>
         </tr>
@@ -125,12 +209,24 @@
             <td>{{ c["patient_first_name"] }}</td>
             <td>{{ c["patient_surname"] }}</td>
             <td>{{ c["patient_referral_id"] }}</td>
+            <td>{{ c["patient_dob"] or "—" }}</td>
             <td>{{ c["institution_name"] or "—" }}</td>
             <td>{{ c["study_description"] }}</td>
-            <td>{{ c["radiologist"] }}</td>
+            <td>
+              <form method="post" action="/admin/case/{{ c['id'] }}/assign-radiologist" style="display:flex; gap:6px; align-items:center;">
+                <select name="radiologist">
+                  <option value="">Unassigned</option>
+                  {% for r in radiologists %}
+                    <option value="{{ r }}" {% if c["radiologist"] == r %}selected{% endif %}>{{ r }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="btn" style="padding:6px 10px; font-size:12px;">Save</button>
+              </form>
+            </td>
             <td class="row-actions">
               <a href="/admin/case/{{ c['id'] }}">Open</a>
-              <a href="/case/{{ c['id'] }}/pdf" target="_blank">PDF</a>
+              <a href="/admin/case/{{ c['id'] }}/edit">Edit</a>
+              <a href="/case/{{ c['id'] }}/pdf" target="_blank">Download</a>
             </td>
           </tr>
         {% endfor %}
@@ -166,7 +262,7 @@
         'tat': 'tat',
         'first name': 'patient_first_name',
         'surname': 'patient_surname',
-        'referral id': 'patient_referral_id',
+        'patient id': 'patient_referral_id',
         'institution': 'institution_id',
         'status': 'status',
         'study': 'study_description',
@@ -177,5 +273,90 @@
       }
     });
   </script>
+
+  <script>
+    // ── Column resize with localStorage persistence ──────────────────
+    const COL_DEFAULTS = {
+      'col-status':  72,
+      'col-created': 100,
+      'col-tat':     62,
+      'col-fname':   76,
+      'col-sname':   76,
+      'col-pid':     88,
+      'col-dob':     88,
+      'col-inst':    170,
+      'col-study':   122,
+      'col-rad':     220,
+      'col-actions': 160
+    };
+    const LS_KEY = 'adminDashColWidths';
+
+    function loadWidths() {
+      try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; }
+    }
+    function saveWidths(map) {
+      localStorage.setItem(LS_KEY, JSON.stringify(map));
+    }
+    function applyWidths() {
+      const saved = loadWidths();
+      Object.keys(COL_DEFAULTS).forEach(id => {
+        const col = document.getElementById(id);
+        if (col) col.style.width = (saved[id] || COL_DEFAULTS[id]) + 'px';
+      });
+    }
+
+    function initResizeHandles() {
+      const headers = document.querySelectorAll('table thead th');
+      const colIds = Object.keys(COL_DEFAULTS);
+      headers.forEach((th, i) => {
+        if (i >= colIds.length - 1) return; // no handle on last column
+        const handle = document.createElement('div');
+        handle.className = 'col-resize-handle';
+        handle.title = 'Drag to resize';
+        handle.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          handle.classList.add('dragging');
+          const startX = e.pageX;
+          const colEl = document.getElementById(colIds[i]);
+          const startW = colEl ? colEl.offsetWidth : COL_DEFAULTS[colIds[i]];
+          function onMove(e) {
+            const newW = Math.max(40, startW + (e.pageX - startX));
+            if (colEl) colEl.style.width = newW + 'px';
+          }
+          function onUp() {
+            handle.classList.remove('dragging');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            // Persist all current widths
+            const map = {};
+            colIds.forEach(id => {
+              const c = document.getElementById(id);
+              if (c) map[id] = c.offsetWidth;
+            });
+            saveWidths(map);
+          }
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+        th.appendChild(handle);
+      });
+    }
+
+    // Reset button — double-click any header to reset all widths
+    document.addEventListener('dblclick', function(e) {
+      if (e.target.closest('table thead th') && !e.target.classList.contains('col-resize-handle')) {
+        localStorage.removeItem(LS_KEY);
+        Object.keys(COL_DEFAULTS).forEach(id => {
+          const c = document.getElementById(id);
+          if (c) c.style.width = COL_DEFAULTS[id] + 'px';
+        });
+      }
+    });
+
+    applyWidths();
+    initResizeHandles();
+  </script>
+  <script src="/static/js/session.js"></script>
 </body>
 </html>

@@ -6,20 +6,20 @@
   <title>Edit Case | Vetting App</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; display: flex; flex-direction: column; min-height: 100vh; }
+    body { margin: 24px; display: flex; flex-direction: column; min-height: 100vh; }
     .container { max-width: 800px; margin: 0 auto; flex: 1; }
     .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
     .btn { display: inline-block; padding: 10px 14px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
     .btn.secondary { background: #555; }
     .btn.danger { background: #da3633; }
     .form-group { margin-bottom: 18px; }
-    label { display: block; font-weight: bold; margin-bottom: 6px; color: rgba(255,255,255,0.9); }
+    label { display: block; font-weight: 400; margin-bottom: 6px; color: rgba(255,255,255,0.9); }
     input, select, textarea { 
       width: 100%; 
       padding: 10px; 
       border: 1px solid rgba(31, 111, 235, 0.3); 
       border-radius: 6px; 
-      font-family: Arial, sans-serif; 
+      font-family: inherit; 
       font-size: 14px; 
       box-sizing: border-box;
       background: rgba(10, 22, 40, 0.8);
@@ -39,7 +39,7 @@
     .small { font-size: 12px; color: rgba(255,255,255,0.7); }
     
     .header-with-logo { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
-    .logo-container { width: 50px; height: 50px; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #333; font-size: 24px; }
+    .logo-container { width: 50px; height: 50px; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 400; color: #333; font-size: 24px; }
     .logo-text h2 { margin: 0; font-size: 18px; }
     .logo-text p { margin: 2px 0 0 0; font-size: 12px; color: #666; }
     
@@ -59,6 +59,7 @@
   </style>
 </head>
 <body>
+  <div id="session-expiry-warning">⚠️ Your session will expire in 5 minutes due to inactivity. <a href="/login" style="color:#fde68a;font-weight:400;">Sign in again</a> to continue.</div>
   <div class="wrapper">
     <div class="main-content">
   <div class="container">
@@ -87,10 +88,14 @@
           </div>
         </div>
 
-        <div class="form-row full">
+        <div class="form-row">
           <div class="form-group">
-            <label>Patient Referral ID</label>
+            <label>Patient ID</label>
             <input type="text" name="patient_referral_id" value="{{ case['patient_referral_id'] or '' }}" placeholder="Patient ID">
+          </div>
+          <div class="form-group">
+            <label>Patient DOB</label>
+            <input type="date" name="patient_dob" value="{{ case['patient_dob'] or '' }}">
           </div>
         </div>
 
@@ -126,18 +131,6 @@
           </div>
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label>Protocol</label>
-            <input type="text" name="protocol" value="{{ case['protocol'] or '' }}" list="protocol-list" placeholder="Protocol">
-            <datalist id="protocol-list">
-              {% for p in protocols %}
-                <option value="{{ p }}">
-              {% endfor %}
-            </datalist>
-          </div>
-        </div>
-
         <div class="form-row full">
           <div class="form-group">
             <label>Admin Notes</label>
@@ -157,5 +150,6 @@
       <p>Powered by <strong>Vetting Suite</strong> - Healthcare Applications</p>
     </div>
   </div>
+  <script src="/static/js/session.js"></script>
 </body>
 </html>
