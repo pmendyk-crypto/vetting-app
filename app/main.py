@@ -3058,23 +3058,43 @@ def admin_case_edit_save(
         conn.close()
         raise HTTPException(status_code=403, detail="Cannot edit approved cases")
 
+    cleaned_first_name = patient_first_name.strip()
+    cleaned_surname = patient_surname.strip()
+    cleaned_referral_id = patient_referral_id.strip()
+    cleaned_dob = patient_dob.strip() or None
+    cleaned_study_description = study_description.strip()
+    cleaned_admin_notes = admin_notes.strip()
+    cleaned_protocol = protocol.strip() or None
+    cleaned_modality = modality.strip() or None
+
+    institution_raw = institution_id.strip()
+    cleaned_institution_id = int(institution_raw) if institution_raw.isdigit() else None
+
+    # Keep existing radiologist if the form submits an empty value
+    cleaned_radiologist = radiologist.strip() or (case_dict.get("radiologist") or "")
+    if not cleaned_radiologist:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Radiologist is required")
+
     def _clean(value: str | None) -> str:
         return (value or "").strip()
 
     update_fields = [
-        ("patient_first_name", patient_first_name.strip()),
-        ("patient_surname", patient_surname.strip()),
-        ("patient_referral_id", patient_referral_id.strip()),
-        ("patient_dob", patient_dob.strip() or None),
-        ("institution_id", institution_id.strip() or None),
-        ("study_description", study_description.strip()),
-        ("admin_notes", admin_notes.strip()),
-        ("radiologist", radiologist.strip() or None),
-        ("protocol", protocol.strip() or None),
+        ("patient_first_name", cleaned_first_name),
+        ("patient_surname", cleaned_surname),
+        ("patient_referral_id", cleaned_referral_id),
+        ("patient_dob", cleaned_dob),
+        ("institution_id", cleaned_institution_id),
+        ("study_description", cleaned_study_description),
+        ("admin_notes", cleaned_admin_notes),
+        ("radiologist", cleaned_radiologist),
     ]
 
+    if table_has_column("cases", "protocol"):
+        update_fields.append(("protocol", cleaned_protocol))
+
     if table_has_column("cases", "modality"):
-        update_fields.append(("modality", modality.strip() or None))
+        update_fields.append(("modality", cleaned_modality))
 
     changes: list[str] = []
     old_case = dict(case)
@@ -3089,12 +3109,17 @@ def admin_case_edit_save(
 
     update_sql = "UPDATE cases SET " + ", ".join([f"{col} = ?" for col, _ in update_fields]) + " WHERE id = ?"
     update_params = [value for _, value in update_fields] + [case_id]
-    conn.execute(update_sql, update_params)
-    conn.commit()
+    try:
+        conn.execute(update_sql, update_params)
+        conn.commit()
+    except Exception as exc:
+        conn.close()
+        print(f"[ERROR] Failed to save case edits for case {case_id}: {exc}")
+        raise HTTPException(status_code=400, detail="Unable to save case changes")
     conn.close()
 
     change_summary = "; ".join(changes) if changes else "No field changes"
-    note_text = admin_notes.strip()
+    note_text = cleaned_admin_notes
     event_comment = change_summary
     if note_text:
         event_comment = f"{change_summary}. Notes: {note_text}"
