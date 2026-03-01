@@ -3017,7 +3017,7 @@ def admin_case_edit_view(request: Request, case_id: str):
     )
 
 @app.post("/admin/case/{case_id}/edit")
-def admin_case_edit_save(
+async def admin_case_edit_save(
     request: Request,
     case_id: str,
     patient_first_name: str = Form(""),
@@ -3030,6 +3030,7 @@ def admin_case_edit_save(
     radiologist: str = Form(""),
     modality: str = Form(""),
     protocol: str = Form(""),
+    attachment: UploadFile | None = File(None),
 ):
     try:
         user = require_admin(request)
@@ -3068,6 +3069,32 @@ def admin_case_edit_save(
     # Empty string is allowed by current app flow; avoid writing NULL.
     cleaned_radiologist = radiologist.strip() or (case_dict.get("radiologist") or "")
 
+    replacement_uploaded_filename: str | None = None
+    replacement_stored_path: str | None = None
+    old_stored_path = case_dict.get("stored_filepath")
+    if attachment and attachment.filename:
+        replacement_uploaded_filename = attachment.filename
+        replacement_bytes = await attachment.read()
+        if replacement_bytes:
+            if BLOB_STORAGE_ENABLED:
+                blob_name = upload_to_blob(case_id, replacement_bytes, replacement_uploaded_filename)
+                if blob_name:
+                    replacement_stored_path = blob_name
+
+            if not replacement_stored_path:
+                safe_name = f"{case_id}_{Path(replacement_uploaded_filename).name}"
+                replacement_stored_path = str(UPLOAD_DIR / safe_name)
+                with open(replacement_stored_path, "wb") as f:
+                    f.write(replacement_bytes)
+
+            if old_stored_path and old_stored_path != replacement_stored_path and str(old_stored_path).startswith(str(UPLOAD_DIR)):
+                try:
+                    old_path_obj = Path(str(old_stored_path))
+                    if old_path_obj.exists():
+                        old_path_obj.unlink()
+                except Exception:
+                    pass
+
     def _clean(value: str | None) -> str:
         return (value or "").strip()
 
@@ -3087,6 +3114,9 @@ def admin_case_edit_save(
     add_field_if_exists("radiologist", cleaned_radiologist)
     add_field_if_exists("protocol", cleaned_protocol)
     add_field_if_exists("modality", cleaned_modality)
+    if replacement_uploaded_filename is not None:
+        add_field_if_exists("uploaded_filename", replacement_uploaded_filename)
+        add_field_if_exists("stored_filepath", replacement_stored_path)
 
     if not update_fields:
         conn.close()
@@ -3113,6 +3143,9 @@ def admin_case_edit_save(
         print(f"[ERROR] Failed to save case edits for case {case_id}: {exc}")
         raise HTTPException(status_code=400, detail="Unable to save case changes")
     conn.close()
+
+    if replacement_uploaded_filename is not None:
+        changes.append(f"attachment: replaced with {replacement_uploaded_filename}")
 
     change_summary = "; ".join(changes) if changes else "No field changes"
     note_text = cleaned_admin_notes

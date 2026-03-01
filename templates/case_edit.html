@@ -180,7 +180,7 @@
     </div>
 
     <div class="card">
-      <form method="POST">
+      <form method="POST" enctype="multipart/form-data">
         <input type="hidden" id="org_id_hidden" value="{{ case.get('org_id') or user_org_id or '' }}">
         <div class="form-row">
           <div class="form-group">
@@ -262,6 +262,21 @@
           <div class="form-group">
             <label>Admin Notes</label>
             <textarea name="admin_notes" placeholder="Admin Notes">{{ case['admin_notes'] or '' }}</textarea>
+          </div>
+        </div>
+
+        <div class="form-row full">
+          <div class="form-group">
+            <label>Reattach Referral File (optional)</label>
+            <input type="file" name="attachment">
+            <p class="small" style="margin-top:6px;">
+              {% if case['uploaded_filename'] %}
+                Current file: <strong>{{ case['uploaded_filename'] }}</strong>
+                {% if not case['stored_filepath'] %}(expired){% endif %}
+              {% else %}
+                No referral file currently attached.
+              {% endif %}
+            </p>
           </div>
         </div>
 
