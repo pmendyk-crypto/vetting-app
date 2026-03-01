@@ -41,19 +41,25 @@
     .filter-group input, .filter-group select { padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.3); color: white; font-size: 14px; }
     
     /* Filter action buttons */
-    .filter-actions { display: flex; gap: 8px; align-items: flex-end; justify-content: flex-end; flex-wrap: wrap; }
+    .filter-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
     .filter-actions .btn {
       margin: 0;
       padding: 9px 18px;
       font-size: 14px;
-      white-space: nowrap;
-      border-radius: 7px;
+      font-family: inherit;
       font-weight: 500;
       letter-spacing: 0.2px;
+      white-space: nowrap;
+      border-radius: 7px;
       transition: all 0.2s ease;
       text-decoration: none;
-      border: none;
+      border: 1px solid transparent;
       cursor: pointer;
+      box-sizing: border-box;
+      height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       box-shadow: 0 1px 3px rgba(0,0,0,0.25);
     }
     .filter-actions .btn:hover {
