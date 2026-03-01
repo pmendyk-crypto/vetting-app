@@ -274,6 +274,53 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
 
 
+# -------------------------
+# Health Check Endpoint
+# -------------------------
+@app.get("/health")
+@app.get("/healthz")
+async def health_check():
+    """
+    Health check endpoint for Azure App Service health monitoring.
+    Returns 200 OK if the application and database are healthy.
+    Returns 503 Service Unavailable if there are issues.
+    """
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "checks": {}
+    }
+    
+    # Check database connectivity
+    try:
+        conn = get_db()
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+        health_status["checks"]["database"] = "ok"
+    except Exception as e:
+        health_status["status"] = "unhealthy"
+        health_status["checks"]["database"] = f"error: {str(e)}"
+        return JSONResponse(content=health_status, status_code=503)
+    
+    # Check blob storage if enabled
+    if BLOB_STORAGE_ENABLED:
+        try:
+            blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+            container_client = blob_service_client.get_container_client(REFERRAL_BLOB_CONTAINER)
+            container_client.exists()
+            health_status["checks"]["blob_storage"] = "ok"
+        except Exception as e:
+            health_status["status"] = "degraded"
+            health_status["checks"]["blob_storage"] = f"warning: {str(e)}"
+            # Don't fail health check for blob storage issues, just mark as degraded
+    else:
+        health_status["checks"]["blob_storage"] = "disabled"
+    
+    # Return appropriate status code
+    status_code = 200 if health_status["status"] == "healthy" else 503
+    return JSONResponse(content=health_status, status_code=status_code)
+
+
 # Multi-tenant routes disabled for now - using existing login system
 # if MULTITENANT_ENABLED:
 #     app.include_router(multitenant.router)
