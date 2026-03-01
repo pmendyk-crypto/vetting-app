@@ -3096,6 +3096,73 @@ def admin_case_timeline_pdf(request: Request, case_id: str):
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
+@app.get("/admin/case/{case_id}/timeline.csv")
+def admin_case_timeline_csv(request: Request, case_id: str):
+    try:
+        user = require_admin(request)
+    except HTTPException:
+        return redirect_to_login("admin", f"/admin/case/{case_id}")
+
+    conn = get_db()
+    org_id = user.get("org_id")
+    if org_id and not user.get("is_superuser"):
+        row = conn.execute("SELECT * FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
+    else:
+        row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
+
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    case_dict = row if isinstance(row, dict) else dict(row)
+    org_name = ""
+    if case_dict.get("org_id"):
+        org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (case_dict.get("org_id"),)).fetchone()
+        if org_row:
+            org_name = org_row.get("name") if isinstance(org_row, dict) else org_row[0]
+
+    events: list[dict] = []
+    if table_exists("case_events"):
+        event_rows = conn.execute(
+            "SELECT * FROM case_events WHERE case_id = ? ORDER BY created_at ASC",
+            (case_id,),
+        ).fetchall()
+        events = [dict(e) for e in event_rows]
+    conn.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header with case info
+    writer.writerow(["Case Timeline Audit Report"])
+    writer.writerow([f"Case ID: {case_id}"])
+    if org_name:
+        writer.writerow([f"Organisation: {org_name}"])
+    writer.writerow([f"Generated (UTC): {format_display_datetime(utc_now_iso())}"])
+    writer.writerow([])  # Empty row
+    
+    # Write column headers
+    writer.writerow(["Timestamp (UTC)", "Event Type", "User", "Details"])
+    
+    # Write events
+    if not events:
+        writer.writerow(["No timeline events recorded for this case."])
+    else:
+        for event in events:
+            ts = format_display_datetime(event.get("created_at"), event.get("created_at") or "")
+            event_type = str(event.get("event_type") or "-")
+            username = str(event.get("username") or "-")
+            details = str(event.get("comment") or "")
+            writer.writerow([ts, event_type, username, details])
+    
+    output.seek(0)
+    filename = f"{case_id}_timeline_audit.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
 # -------------------------
 # Case edit
 # -------------------------
