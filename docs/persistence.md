@@ -1,48 +1,72 @@
-Render persistent storage and Postgres migration
+Persistent Storage and PostgreSQL Configuration
 
 Problem
 -------
-On many cloud hosts (including Render), the container filesystem is ephemeral: files written to the application root are lost when the instance is restarted, redeployed, or moved. If your app uses a local SQLite file (hub.db) and an uploads folder inside the project directory, data will appear to "disappear" after deploys or restarts.
+On cloud hosts with ephemeral filesystems, local files written to the app root are lost when the instance restarts, redeploys, or moves. If your app uses a local SQLite file (hub.db) and an uploads folder, data will appear to "disappear" after redeploys.
 
-Recommended options
--------------------
-1) Fast, recommended (short-term): Mount a persistent disk on Render and point the app at it.
-   - In Render web service settings, add a Persistent Disk and mount it at `/data`.
-   - In the service "Environment" settings, set:
-     - `DB_PATH` = `/data/hub.db`
-     - `UPLOAD_DIR` = `/data/uploads`
-   - Redeploy. The app now writes `hub.db` and uploads to `/data`, which persists across restarts.
+Recommended Solutions
+---------------------
 
-2) Production-ready (recommended long-term): Use a managed PostgreSQL database.
-   - Provision a Postgres instance (Render Postgres, RDS, etc.).
-   - Set `DATABASE_URL` environment variable on the Render service (e.g. `postgres://user:pass@host:5432/dbname`).
-   - Optionally: migrate existing SQLite data to Postgres (see migration script in `scripts/`).
-   - Advantages: safe for multiple instances, backups, scaling, and long-term reliability.
+1) Azure App Service (RECOMMENDED for this app)
 
-3) Short-term workaround: export `hub.db` locally before redeploy and re-import afterwards. Not recommended.
+Azure App Service provides persistent storage at `/home/site/wwwroot/` that survives restarts and redeployments.
 
-Migration script
-----------------
-A migration helper is included at `scripts/migrate_sqlite_to_postgres.py`. It copies tables from your local `hub.db` to the Postgres instance specified by `DATABASE_URL` environment variable. The script requires `psycopg2-binary` and `SQLAlchemy` installed (already added to `requirements.txt`).
+**Configuration in Azure Portal:**
 
-Usage example (local machine)
-----------------------------
-1. Install updated deps in your virtualenv:
+Set environment variables in **Configuration → Application Settings**:
+
+- `UPLOAD_DIR` = `/home/site/wwwroot/uploads`
+- `DATABASE_URL` = Your Azure PostgreSQL connection string
+- `APP_SECRET` = Your secure secret key
+
+**Uploads Directory:**
+
+- App automatically creates `/home/site/wwwroot/uploads`
+- Files persist across app restarts and deployments
+- Can be accessed via Azure Storage if needed
+
+2) Production-Ready: Managed PostgreSQL Database
+
+Use **Azure Database for PostgreSQL** or any PostgreSQL provider.
+
+**Setup:**
+
+1. Create PostgreSQL instance in Azure
+2. Set `DATABASE_URL` environment variable:
+   ```
+   postgresql://username:password@server.postgres.database.azure.com:5432/dbname
+   ```
+3. App automatically migrates and creates tables on startup
+4. No local SQLite database needed
+
+**Advantages:**
+
+- Works across multiple app instances
+- Built-in backups and point-in-time restore
+- Automatic scaling
+- Better for production workloads
+
+Migration from SQLite to PostgreSQL
+-----------------------------------
+
+A migration helper is included at `scripts/migrate_sqlite_to_postgres.py`. It copies tables from your local `hub.db` to the PostgreSQL instance.
+
+**Usage:**
 
 ```powershell
-pip install -r requirements.txt
+# Set the target database
+setx DATABASE_URL "postgresql://username:password@host:5432/dbname"
+
+# Run migration
+python scripts/migrate_sqlite_to_postgres.py --sqlite hub.db
 ```
 
-2. Run the migration (from project root):
-
-```powershell
-setx DATABASE_URL "postgres://user:pass@host:5432/dbname"
-python scripts\migrate_sqlite_to_postgres.py --sqlite hub.db
-```
-
-3. Update Render environment variables and redeploy your service.
+The script requires `psycopg2-binary` and `SQLAlchemy` (already included in `requirements.txt`).
 
 Notes
 -----
-- If you choose the persistent disk option, you do not need to change database code.
-- If you choose Postgres, I can implement direct SQLAlchemy usage in the app (instead of sqlite3) so the app runs against Postgres natively. That requires code changes and additional testing.
+
+- The app automatically detects PostgreSQL via `DATABASE_URL` and uses it preferentially
+- SQLite is still supported for local development
+- Azure App Service provides built-in persistent storage for uploads
+- For production, always use PostgreSQL instead of SQLite
