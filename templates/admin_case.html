@@ -165,7 +165,10 @@
       </div>
 
       <div class="card card-full-width">
-        <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Case Timeline</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <h3 style="margin-top: 0; margin-bottom: 0; color: rgba(255,255,255,0.9);">Case Timeline</h3>
+          <a href="/admin/case/{{ case['id'] }}/timeline.pdf" class="btn" style="padding:6px 12px;font-size:12px;">⬇ Download Timeline (PDF)</a>
+        </div>
         {% if events and events|length > 0 %}
           <table class="timeline-table">
             <thead>

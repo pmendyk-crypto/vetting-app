@@ -2975,6 +2975,127 @@ def admin_case_view(request: Request, case_id: str):
         {"request": request, "case": case_dict, "org_name": org_name, "events": events},
     )
 
+
+@app.get("/admin/case/{case_id}/timeline.pdf")
+def admin_case_timeline_pdf(request: Request, case_id: str):
+    try:
+        user = require_admin(request)
+    except HTTPException:
+        return redirect_to_login("admin", f"/admin/case/{case_id}")
+
+    conn = get_db()
+    org_id = user.get("org_id")
+    if org_id and not user.get("is_superuser"):
+        row = conn.execute("SELECT * FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
+    else:
+        row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
+
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    case_dict = row if isinstance(row, dict) else dict(row)
+    org_name = ""
+    if case_dict.get("org_id"):
+        org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (case_dict.get("org_id"),)).fetchone()
+        if org_row:
+            org_name = org_row.get("name") if isinstance(org_row, dict) else org_row[0]
+
+    events: list[dict] = []
+    if table_exists("case_events"):
+        event_rows = conn.execute(
+            "SELECT * FROM case_events WHERE case_id = ? ORDER BY created_at ASC",
+            (case_id,),
+        ).fetchall()
+        events = [dict(e) for e in event_rows]
+    conn.close()
+
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    y = height - 50
+
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, y, "Case Timeline Audit Report")
+    y -= 22
+
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Case ID: {case_id}")
+    y -= 14
+    if org_name:
+        c.drawString(40, y, f"Organisation: {org_name}")
+        y -= 14
+    c.drawString(40, y, f"Generated (UTC): {format_display_datetime(utc_now_iso())}")
+    y -= 20
+
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, y, "Timestamp (UTC)")
+    c.drawString(155, y, "Event")
+    c.drawString(235, y, "User")
+    c.drawString(315, y, "Details")
+    y -= 10
+    c.line(40, y, width - 40, y)
+    y -= 14
+
+    def wrap_text(text_value: str, max_width: int) -> list[str]:
+        words = (text_value or "").split()
+        if not words:
+            return [""]
+        lines: list[str] = []
+        current = words[0]
+        for word in words[1:]:
+            candidate = f"{current} {word}"
+            if c.stringWidth(candidate, "Helvetica", 9) <= max_width:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+        return lines
+
+    if not events:
+        c.setFont("Helvetica", 10)
+        c.drawString(40, y, "No timeline events recorded for this case.")
+    else:
+        for event in events:
+            ts = format_display_datetime(event.get("created_at"), event.get("created_at") or "")
+            event_type = str(event.get("event_type") or "-")
+            username = str(event.get("username") or "-")
+            details = str(event.get("comment") or "")
+            detail_lines = wrap_text(details, 250)
+
+            required_height = max(14, 12 * len(detail_lines)) + 6
+            if y - required_height < 40:
+                c.showPage()
+                y = height - 50
+                c.setFont("Helvetica-Bold", 10)
+                c.drawString(40, y, "Timestamp (UTC)")
+                c.drawString(155, y, "Event")
+                c.drawString(235, y, "User")
+                c.drawString(315, y, "Details")
+                y -= 10
+                c.line(40, y, width - 40, y)
+                y -= 14
+
+            c.setFont("Helvetica", 9)
+            c.drawString(40, y, ts)
+            c.drawString(155, y, event_type)
+            c.drawString(235, y, username)
+            line_y = y
+            for line in detail_lines:
+                c.drawString(315, line_y, line)
+                line_y -= 12
+            y = line_y - 6
+
+    c.save()
+    buffer.seek(0)
+    filename = f"{case_id}_timeline_audit.pdf"
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
 # -------------------------
 # Case edit
 # -------------------------
