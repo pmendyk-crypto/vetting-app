@@ -392,20 +392,14 @@ def get_db() -> sqlite3.Connection:
                         param_map[f"p{i}"] = params[i]
                     named.append(parts[-1])
                     sql_named = "".join(named)
-                    try:
-                        res = self._conn.execute(text(sql_named), param_map)
-                        return SAResult(res)
-                    except SQLAlchemyError:
-                        return SAResult(self._conn.execute(text(sql)))
+                    res = self._conn.execute(text(sql_named), param_map)
+                    return SAResult(res)
                 else:
                     # assume dict or none
                     if isinstance(params, (list, tuple)):
                         # convert to positional mapping p0..pn
                         param_map = {f"p{i}": v for i, v in enumerate(params)}
-                        try:
-                            return SAResult(self._conn.execute(text(sql), param_map))
-                        except SQLAlchemyError:
-                            return SAResult(self._conn.execute(text(sql)))
+                        return SAResult(self._conn.execute(text(sql), param_map))
                     else:
                         return SAResult(self._conn.execute(text(sql), params or {}))
 
@@ -3077,22 +3071,26 @@ def admin_case_edit_save(
     def _clean(value: str | None) -> str:
         return (value or "").strip()
 
-    update_fields = [
-        ("patient_first_name", cleaned_first_name),
-        ("patient_surname", cleaned_surname),
-        ("patient_referral_id", cleaned_referral_id),
-        ("patient_dob", cleaned_dob),
-        ("institution_id", cleaned_institution_id),
-        ("study_description", cleaned_study_description),
-        ("admin_notes", cleaned_admin_notes),
-        ("radiologist", cleaned_radiologist),
-    ]
+    update_fields: list[tuple[str, str | int | None]] = []
 
-    if table_has_column("cases", "protocol"):
-        update_fields.append(("protocol", cleaned_protocol))
+    def add_field_if_exists(column_name: str, value: str | int | None) -> None:
+        if table_has_column("cases", column_name):
+            update_fields.append((column_name, value))
 
-    if table_has_column("cases", "modality"):
-        update_fields.append(("modality", cleaned_modality))
+    add_field_if_exists("patient_first_name", cleaned_first_name)
+    add_field_if_exists("patient_surname", cleaned_surname)
+    add_field_if_exists("patient_referral_id", cleaned_referral_id)
+    add_field_if_exists("patient_dob", cleaned_dob)
+    add_field_if_exists("institution_id", cleaned_institution_id)
+    add_field_if_exists("study_description", cleaned_study_description)
+    add_field_if_exists("admin_notes", cleaned_admin_notes)
+    add_field_if_exists("radiologist", cleaned_radiologist)
+    add_field_if_exists("protocol", cleaned_protocol)
+    add_field_if_exists("modality", cleaned_modality)
+
+    if not update_fields:
+        conn.close()
+        raise HTTPException(status_code=400, detail="No editable fields available for this case")
 
     changes: list[str] = []
     old_case = dict(case)
