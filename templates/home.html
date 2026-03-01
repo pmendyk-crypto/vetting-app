@@ -39,6 +39,42 @@
     .filter-group { display: flex; flex-direction: column; }
     .filter-group label { font-size: 14px; color: rgba(255,255,255,0.7); margin-bottom: 4px; }
     .filter-group input, .filter-group select { padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.3); color: white; font-size: 14px; }
+    
+    /* Filter action buttons */
+    .filter-actions { display: flex; gap: 8px; align-items: flex-end; justify-content: flex-end; flex-wrap: wrap; }
+    .filter-actions .btn {
+      margin: 0;
+      padding: 9px 18px;
+      font-size: 14px;
+      white-space: nowrap;
+      border-radius: 7px;
+      font-weight: 500;
+      letter-spacing: 0.2px;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    }
+    .filter-actions .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+    .filter-actions .btn:active {
+      transform: translateY(0);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .filter-actions .btn.secondary {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.85);
+      box-shadow: none;
+    }
+    .filter-actions .btn.secondary:hover {
+      background: rgba(255,255,255,0.12);
+      transform: none;
+      box-shadow: none;
+    }
     /* Main dashboard table styling */
     table { table-layout: fixed; width: 100%; border-collapse: collapse; margin-top: 4px; }
     table thead th { 
@@ -182,10 +218,13 @@
     }
     @media (max-width: 1200px) {
       .filters-content { grid-template-columns: 1fr 1fr; }
+      .filter-actions { width: 100%; grid-column: 1 / -1; justify-content: flex-start; }
     }
     @media (max-width: 700px) {
       .filters-content { grid-template-columns: 1fr; }
       .tab-buttons { flex-wrap: wrap; }
+      .filter-actions { flex-direction: column; width: 100%; }
+      .filter-actions .btn { width: 100%; text-align: center; }
     }
   </style>
 </head>
@@ -262,11 +301,11 @@
           <input name="q" value="{{ q }}" placeholder="Search...">
         </div>
 
-        <div style="display: flex; gap: 8px; align-items: flex-end; justify-content: flex-end;">
-          <button type="submit" class="btn" style="margin:0; padding:8px 16px; font-size:14px; white-space:nowrap;">Apply</button>
-          <a href="/admin?tab={{ tab }}" class="btn secondary" style="margin:0; padding:8px 16px; font-size:14px; white-space:nowrap; text-decoration:none;">Reset</a>
-          <a href="/submit" class="btn" style="margin:0; padding:8px 16px; font-size:14px; white-space:nowrap; text-decoration:none;">Submit New Case</a>
-          <a href="/admin/notify-radiologist" class="btn" style="margin:0; padding:8px 16px; font-size:14px; white-space:nowrap; text-decoration:none;">Notify</a>
+        <div class="filter-actions">
+          <button type="submit" class="btn">Apply</button>
+          <a href="/admin?tab={{ tab }}" class="btn secondary">Reset</a>
+          <a href="/submit" class="btn">Submit New Case</a>
+          <a href="/admin/notify-radiologist" class="btn">Notify</a>
         </div>
       </div>
     </form>
