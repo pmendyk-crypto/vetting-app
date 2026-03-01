@@ -3070,11 +3070,9 @@ def admin_case_edit_save(
     institution_raw = institution_id.strip()
     cleaned_institution_id = int(institution_raw) if institution_raw.isdigit() else None
 
-    # Keep existing radiologist if the form submits an empty value
+    # Keep existing radiologist if the form submits an empty value.
+    # Empty string is allowed by current app flow; avoid writing NULL.
     cleaned_radiologist = radiologist.strip() or (case_dict.get("radiologist") or "")
-    if not cleaned_radiologist:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Radiologist is required")
 
     def _clean(value: str | None) -> str:
         return (value or "").strip()
