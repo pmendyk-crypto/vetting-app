@@ -229,7 +229,7 @@
           </div>
         </div>
 
-        <div class="form-row full">
+        <div class="form-row">
           <div class="form-group">
             <label>Modality</label>
             <select name="modality" id="modality" onchange="loadStudyDescriptions()">
@@ -241,9 +241,7 @@
               <option value="DEXA" {% if case.get('modality') == 'DEXA' %}selected{% endif %}>DEXA (Bone Densitometry)</option>
             </select>
           </div>
-        </div>
 
-        <div class="form-row full">
           <div class="form-group">
             <label>Study Description</label>
             <input
