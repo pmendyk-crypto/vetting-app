@@ -51,10 +51,8 @@
 
         .header-actions {
             display: flex;
-            flex-direction: column;
-            gap: 12px;
             align-items: center;
-            justify-content: center;
+            gap: 16px;
         }
 
         .btn {
@@ -70,7 +68,7 @@
             justify-content: center;
             text-align: center;
             transition: all 0.2s ease;
-            min-width: 140px;
+            min-width: 120px;
         }
 
         .btn-primary {
@@ -102,10 +100,8 @@
             gap: 12px;
             background: rgba(31, 111, 235, 0.08);
             border: 1px solid rgba(31, 111, 235, 0.2);
-            padding: 12px 16px;
+            padding: 10px 16px;
             border-radius: 8px;
-            width: 100%;
-            max-width: 280px;
         }
 
         .user-avatar {
@@ -127,7 +123,6 @@
             display: flex;
             flex-direction: column;
             gap: 2px;
-            flex: 1;
         }
 
         .user-name {
@@ -145,13 +140,10 @@
         .action-buttons {
             display: flex;
             gap: 8px;
-            width: 100%;
-            justify-content: center;
         }
 
         .action-buttons .btn {
-            flex: 1;
-            max-width: 130px;
+            min-width: 110px;
         }
 
         /* Tab Styles */
@@ -539,10 +531,10 @@
                 <!-- User Info Card -->
                 <div class="user-info-card">
                     <div class="user-avatar">
-                        {{ current_user.username[0]|upper }}
+                        {{ (current_user.first_name[0] if current_user.first_name else current_user.username[0])|upper }}
                     </div>
                     <div class="user-details">
-                        <div class="user-name">{{ current_user.username }}</div>
+                        <div class="user-name">{{ current_user.first_name }} {{ current_user.surname if current_user.surname else '' }}</div>
                         <div class="user-role">Radiologist</div>
                     </div>
                 </div>
