@@ -15,7 +15,7 @@
     }
 
     .tab-buttons { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-    .tab-btn { padding: 10px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; color: rgba(255,255,255,0.85); cursor: pointer; font-weight: 400; font-size: 13px; transition: all 0.2s; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+    .tab-btn { padding: 10px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; color: rgba(255,255,255,0.85); cursor: pointer; font-weight: 400; font-size: 14px; transition: all 0.2s; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
     .tab-btn:hover { background: rgba(255,255,255,0.12); }
     .tab-count { display: inline-block; border-radius: 999px; font-size: 11px; font-weight: 400; padding: 2px 8px; min-width: 22px; text-align: center; }
     /* All — blue */
@@ -37,8 +37,8 @@
     .filters-section { background: var(--card-bg); border: 1px solid var(--card-border); padding: 16px; border-radius: 8px; margin-bottom: 16px; }
     .filters-content { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 12px; align-items: flex-end; }
     .filter-group { display: flex; flex-direction: column; }
-    .filter-group label { font-size: 12px; color: rgba(255,255,255,0.7); margin-bottom: 4px; }
-    .filter-group input, .filter-group select { padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.3); color: white; font-size: 12px; }
+    .filter-group label { font-size: 14px; color: rgba(255,255,255,0.7); margin-bottom: 4px; }
+    .filter-group input, .filter-group select { padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.3); color: white; font-size: 14px; }
     table th { cursor: pointer; user-select: none; position: relative; }
     table th:hover { background: rgba(255,255,255,0.08); }
     table th.sortable::after { content: " ↕"; opacity: 0.5; font-size: 11px; }
@@ -47,6 +47,24 @@
     table { table-layout: fixed; width: 100%; }
     table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     table td.row-actions { overflow: visible; white-space: nowrap; }
+    table th, table td { font-size: 14px; padding: 7px 10px; }
+    table tbody tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+    table tbody tr:hover { background: rgba(31,111,235,0.06); }
+    table thead th { border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .assign-save-btn {
+      background: transparent;
+      border: none;
+      color: #1f6feb;
+      font-size: 14px;
+      font-weight: 400;
+      padding: 0;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .assign-save-btn:hover {
+      color: #4ea1ff;
+    }
     /* resize handle */
     .col-resize-handle {
         position: absolute;
@@ -92,7 +110,7 @@
       <img class="brand-logo" src="/static/images/logo-light.png" alt="Lumos Lab"
         onerror="this.style.display='none';">
       <div>
-        <h1 style="margin:0;">{{ org_name if org_name else 'Admin Dashboard' }}</h1>
+        <h1 style="margin:0; font-weight:400;">{{ org_name|replace('Admin Dashboard', 'Dashboard') if org_name else 'Dashboard' }}</h1>
       </div>
     </div>
 
@@ -103,15 +121,15 @@
             {{ current_user["username"][0] | upper }}
           </div>
           <div style="line-height:1.4;">
-            <div style="font-size:13px;font-weight:400;color:rgba(255,255,255,0.9);">{{ current_user["username"] }}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.45);text-transform:capitalize;">{{ current_user["role"] }}</div>
+            <div style="font-size:14px;font-weight:400;color:rgba(255,255,255,0.9);">{{ current_user["username"] }}</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.45);text-transform:capitalize;">{{ current_user["role"] }}</div>
           </div>
         </a>
       {% endif %}
       <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; width:100%;">
-        <a class="btn secondary" href="/admin.csv?tab={{ tab }}" style="padding:8px 16px; font-size:13px;">⬇ Download STAT</a>
-        <a class="btn secondary" href="/settings" style="padding:8px 16px; font-size:13px;">Settings</a>
-        <a class="btn secondary" href="/logout" style="padding:8px 16px; font-size:13px;">Logout</a>
+        <a class="btn secondary" href="/admin.csv?tab={{ tab }}" style="padding:8px 16px; font-size:14px;">⬇ Download STAT</a>
+        <a class="btn secondary" href="/settings" style="padding:8px 16px; font-size:14px;">Settings</a>
+        <a class="btn secondary" href="/logout" style="padding:8px 16px; font-size:14px;">Logout</a>
       </div>
     </div>
   </div>
@@ -158,11 +176,11 @@
           <input name="q" value="{{ q }}" placeholder="Search...">
         </div>
 
-        <div style="display: flex; gap: 8px; align-items: flex-end;">
-          <button type="submit" class="btn" style="margin:0; padding:8px 16px; font-size:13px; white-space:nowrap;">Apply</button>
-          <a href="/admin?tab={{ tab }}" class="btn secondary" style="margin:0; padding:8px 16px; font-size:13px; white-space:nowrap; text-decoration:none;">Reset</a>
-          <a href="/submit" class="btn" style="margin:0; padding:8px 16px; font-size:13px; white-space:nowrap; text-decoration:none;">Submit New Case</a>
-          <a href="/admin/notify-radiologist" class="btn" style="margin:0; padding:8px 16px; font-size:13px; white-space:nowrap; background:rgba(139,92,246,0.85); border-color:rgba(139,92,246,0.6); text-decoration:none;">🔔 Notify Radiologist</a>
+        <div style="display: flex; gap: 8px; align-items: flex-end; justify-content: flex-end;">
+          <button type="submit" class="btn" style="margin:0; padding:8px 16px; font-size:14px; white-space:nowrap;">Apply</button>
+          <a href="/admin?tab={{ tab }}" class="btn secondary" style="margin:0; padding:8px 16px; font-size:14px; white-space:nowrap; text-decoration:none;">Reset</a>
+          <a href="/submit" class="btn" style="margin:0; padding:8px 16px; font-size:14px; white-space:nowrap; text-decoration:none;">Submit New Case</a>
+          <a href="/admin/notify-radiologist" class="btn" style="margin:0; padding:8px 16px; font-size:14px; white-space:nowrap; text-decoration:none;">Notify</a>
         </div>
       </div>
     </form>
@@ -202,7 +220,7 @@
       </thead>
       <tbody>
         {% for c in cases %}
-          <tr>
+          <tr class="case-row" data-open-url="/admin/case/{{ c['id'] }}">
             <td><span class="pill" data-status="{{ c['status']|lower }}">{{ c["status"]|capitalize }}</span></td>
             <td>{{ c["created_display"] }}</td>
             <td>{{ c["tat_display"] }}</td>
@@ -220,7 +238,7 @@
                     <option value="{{ r }}" {% if c["radiologist"] == r %}selected{% endif %}>{{ r }}</option>
                   {% endfor %}
                 </select>
-                <button type="submit" class="btn" style="padding:6px 10px; font-size:12px;">Save</button>
+                <button type="submit" class="assign-save-btn">Save</button>
               </form>
             </td>
             <td class="row-actions">
@@ -235,6 +253,27 @@
   {% endif %}
 
   <script>
+    function initializeCaseRowClicks() {
+      document.querySelectorAll('tbody tr.case-row[data-open-url]').forEach(row => {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', (event) => {
+          if (event.target.closest('a, button, input, select, textarea, label, form')) {
+            return;
+          }
+          const openUrl = row.getAttribute('data-open-url');
+          if (openUrl) {
+            window.location.href = openUrl;
+          }
+        });
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeCaseRowClicks);
+    } else {
+      initializeCaseRowClicks();
+    }
+
     function updateSort(column) {
       const currentSort = new URLSearchParams(window.location.search).get('sort_by');
       const currentDir = new URLSearchParams(window.location.search).get('sort_dir') || 'desc';

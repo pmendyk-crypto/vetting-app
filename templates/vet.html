@@ -6,10 +6,16 @@
     <title>Vet Case - Vetting Suite</title>
     <link rel="stylesheet" href="/static/css/site.css">
     <style>
+        body {
+            overflow-x: hidden;
+        }
+
         .vet-container {
-            max-width: 1400px;
+            max-width: none;
+            width: 100%;
             margin: 0 auto;
             padding: 20px;
+            box-sizing: border-box;
         }
 
         .vet-header {
@@ -37,7 +43,7 @@
 
         .org-label {
             color: rgba(255, 255, 255, 0.6);
-            font-size: 13px;
+            font-size: 12px;
             margin-top: 6px;
         }
 
@@ -94,7 +100,10 @@
             font-weight: 400;
             cursor: pointer;
             text-decoration: none;
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
             transition: all 0.2s ease;
         }
 
@@ -190,12 +199,41 @@
             word-break: break-word;
         }
 
+        .detail-value {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.95);
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .detail-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px 16px;
+            margin-top: 8px;
+        }
+
+        .detail-meta-item label {
+            font-size: 11px;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .detail-meta-item span {
+            display: block;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
         .form-group {
             margin-bottom: 15px;
         }
 
         .form-group label {
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 400;
             color: rgba(255, 255, 255, 0.75);
             margin-bottom: 6px;
@@ -246,7 +284,7 @@
             padding: 12px;
             border-radius: 4px;
             margin-top: 8px;
-            font-size: 13px;
+            font-size: 14px;
             color: rgba(255, 255, 255, 0.85);
             line-height: 1.6;
             display: none;
@@ -294,7 +332,7 @@
         .attachment-links a {
             color: #1f6feb;
             text-decoration: none;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 400;
         }
 
@@ -307,7 +345,7 @@
             border: 1px solid rgba(31, 111, 235, 0.2);
             padding: 12px;
             border-radius: 6px;
-            font-size: 12px;
+            font-size: 14px;
             color: rgba(255, 255, 255, 0.75);
             margin-bottom: 15px;
         }
@@ -387,7 +425,7 @@
             border: 1px solid rgba(31,111,235,0.3);
             background: rgba(255,255,255,0.05);
             color: white;
-            font-size: 13px;
+            font-size: 14px;
         }
         .irefer-search-row input:focus { outline: none; border-color: #1f6feb; }
         .irefer-search-row button {
@@ -397,7 +435,7 @@
             border: none;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 14px;
         }
         .irefer-body {
             flex: 1;
@@ -406,7 +444,7 @@
         }
         .irefer-placeholder {
             color: rgba(255,255,255,0.5);
-            font-size: 13px;
+            font-size: 14px;
             text-align: center;
             margin-top: 60px;
         }
@@ -450,7 +488,7 @@
         .irefer-inv.not-indicated { border-left-color: #f87171; background: rgba(248,113,113,0.04); }
         .irefer-inv.specialised { border-left-color: #c084fc; }
         .irefer-inv.circumstances { border-left-color: #fb923c; }
-        .irefer-inv-name { color: white; margin-bottom: 4px; font-size: 13px; }
+        .irefer-inv-name { color: white; margin-bottom: 4px; font-size: 14px; }
         .irefer-rec {
             display: inline-block;
             font-size: 10px;
@@ -488,11 +526,11 @@
             border: 1px solid rgba(251,146,60,0.25);
             border-radius: 8px;
             padding: 14px 16px;
-            font-size: 13px;
+            font-size: 14px;
             color: rgba(251,146,60,0.9);
             line-height: 1.6;
         }
-        .irefer-loading { text-align: center; color: rgba(255,255,255,0.5); font-size: 13px; padding: 40px 0; }
+        .irefer-loading { text-align: center; color: rgba(255,255,255,0.5); font-size: 14px; padding: 40px 0; }
         .btn-irefer {
             background: rgba(96,165,250,0.12);
             color: #60a5fa;
@@ -506,6 +544,19 @@
         .btn-irefer:hover { background: rgba(96,165,250,0.2); }
 
         @media (max-width: 768px) {
+            .vet-container {
+                padding: 16px 12px;
+            }
+
+            .vet-header {
+                align-items: flex-start;
+            }
+
+            .brand-logo {
+                width: 44px;
+                height: 44px;
+            }
+
             .header-actions {
                 width: 100%;
                 flex-direction: column;
@@ -513,11 +564,38 @@
 
             .header-actions .btn {
                 width: 100%;
+                justify-content: center;
+                text-align: center;
             }
 
             .case-meta {
                 flex-direction: column;
                 gap: 10px;
+            }
+
+            .vet-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .vet-card {
+                padding: 16px;
+            }
+
+            .detail-meta {
+                grid-template-columns: 1fr;
+            }
+
+            .attachment-preview {
+                height: 360px;
+            }
+
+            .irefer-search {
+                flex-direction: column;
+            }
+
+            .irefer-search input,
+            .irefer-search button {
+                width: 100%;
             }
 
             .form-actions {
@@ -569,19 +647,23 @@
 
                     <div class="detail-row">
                         <label>Patient</label>
-                        <p>
+                        <div class="detail-value">
                             {% if case.patient_first_name or case.patient_surname %}
                                 {{ case.patient_first_name }} {{ case.patient_surname }}
                             {% else %}
                                 {{ case.patient_id or 'Not specified' }}
                             {% endif %}
-                            {% if case.patient_referral_id %}
-                                <br><span style="font-size: 11px; color: rgba(255,255,255,0.6);">ID: {{ case.patient_referral_id }}</span>
-                            {% endif %}
-                            {% if case.patient_dob %}
-                                <br><span style="font-size: 11px; color: rgba(255,255,255,0.6);">Patient DOB: {{ case.patient_dob }}</span>
-                            {% endif %}
-                        </p>
+                        </div>
+                        <div class="detail-meta">
+                            <div class="detail-meta-item">
+                                <label>Patient ID</label>
+                                <span>{{ case.patient_referral_id or '—' }}</span>
+                            </div>
+                            <div class="detail-meta-item">
+                                <label>Patient DOB</label>
+                                <span>{{ case.patient_dob or '—' }}</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="detail-row">
@@ -601,12 +683,6 @@
                         {% endif %}
                     </div>
 
-                    {% if case.uploaded_filename %}
-                    <div class="detail-row">
-                        <label>Attachment</label>
-                        <p>{{ case.uploaded_filename }}</p>
-                    </div>
-                    {% endif %}
                 </div>
 
                 <!-- Decision Card -->
@@ -680,7 +756,7 @@
 
                         {% if case.vetted_at %}
                         <div class="info-box" style="margin-top: 15px;">
-                            <strong>Vetted at:</strong> {{ case.vetted_at }} (UTC)
+                            <strong>Vetted at:</strong> {{ case.vetted_at | display_datetime }} (UTC)
                         </div>
                         {% endif %}
                     </form>
@@ -694,10 +770,16 @@
                     <h2>Attachment Preview</h2>
 
                     {% if case.uploaded_filename %}
-                        <p style="font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 0;">
-                            PDFs and images display in the preview below.
-                        </p>
-                        <iframe src="/case/{{ case.id }}/attachment/inline" class="attachment-preview"></iframe>
+                        {% if case.stored_filepath %}
+                            <p style="font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 0;">
+                                PDFs and images display in the preview below.
+                            </p>
+                            <iframe src="/case/{{ case.id }}/attachment/inline" class="attachment-preview"></iframe>
+                        {% else %}
+                            <div class="attachment-placeholder">
+                                Referral file missing or expired
+                            </div>
+                        {% endif %}
                     {% else %}
                         <div class="attachment-placeholder">
                             No attachment uploaded
@@ -709,12 +791,12 @@
                 <div class="vet-card stretch">
                     <h2>iRefer Guidelines</h2>
                     <p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0 0 12px 0;line-height:1.5;">Look up RCR clinical imaging guidelines for this case. Results are searched against the study description.</p>
-                    <div style="display:flex;gap:8px;flex-shrink:0;">
+                    <div class="irefer-search" style="display:flex;gap:8px;flex-shrink:0;">
                         <input type="text" id="ireferQuery" placeholder="Search clinical indication…"
-                               style="flex:1;padding:9px 12px;border-radius:6px;border:1px solid rgba(31,111,235,0.3);background:rgba(255,255,255,0.05);color:white;font-size:13px;"
+                               style="flex:1;padding:9px 12px;border-radius:6px;border:1px solid rgba(31,111,235,0.3);background:rgba(255,255,255,0.05);color:white;font-size:14px;"
                                onkeydown="if(event.key==='Enter')ireferSearch()">
                         <button onclick="ireferSearch()"
-                                style="padding:9px 16px;background:#1f6feb;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap;">Search</button>
+                                style="padding:9px 16px;background:#1f6feb;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;white-space:nowrap;">Search</button>
                     </div>
                     <div id="ireferBody" class="irefer-body-inner" style="margin-top:14px;">
                         <div class="irefer-placeholder">Press Search to look up guidelines.</div>

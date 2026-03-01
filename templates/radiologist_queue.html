@@ -13,7 +13,7 @@
       {% for c in cases %}
         <li>
           <strong>{{ c["status"] }}</strong>
-          | {{ c["created_at"] }}
+          | {{ c["created_at"] | display_datetime }}
           | {{ c["patient_id"] }}
           | {{ c["study_description"] }}
           | <a href="/vet/{{ c['id'] }}">Open</a>

@@ -55,7 +55,7 @@
                             <span class="badge badge-danger">Inactive</span>
                         {% endif %}
                     </td>
-                    <td>{{ org.created_at[:10] }}</td>
+                    <td>{{ org.created_at | display_datetime }}</td>
                     <td>
                         <a href="/superuser/organisations/{{ org.id }}/members" class="btn btn-sm btn-info">Members</a>
                         <a href="/superuser/organisations/{{ org.id }}/edit" class="btn btn-sm btn-warning">Edit</a>

@@ -1,152 +1,1393 @@
-<!doctype html>
+﻿<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Submit New Case</title>
+  <title>Create New Case</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    body { display: flex; flex-direction: column; min-height: 100vh; }
-    .container { max-width: 800px; margin: 0 auto; padding: 20px; flex: 1; }
-    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-    .page-title { margin: 0 0 20px 0; color: white; }
-    .form-section { background: var(--card-bg); border: 1px solid var(--card-border); padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-    .form-section h2 { color: white; font-size: 16px; margin: 0 0 16px 0; }
-    .form-row { margin-bottom: 16px; }
-    .form-row label { display: block; color: rgba(255,255,255,0.8); font-size: 13px; margin-bottom: 6px; font-weight: 400; }
-    .required::after { content: " *"; color: #ff9999; }
-    .form-row input, .form-row select, .form-row textarea { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.25); color: white; font-size: 13px; box-sizing: border-box; }
-    .form-row input::placeholder, .form-row textarea::placeholder { color: rgba(255,255,255,0.4); }
-    .form-row input:focus, .form-row select:focus, .form-row textarea:focus { outline: none; border-color: rgba(255,255,255,0.15); background: rgba(0,0,0,0.35); }
-    .form-row textarea { min-height: 100px; resize: vertical; }
-    .form-row.full { grid-column: 1 / -1; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .actions { display: flex; gap: 12px; margin-top: 20px; }
-    .btn { display: inline-block; padding: 10px 16px; background: #1f6feb; color: white; border: none; border-radius: 6px; text-decoration: none; font-weight: 400; cursor: pointer; }
-    .btn:hover { filter: brightness(1.05); }
-    .btn.secondary { background: rgba(255,255,255,0.08); }
-    .btn.secondary:hover { background: rgba(255,255,255,0.12); }
-    .err { color: #ffb4b4; background: rgba(255,180,180,0.08); padding: 10px; border-radius: 6px; margin-bottom: 16px; }
-    .info-text { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 4px; }
-    .form-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    html, body { 
+      height: 100%; 
+      margin: 0; 
+      background: linear-gradient(180deg, var(--bg-1), var(--bg-2));
+      overflow: hidden;
+    }
+    body { 
+      font-family: Inter, system-ui, sans-serif; 
+      color: var(--muted);
+    }
+
+    .page-wrapper {
+      --content-width: min(70vw, 1100px);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .page-header {
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between;
+      padding: 12px 0; 
+      background: transparent;
+      flex-shrink: 0;
+    }
+    .page-header-inner {
+      width: var(--content-width);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px 16px;
+      backdrop-filter: blur(10px);
+      box-sizing: border-box;
+    }
+    .page-header-left { 
+      display: flex; 
+      align-items: center; 
+      gap: 12px; 
+    }
+    .page-header img { 
+      height: 32px; 
+      border-radius: 6px; 
+    }
+    .page-header h1 { 
+      margin: 0; 
+      font-size: 19px; 
+      color: white; 
+      font-weight: 600; 
+      letter-spacing: -0.02em;
+    }
+
+    .form-container {
+      flex: 1;
+      display: flex;
+      padding: 16px 24px;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    form { 
+      display: flex; 
+      flex-direction: column; 
+      gap: 12px;
+      width: var(--content-width);
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+
+    .main-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex: 1;
+      overflow-y: auto;
+    }
+    .top-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* Card Sections */
+    .form-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 14px;
+      transition: all 0.3s ease;
+      flex-shrink: 0;
+    }
+    .main-grid .form-card {
+      display: flex;
+      flex-direction: column;
+    }
+    .form-card:hover { border-color: rgba(255,255,255,0.12); }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: white;
+      margin: 0;
+    }
+
+    .form-grid { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr; 
+      gap: 10px; 
+    }
+
+    .form-row { 
+      display: flex; 
+      flex-direction: column; 
+      gap: 4px; 
+    }
+    .form-row label { 
+      font-size: 12px; 
+      color: var(--muted); 
+      font-weight: 500;
+    }
+    .form-row.full {
+      width: 100%;
+    }
+    .required::after { 
+      content: " *"; 
+      color: #ff6b6b; 
+    }
+    .form-row input, 
+    .form-row select, 
+    .form-row textarea {
+      padding: 8px 10px; 
+      border-radius: 8px; 
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.2); 
+      color: var(--muted); 
+      font-size: 14px; 
+      font-family: inherit;
+      transition: all 0.2s ease;
+    }
+    .form-row input[type="file"] {
+      padding: 6px 8px;
+      background: rgba(0,0,0,0.25);
+    }
+    .form-row input[type="file"]::file-selector-button {
+      margin-right: 8px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .form-row input[type="file"]::file-selector-button:hover {
+      filter: brightness(1.05);
+    }
+    .form-row input:focus, 
+    .form-row select:focus, 
+    .form-row textarea:focus {
+      outline: none; 
+      border-color: var(--accent); 
+      background: rgba(0,0,0,0.25);
+      box-shadow: 0 0 0 2px rgba(31,111,235,0.15);
+    }
+    .form-row textarea { 
+      resize: none; 
+      min-height: 84px; 
+    }
+    .info-text { 
+      font-size: 11px; 
+      color: rgba(255,255,255,0.5); 
+      margin-top: 2px; 
+    }
+
+    /* Enhanced Extra Studies Section */
+    .extra-studies-card {
+      background: var(--card-bg);
+      border: 1px dashed var(--card-border);
+      border-radius: 8px;
+      overflow: visible;
+      transition: all 0.3s ease;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .extra-studies-card.has-studies { border-style: solid; border-color: var(--card-border); }
+    .extra-studies-card.is-empty {
+      flex: 0 0 140px;
+    }
+    .extra-studies-card.is-empty .extra-rows {
+      min-height: 70px;
+    }
+    .extra-studies-card.is-empty .empty-studies {
+      padding: 10px 12px;
+    }
     
-    .header-with-logo { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
-    .logo-container { width: 50px; height: 50px; background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 400; color: #333; font-size: 24px; }
-    .logo-text h2 { margin: 0; font-size: 18px; }
-    .logo-text p { margin: 2px 0 0 0; font-size: 12px; color: rgba(255,255,255,0.6); }
+    .extra-studies-header {
+      display: flex; 
+      align-items: flex-start; 
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: rgba(0,0,0,0.2);
+      flex-shrink: 0;
+    }
+    .extra-studies-title {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .extra-studies-title .icon {
+      font-size: 18px;
+    }
+    .extra-studies-title-text h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: white;
+    }
+    .extra-studies-subtext {
+      font-size: 11px;
+      color: rgba(255,255,255,0.55);
+      margin-top: 2px;
+    }
+    .extra-studies-header .add-study-btn {
+      align-self: flex-start;
+    }
     
-    .page-footer { text-align: center; padding: 30px 20px; border-top: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); font-size: 13px; }
-    .page-footer p { margin: 0; }
+    .add-study-btn {
+      font-size: 12px; 
+      font-weight: 500;
+      color: white; 
+      border: none;
+      background: var(--accent);
+      padding: 6px 12px; 
+      border-radius: 6px; 
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(31,111,235,0.25);
+      flex-shrink: 0;
+    }
+    .add-study-btn:hover { 
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(31,111,235,0.4);
+    }
+    .add-study-btn:active {
+      transform: translateY(0);
+    }
+
+    .extra-rows { 
+      padding: 8px 14px 12px; 
+      display: flex; 
+      flex-direction: column; 
+      gap: 8px;
+      overflow: visible;
+      flex: 1;
+      min-height: 0;
+    }
+    .extra-row {
+      display: grid; 
+      grid-template-columns: 1fr 1fr 1fr 32px; 
+      gap: 8px; 
+      align-items: start;
+      padding: 10px;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 6px;
+      animation: slideIn 0.3s ease;
+      position: relative;
+      z-index: 1;
+    }
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .extra-row input, 
+    .extra-row select {
+      padding: 7px 10px;
+      border-radius: 8px; 
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.2); 
+      color: var(--muted); 
+      font-size: 12px; 
+      transition: all 0.2s ease;
+    }
+    .extra-row input:focus,
+    .extra-row select:focus {
+      border-color: var(--accent);
+      background: rgba(0,0,0,0.25);
+      box-shadow: 0 0 0 2px rgba(31,111,235,0.15);
+      outline: none;
+    }
+    .extra-row label {
+      font-size: 11px !important;
+      margin-bottom: 3px !important;
+    }
+    .remove-btn {
+      width: 28px; 
+      height: 28px; 
+      border-radius: 6px; 
+      border: 1px solid rgba(239,68,68,0.3);
+      background: rgba(239,68,68,0.1); 
+      color: #ff6b6b; 
+      cursor: pointer; 
+      font-size: 16px;
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+    .remove-btn:hover { 
+      background: rgba(239,68,68,0.2);
+      border-color: rgba(239,68,68,0.5);
+      transform: scale(1.05);
+    }
+
+    .empty-studies {
+      padding: 12px 12px;
+      text-align: center;
+      color: rgba(255,255,255,0.4);
+      font-size: 12px;
+    }
+
+    /* Actions */
+    .actions { 
+      display: flex; 
+      gap: 8px; 
+      padding: 12px 0 4px;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .btn { 
+      padding: 8px 12px; 
+      background: var(--accent);
+      color: white; 
+      border: none; 
+      border-radius: 8px; 
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer; 
+      text-decoration: none;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(31,111,235,0.25);
+    }
+    .btn:hover { 
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(31,111,235,0.4);
+    }
+    .btn.secondary { 
+      background: rgba(255,255,255,0.08);
+      box-shadow: none;
+    }
+    .btn.secondary:hover { 
+      background: rgba(255,255,255,0.12);
+      box-shadow: 0 2px 6px rgba(255,255,255,0.1);
+    }
+    .err { 
+      color: #ff6b6b; 
+      background: rgba(239,68,68,0.1); 
+      padding: 10px 12px; 
+      border-radius: 6px; 
+      font-size: 11px;
+      border: 1px solid rgba(239,68,68,0.3);
+      flex-shrink: 0;
+    }
+
+    /* Custom Scrollbar */
+    .main-grid::-webkit-scrollbar,
+    .extra-rows::-webkit-scrollbar {
+      width: 6px;
+    }
+    .main-grid::-webkit-scrollbar-track,
+    .extra-rows::-webkit-scrollbar-track {
+      background: rgba(0,0,0,0.2);
+      border-radius: 3px;
+    }
+    .main-grid::-webkit-scrollbar-thumb,
+    .extra-rows::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.2);
+      border-radius: 3px;
+    }
+    .main-grid::-webkit-scrollbar-thumb:hover,
+    .extra-rows::-webkit-scrollbar-thumb:hover {
+      background: rgba(255,255,255,0.3);
+    }
+
+    @media (max-width: 768px) {
+      .main-grid { flex-direction: column; }
+      .top-grid { grid-template-columns: 1fr; }
+      .bottom-grid { grid-template-columns: 1fr; }
+      form { width: 100%; }
+      .page-header-inner { width: 100%; }
+      .page-header {
+        padding: 12px 16px;
+      }
+      .page-header h1 {
+        font-size: 16px;
+      }
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+      .extra-row {
+        grid-template-columns: 1fr;
+      }
+      .extra-row .remove-btn {
+        grid-column: 1;
+        width: 100%;
+      }
+    }
     
-    @media (max-width: 700px) {
-      .form-two-col { grid-template-columns: 1fr; }
-      .topbar { flex-direction: column; align-items: flex-start; }
+    /* Study Description Dropdown Styles */
+    .description-dropdown {
+      box-shadow: 0 18px 30px rgba(6, 11, 24, 0.6), 0 8px 20px rgba(31, 111, 235, 0.2);
+      background: rgba(6, 12, 24, 0.98) !important;
+      border: 1px solid rgba(148, 163, 184, 0.25) !important;
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      overflow: hidden;
+      padding: 10px;
+    }
+
+    .protocol-panel-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+      padding: 6px 8px 8px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .protocol-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(226, 232, 240, 0.88);
+    }
+
+    .protocol-meta {
+      font-size: 11px;
+      color: rgba(148, 163, 184, 0.9);
+    }
+
+    .protocol-panel-search {
+      margin: 10px 0 8px;
+    }
+
+    .protocol-search-input {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(10, 18, 34, 0.92);
+      color: #f8fbff;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .protocol-search-input:focus {
+      outline: none;
+      border-color: rgba(59, 130, 246, 0.6);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+
+    .protocol-panel-list {
+      max-height: 260px;
+      overflow-y: auto;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(8, 16, 30, 0.88);
+    }
+
+    .protocol-item {
+      padding: 10px 12px;
+      color: #f8fbff;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      font-size: 14px;
+      transition: all 0.15s ease;
+    }
+
+    .protocol-item:last-child {
+      border-bottom: none;
+    }
+
+    .protocol-item:hover,
+    .protocol-item.selected {
+      background: rgba(59, 130, 246, 0.28);
+      color: #ffffff;
+      padding-left: 14px;
+    }
+
+    .protocol-empty {
+      padding: 14px 12px;
+      text-align: center;
+      color: rgba(148, 163, 184, 0.9);
+      font-size: 12px;
+      font-style: italic;
+    }
+
+    .protocol-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(7, 12, 22, 0.75);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+
+    .protocol-modal.open {
+      display: flex;
+    }
+
+    .protocol-modal-card {
+      width: min(760px, 92vw);
+      max-height: min(70vh, 640px);
+      background: rgba(10, 18, 34, 0.98);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(6, 11, 24, 0.6);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .protocol-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .protocol-modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #f8fbff;
+    }
+
+    .protocol-modal-meta {
+      font-size: 12px;
+      color: rgba(148, 163, 184, 0.9);
+    }
+
+    .protocol-modal-close {
+      border: none;
+      background: rgba(148, 163, 184, 0.15);
+      color: #f8fbff;
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .protocol-modal-search {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(8, 16, 30, 0.95);
+      color: #f8fbff;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .protocol-modal-search:focus {
+      outline: none;
+      border-color: rgba(59, 130, 246, 0.6);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+
+    .protocol-modal-list {
+      flex: 1;
+      overflow-y: auto;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(8, 16, 30, 0.88);
+    }
+
+    .protocol-modal-item {
+      padding: 12px 14px;
+      color: #f8fbff;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      font-size: 14px;
+      transition: all 0.15s ease;
+    }
+
+    .protocol-modal-item:hover,
+    .protocol-modal-item.selected {
+      background: rgba(59, 130, 246, 0.28);
+      color: #ffffff;
+      padding-left: 16px;
+    }
+
+    .protocol-modal-empty {
+      padding: 16px 14px;
+      text-align: center;
+      color: rgba(148, 163, 184, 0.9);
+      font-size: 13px;
+      font-style: italic;
+    }
+
+    .add-study-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(7, 12, 22, 0.75);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .add-study-modal.open {
+      display: flex;
+    }
+
+    .add-study-card {
+      width: min(640px, 92vw);
+      background: rgba(10, 18, 34, 0.98);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(6, 11, 24, 0.6);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .add-study-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .add-study-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #f8fbff;
+    }
+
+    .add-study-close {
+      border: none;
+      background: rgba(148, 163, 184, 0.15);
+      color: #f8fbff;
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .add-study-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .add-study-grid .form-row {
+      gap: 6px;
+    }
+
+    .add-study-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    @media (max-width: 600px) {
+      .add-study-grid { grid-template-columns: 1fr; }
+    }
+    
+    .no-results {
+      padding: 15px;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 12px;
+      font-style: italic;
     }
   </style>
 </head>
 <body>
-  <div class="header-with-logo" style="padding: 20px 0 0 0; max-width: 800px; margin: 0 auto; padding-left: 20px; padding-right: 20px;">
-    <img src="/static/images/logo-light.png" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;" alt="Lumos Lab Logo"
-        onerror="this.style.display='none';">
-    <div class="logo-text">
-      <h2>Lumos Lab</h2>
-      <p>Healthcare Applications</p>
+  <div class="page-wrapper">
+    <div class="page-header">
+      <div class="page-header-inner">
+        <div class="page-header-left">
+          <img src="/static/images/logo-light.png" alt="Lumos Lab" onerror="this.style.display='none'">
+          <h1>Create New Case</h1>
+        </div>
+        <a href="/admin" class="btn secondary">← Back to Dashboard</a>
+      </div>
+    </div>
+
+    <div class="form-container">
+      <form method="post" action="/submit" enctype="multipart/form-data" id="caseForm">
+
+        {% if error %}
+          <div class="err">⚠️ {{ error }}</div>
+        {% endif %}
+
+        <div class="main-grid">
+          <div class="top-grid">
+            <div class="form-card">
+              <div class="card-header">
+                <h2 class="card-title">Patient Details</h2>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-row">
+                  <label class="required">First Name</label>
+                  <input name="patient_first_name" type="text" placeholder="First name" required>
+                </div>
+                <div class="form-row">
+                  <label class="required">Surname</label>
+                  <input name="patient_surname" type="text" placeholder="Surname" required>
+                </div>
+              </div>
+              
+              <div class="form-row" style="margin-top: 10px;">
+                <label class="required">Patient ID</label>
+                <input name="patient_referral_id" type="text" placeholder="Patient identifier" required>
+              </div>
+              
+              <div class="form-row" style="margin-top: 10px;">
+                <label>Date of Birth</label>
+                <input name="patient_dob" type="date">
+              </div>
+              <div class="form-row" style="margin-top: 10px;">
+                <label class="required">Institution</label>
+                <select name="institution_id" id="institution_id" required onchange="updateOrgContext()">
+                  <option value="">-- Select --</option>
+                  {% for inst in institutions %}
+                    <option value="{{ inst.id }}" data-org-id="{{ inst.org_id or inst.organization_id or user_org_id or 1 }}">{{ inst.name }}</option>
+                  {% endfor %}
+                </select>
+                <input type="hidden" id="org_id_hidden" name="org_id" value="{{ user_org_id or '' }}">
+              </div>
+            </div>
+
+            <div class="form-card">
+              <div class="card-header">
+                <h2 class="card-title">Justification Request</h2>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-row">
+                  <label>Assign Radiologist</label>
+                  <select name="radiologist">
+                    <option value="">-- Later --</option>
+                    {% for rad in radiologists %}
+                      <option value="{{ rad.name }}">{{ rad.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label class="required">Modality</label>
+                  <select name="modality" id="modality" onchange="loadStudyDescriptions()" style="background: rgba(31, 111, 235, 0.15); border: 2px solid rgba(31, 111, 235, 0.4); color: white;">
+                    <option value="" style="background: rgba(0,0,0,0.8);">Select Modality</option>
+                    <option value="MRI" style="background: rgba(0,0,0,0.8);">MRI (Magnetic Resonance)</option>
+                    <option value="CT" style="background: rgba(0,0,0,0.8);">CT (Computed Tomography)</option>
+                    <option value="XR" style="background: rgba(0,0,0,0.8);">XR (X-Ray)</option>
+                    <option value="PET" style="background: rgba(0,0,0,0.8);">PET (Positron Emission Tomography)</option>
+                    <option value="DEXA" style="background: rgba(0,0,0,0.8);">DEXA (Bone Densitometry)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-row full" style="margin-top: 10px;">
+                <label class="required">Study Description</label>
+                <div style="position: relative;">
+                  <input 
+                    name="study_description" 
+                    id="study_description"
+                    type="text" 
+                    placeholder="Select modality first, then type to search or select from list"
+                    required
+                    oninput="filterDescriptions()"
+                    onfocus="openProtocolModal('study_description')"
+                    autocomplete="off"
+                    style="width: 100%;"
+                  >
+                  <div id="descriptionList" class="description-dropdown" style="display: none; position: absolute; top: 100%; left: 0; width: min(520px, 100%); border-top: none; border-radius: 12px; z-index: 100;">
+                    <div class="protocol-panel-header">
+                      <span class="protocol-title">Available Protocols</span>
+                      <span class="protocol-meta" data-meta>Modality: --</span>
+                    </div>
+                    <div class="protocol-panel-search">
+                      <input class="protocol-search-input" type="text" placeholder="Search protocols" oninput="filterDescriptions()">
+                    </div>
+                    <div class="protocol-panel-list" data-list></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-row" style="margin-top: 10px;">
+                <label>Admin Notes</label>
+                <textarea name="admin_notes" placeholder="Optional admin notes..."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="bottom-grid">
+            <div class="form-card">
+              <div class="card-header">
+                <h2 class="card-title">Referral File</h2>
+              </div>
+
+              <div class="form-row">
+                <label class="required">Referral File</label>
+                <input name="attachment" type="file" required>
+                <p class="info-text">Upload imaging referral (PDF, image, etc.)</p>
+              </div>
+            </div>
+
+            <div class="form-card">
+              <div class="card-header">
+                <h2 class="card-title">Additional Studies</h2>
+              </div>
+
+              <div class="extra-studies-card is-empty" id="extraStudiesBox">
+                <div class="extra-studies-header">
+                  <div class="extra-studies-title">
+                    <span class="icon">📚</span>
+                    <div class="extra-studies-title-text">
+                      <h3>Additional Studies</h3>
+                    </div>
+                    <span class="extra-studies-subtext">Add more studies for same patient</span>
+                  </div>
+                  <button type="button" class="add-study-btn" onclick="openAddStudyModal()">
+                    ➕ Add
+                  </button>
+                </div>
+                <div class="extra-rows" id="extraRows">
+                  <div class="empty-studies" id="emptyStudiesMsg">
+                    Click "Add" to create additional cases for this patient.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <a href="/admin" class="btn secondary">Cancel</a>
+            <button type="submit" class="btn" name="action" value="submit">✓ Submit Case(s)</button>
+          </div>
+        </div>
+
+        <!-- Hidden fields for extra studies (populated by JS) -->
+        <div id="extraHiddenFields"></div>
+      </form>
     </div>
   </div>
 
-  <div class="container">
-    <div class="topbar">
-      <h1 class="page-title">Create New Case</h1>
-      <a href="/admin" class="btn secondary">Back</a>
-    </div>
+  <script>
+    const radiologists = [
+      { value: "", label: "-- Assign Later --" },
+      {% for rad in radiologists %}
+        { value: "{{ rad.name }}", label: "{{ rad.name }}" },
+      {% endfor %}
+    ];
 
-    <form method="post" action="/submit" enctype="multipart/form-data">
-      <!-- Patient Information -->
-      <div class="form-section">
-        <h2>Patient Information</h2>
+    let rowCount = 0;
+    const descriptionCache = {};
 
-        <div class="form-two-col">
-          <div class="form-row">
-            <label class="required">First Name</label>
-            <input name="patient_first_name" type="text" required>
-          </div>
+    function addStudyRow(values = {}) {
+      rowCount++;
+      const container = document.getElementById('extraRows');
+      const emptyMsg = document.getElementById('emptyStudiesMsg');
+      const box = document.getElementById('extraStudiesBox');
+      
+      // Hide empty message and update card style
+      if (emptyMsg) {
+        emptyMsg.style.display = 'none';
+      }
+      box.classList.add('has-studies');
+      box.classList.remove('is-empty');
 
-          <div class="form-row">
-            <label class="required">Surname</label>
-            <input name="patient_surname" type="text" required>
-          </div>
+      const row = document.createElement('div');
+      row.className = 'extra-row';
+      row.id = 'extraRow_' + rowCount;
+
+      // Modality select
+      const modalityCol = document.createElement('div');
+      modalityCol.className = 'form-row';
+      const modalityLabel = document.createElement('label');
+      modalityLabel.textContent = 'Modality';
+      const modalitySelect = document.createElement('select');
+      modalitySelect.name = 'extra_modality';
+      modalitySelect.innerHTML = `
+        <option value="">-- Select --</option>
+        <option value="MRI">MRI (Magnetic Resonance)</option>
+        <option value="CT">CT (Computed Tomography)</option>
+        <option value="XR">XR (X-Ray)</option>
+        <option value="PET">PET (Positron Emission Tomography)</option>
+        <option value="DEXA">DEXA (Bone Densitometry)</option>
+      `;
+      if (values.modality) {
+        modalitySelect.value = values.modality;
+      }
+      modalityCol.appendChild(modalityLabel);
+      modalityCol.appendChild(modalitySelect);
+
+      // Study description input + dropdown
+      const studyCol = document.createElement('div');
+      studyCol.className = 'form-row';
+      const studyLabel = document.createElement('label');
+      studyLabel.textContent = 'Study Description';
+      const studyWrapper = document.createElement('div');
+      studyWrapper.style.position = 'relative';
+      const studyInput = document.createElement('input');
+      const studyInputId = `extra_study_description_${rowCount}`;
+      const dropdownId = `descriptionList_${rowCount}`;
+      studyInput.type = 'text';
+      studyInput.id = studyInputId;
+      studyInput.placeholder = 'Select modality to see protocols';
+      studyInput.name = 'extra_study_description';
+      studyInput.autocomplete = 'off';
+      if (values.description) {
+        studyInput.value = values.description;
+      }
+      const dropdown = document.createElement('div');
+      dropdown.id = dropdownId;
+      dropdown.className = 'description-dropdown';
+      dropdown.style.display = 'none';
+      dropdown.style.position = 'absolute';
+      dropdown.style.top = '100%';
+      dropdown.style.left = '0';
+      dropdown.style.width = 'min(520px, 100%)';
+      dropdown.style.borderTop = 'none';
+      dropdown.style.borderRadius = '12px';
+      dropdown.style.zIndex = '100';
+      dropdown.innerHTML = `
+        <div class="protocol-panel-header">
+          <span class="protocol-title">Available Protocols</span>
+          <span class="protocol-meta" data-meta>Modality: --</span>
         </div>
+        <div class="protocol-panel-search">
+          <input class="protocol-search-input" type="text" placeholder="Search protocols" />
+        </div>
+        <div class="protocol-panel-list" data-list></div>
+      `;
+      const searchInput = dropdown.querySelector('.protocol-search-input');
+      searchInput.oninput = () => filterDescriptionsFor(studyInputId, dropdownId);
+      studyInput.oninput = () => filterDescriptionsFor(studyInputId, dropdownId);
+      studyInput.onfocus = () => showAllDescriptionsFor(studyInputId, dropdownId);
+      modalitySelect.onchange = () => {
+        loadStudyDescriptionsFor(studyInputId, dropdownId, modalitySelect.value).then(() => {
+          openProtocolModal(studyInputId);
+        });
+      };
+      studyWrapper.appendChild(studyInput);
+      studyWrapper.appendChild(dropdown);
+      studyCol.appendChild(studyLabel);
+      studyCol.appendChild(studyWrapper);
 
-        <div class="form-row">
-          <label class="required">Patient ID</label>
-          <input name="patient_referral_id" type="text" required>
-        </div>
-        <div class="form-row">
-          <label>Patient DOB</label>
-          <input name="patient_dob" type="date">
-        </div>
+      // Radiologist select
+      const radCol = document.createElement('div');
+      radCol.className = 'form-row';
+      const radLabel = document.createElement('label');
+      radLabel.textContent = 'Radiologist';
+      const radSelect = document.createElement('select');
+      radSelect.name = 'extra_radiologist';
+      radiologists.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.value;
+        opt.textContent = r.label;
+        radSelect.appendChild(opt);
+      });
+      if (values.radiologist) {
+        radSelect.value = values.radiologist;
+      }
+      radCol.appendChild(radLabel);
+      radCol.appendChild(radSelect);
+
+      // Remove button
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'remove-btn';
+      removeBtn.innerHTML = '×';
+      removeBtn.title = 'Remove';
+      removeBtn.onclick = () => {
+        row.remove();
+        const remainingRows = container.querySelectorAll('.extra-row');
+        if (remainingRows.length === 0) {
+          if (emptyMsg) emptyMsg.style.display = 'block';
+          box.classList.remove('has-studies');
+          box.classList.add('is-empty');
+        }
+      };
+
+      row.appendChild(modalityCol);
+      row.appendChild(studyCol);
+      row.appendChild(radCol);
+      row.appendChild(removeBtn);
+      container.appendChild(row);
+
+      // Focus on the new input
+      studyInput.focus();
+    }
+
+    function openAddStudyModal() {
+      const modal = document.getElementById('addStudyModal');
+      const modalitySelect = modal.querySelector('[data-add-modality]');
+      const descriptionSelect = modal.querySelector('[data-add-description]');
+      const radiologistSelect = modal.querySelector('[data-add-radiologist]');
+
+      modalitySelect.value = '';
+      descriptionSelect.innerHTML = '<option value="">Select modality first</option>';
+      radiologistSelect.innerHTML = '';
+      radiologists.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.value;
+        opt.textContent = r.label;
+        radiologistSelect.appendChild(opt);
+      });
+
+      modal.classList.add('open');
+      modalitySelect.focus();
+    }
+
+    function closeAddStudyModal() {
+      document.getElementById('addStudyModal').classList.remove('open');
+    }
+
+    function resolveOrgId() {
+      const hidden = document.getElementById('org_id_hidden');
+      if (hidden && hidden.value) {
+        return hidden.value;
+      }
+      const institutionSelect = document.getElementById('institution_id');
+      if (institutionSelect) {
+        const selectedOption = institutionSelect.options[institutionSelect.selectedIndex];
+        const selectedOrg = selectedOption ? selectedOption.getAttribute('data-org-id') : '';
+        if (selectedOrg) {
+          return selectedOrg;
+        }
+      }
+      return '1';
+    }
+
+    async function loadAddStudyDescriptions() {
+      const modal = document.getElementById('addStudyModal');
+      const modality = modal.querySelector('[data-add-modality]').value;
+      const descriptionSelect = modal.querySelector('[data-add-description]');
+      const orgId = resolveOrgId();
+
+      if (!modality) {
+        descriptionSelect.innerHTML = '<option value="">Select modality first</option>';
+        return;
+      }
+
+      const cacheKey = `${orgId}_${modality}`;
+      if (!descriptionCache[cacheKey]) {
+        try {
+          const response = await fetch(`/api/study-descriptions/by-modality/${modality}?org_id=${orgId}`);
+          descriptionCache[cacheKey] = await response.json();
+        } catch (error) {
+          console.error('Error loading study descriptions:', error);
+          descriptionCache[cacheKey] = [];
+        }
+      }
+
+      const descriptions = descriptionCache[cacheKey] || [];
+      if (descriptions.length === 0) {
+        descriptionSelect.innerHTML = '<option value="">No protocols available</option>';
+        return;
+      }
+
+      descriptionSelect.innerHTML = descriptions.map(item =>
+        `<option value="${item.description}">${item.description}</option>`
+      ).join('');
+    }
+
+    function confirmAddStudy() {
+      const modal = document.getElementById('addStudyModal');
+      const modality = modal.querySelector('[data-add-modality]').value;
+      const description = modal.querySelector('[data-add-description]').value;
+      const radiologist = modal.querySelector('[data-add-radiologist]').value;
+
+      if (!modality || !description) {
+        return;
+      }
+
+      addStudyRow({ modality, description, radiologist });
+      closeAddStudyModal();
+    }
+    
+    // Update organization context when institution is selected
+    function updateOrgContext() {
+      const institutionSelect = document.getElementById('institution_id');
+      const selectedOption = institutionSelect.options[institutionSelect.selectedIndex];
+      const orgId = selectedOption.getAttribute('data-org-id') || '1';
+      document.getElementById('org_id_hidden').value = orgId;
+      
+      // Reload study descriptions with new org context
+      const modalitySelect = document.getElementById('modality');
+      if (modalitySelect.value) {
+        loadStudyDescriptions();
+      }
+    }
+    
+    // Study Description Presets - Load descriptions based on modality
+    let allDescriptions = [];
+    
+    async function loadStudyDescriptions() {
+      const modality = document.getElementById('modality').value;
+      await loadStudyDescriptionsFor('study_description', 'descriptionList', modality);
+      if (modality) {
+        openProtocolModal('study_description');
+      }
+    }
+
+    async function loadStudyDescriptionsFor(inputId, dropdownId, modality) {
+      const orgId = resolveOrgId();
+      const dropdown = document.getElementById(dropdownId);
+      const cacheKey = `${orgId}_${modality}`;
+
+      if (!modality) {
+        dropdown.style.display = 'none';
+        if (inputId === 'study_description') {
+          allDescriptions = [];
+        }
+        return;
+      }
+
+      try {
+        if (!descriptionCache[cacheKey]) {
+          const response = await fetch(`/api/study-descriptions/by-modality/${modality}?org_id=${orgId}`);
+          descriptionCache[cacheKey] = await response.json();
+        }
+        const descriptions = descriptionCache[cacheKey] || [];
+        if (inputId === 'study_description') {
+          allDescriptions = descriptions;
+        }
+        if (descriptions.length > 0) {
+          showDescriptionListFor(descriptions, dropdownId, inputId);
+        } else {
+          dropdown.style.display = 'none';
+        }
+      } catch (error) {
+        console.error('Error loading study descriptions:', error);
+        if (inputId === 'study_description') {
+          allDescriptions = [];
+        }
+        dropdown.style.display = 'none';
+      }
+    }
+    
+    function filterDescriptions() {
+      filterDescriptionsFor('study_description', 'descriptionList');
+    }
+
+    function showAllDescriptions() {
+      showAllDescriptionsFor('study_description', 'descriptionList');
+    }
+
+    function filterDescriptionsFor(inputId, dropdownId) {
+      const dropdown = document.getElementById(dropdownId);
+      const descriptions = inputId === 'study_description' ? allDescriptions : getCachedDescriptionsForInput(inputId);
+      const searchInput = dropdown ? dropdown.querySelector('.protocol-search-input') : null;
+      const inputValue = (searchInput && document.activeElement === searchInput)
+        ? searchInput.value.toLowerCase()
+        : document.getElementById(inputId).value.toLowerCase();
+
+      if (searchInput && document.activeElement !== searchInput) {
+        searchInput.value = inputValue;
+      }
+
+      if (!inputValue && descriptions.length > 0) {
+        showDescriptionListFor(descriptions, dropdownId, inputId);
+        return;
+      }
+
+      if (!inputValue || descriptions.length === 0) {
+        dropdown.style.display = 'none';
+        return;
+      }
+
+      const filtered = descriptions.filter(item =>
+        item.description.toLowerCase().includes(inputValue)
+      );
+
+      if (filtered.length > 0) {
+        showDescriptionListFor(filtered, dropdownId, inputId);
+      } else {
+        const list = dropdown.querySelector('[data-list]');
+        list.innerHTML = '<div class="protocol-empty">No matching descriptions</div>';
+        dropdown.style.display = 'block';
+      }
+    }
+
+    function showAllDescriptionsFor(inputId, dropdownId) {
+      const descriptions = inputId === 'study_description' ? allDescriptions : getCachedDescriptionsForInput(inputId);
+      if (descriptions.length > 0) {
+        showDescriptionListFor(descriptions, dropdownId, inputId);
+        return;
+      }
+      const modality = getModalityForInputId(inputId);
+      if (modality) {
+        loadStudyDescriptionsFor(inputId, dropdownId, modality);
+      }
+    }
+
+    function showDescriptionListFor(items, dropdownId, inputId) {
+      const dropdown = document.getElementById(dropdownId);
+      const list = dropdown.querySelector('[data-list]');
+      const meta = dropdown.querySelector('[data-meta]');
+      const modality = getModalityForInputId(inputId);
+      const metaText = modality ? `Modality: ${modality} | ${items.length}` : 'Modality: --';
+      if (meta) {
+        meta.textContent = metaText;
+      }
+      list.innerHTML = items.map(item =>
+        `<div class="protocol-item" onclick="selectDescriptionFor('${inputId}', '${dropdownId}', '${item.description.replace(/'/g, "\\'")}')">${item.description}</div>`
+      ).join('');
+      dropdown.style.display = 'block';
+    }
+
+    function selectDescriptionFor(inputId, dropdownId, description) {
+      document.getElementById(inputId).value = description;
+      document.getElementById(dropdownId).style.display = 'none';
+    }
+
+
+    function getCachedDescriptionsForInput(inputId) {
+      const orgId = resolveOrgId();
+      const modality = getModalityForInputId(inputId);
+      const cacheKey = `${orgId}_${modality}`;
+      return descriptionCache[cacheKey] || [];
+    }
+
+    function getModalityForInputId(inputId) {
+      if (inputId === 'study_description') {
+        return document.getElementById('modality').value;
+      }
+      const row = document.querySelector(`#${inputId}`)?.closest('.extra-row');
+      const modalitySelect = row ? row.querySelector('select[name="extra_modality"]') : null;
+      return modalitySelect ? modalitySelect.value : '';
+    }
+
+    function openProtocolModal(inputId) {
+      const modality = getModalityForInputId(inputId);
+      const modal = document.getElementById('protocolModal');
+      const title = modal.querySelector('[data-modal-title]');
+      const meta = modal.querySelector('[data-modal-meta]');
+      const list = modal.querySelector('[data-modal-list]');
+      const search = modal.querySelector('[data-modal-search]');
+
+      if (!modality) {
+        meta.textContent = 'Select a modality to load protocols.';
+        list.innerHTML = '<div class="protocol-modal-empty">No modality selected.</div>';
+        modal.classList.add('open');
+        return;
+      }
+
+      const descriptions = getCachedDescriptionsForInput(inputId);
+      title.textContent = 'Study Description Protocols';
+      meta.textContent = `Modality: ${modality} | ${descriptions.length}`;
+      search.value = '';
+      renderProtocolModalList(inputId, descriptions);
+      modal.dataset.targetInput = inputId;
+      modal.classList.add('open');
+      search.focus();
+    }
+
+    function closeProtocolModal() {
+      const modal = document.getElementById('protocolModal');
+      modal.classList.remove('open');
+    }
+
+    function renderProtocolModalList(inputId, items) {
+      const modal = document.getElementById('protocolModal');
+      const list = modal.querySelector('[data-modal-list]');
+      if (!items || items.length === 0) {
+        list.innerHTML = '<div class="protocol-modal-empty">No protocols found for this modality.</div>';
+        return;
+      }
+      list.innerHTML = items.map(item =>
+        `<div class="protocol-modal-item" onclick="selectProtocolFromModal('${inputId}', '${item.description.replace(/'/g, "\\'")}')">${item.description}</div>`
+      ).join('');
+    }
+
+    function filterProtocolModal() {
+      const modal = document.getElementById('protocolModal');
+      const inputId = modal.dataset.targetInput;
+      const search = modal.querySelector('[data-modal-search]').value.toLowerCase();
+      const descriptions = getCachedDescriptionsForInput(inputId);
+      const filtered = descriptions.filter(item =>
+        item.description.toLowerCase().includes(search)
+      );
+      renderProtocolModalList(inputId, filtered);
+    }
+
+    function selectProtocolFromModal(inputId, description) {
+      document.getElementById(inputId).value = description;
+      closeProtocolModal();
+    }
+    
+    // Hide dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+      const dropdowns = document.querySelectorAll('.description-dropdown');
+      dropdowns.forEach(dropdown => {
+        const wrapper = dropdown.parentElement;
+        if (wrapper && !wrapper.contains(e.target)) {
+          dropdown.style.display = 'none';
+        }
+      });
+    });
+  </script>
+
+  <div class="add-study-modal" id="addStudyModal" role="dialog" aria-modal="true">
+    <div class="add-study-card">
+      <div class="add-study-header">
+        <div class="add-study-title">Add Additional Study</div>
+        <button class="add-study-close" type="button" onclick="closeAddStudyModal()">Close</button>
       </div>
-
-      <!-- Case Details -->
-      <div class="form-section">
-        <h2>Case Details</h2>
-
-        <div class="form-two-col">
-          <div class="form-row">
-            <label class="required">Institution</label>
-            <select name="institution_id" required>
-              <option value="">-- Select Institution --</option>
-              {% for inst in institutions %}
-                <option value="{{ inst.id }}">{{ inst.name }}</option>
-              {% endfor %}
-            </select>
-            <p class="info-text">Each institution has its own SLA and protocols</p>
-          </div>
-
-          <div class="form-row">
-            <label>Assign Radiologist</label>
-            <select name="radiologist">
-              <option value="">-- Select or Skip --</option>
-              {% for rad in radiologists %}
-                <option value="{{ rad.name }}">{{ rad.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
+      <div class="add-study-grid">
+        <div class="form-row">
+          <label class="required">Modality</label>
+          <select data-add-modality onchange="loadAddStudyDescriptions()">
+            <option value="">-- Select --</option>
+            <option value="MRI">MRI (Magnetic Resonance)</option>
+            <option value="CT">CT (Computed Tomography)</option>
+            <option value="XR">XR (X-Ray)</option>
+            <option value="PET">PET (Positron Emission Tomography)</option>
+            <option value="DEXA">DEXA (Bone Densitometry)</option>
+          </select>
         </div>
-
         <div class="form-row">
           <label class="required">Study Description</label>
-          <input name="study_description" type="text" placeholder="e.g., CT Head (standard)" required>
+          <select data-add-description>
+            <option value="">Select modality first</option>
+          </select>
         </div>
-
-        <div class="form-row">
-          <label>Admin Notes</label>
-          <textarea name="admin_notes" placeholder="Optional additional notes..."></textarea>
-        </div>
-      </div>
-
-      <!-- Attachment -->
-      <div class="form-section">
-        <h2>Attachment</h2>
-
-        <div class="form-row">
-          <label class="required">Upload File</label>
-          <input name="attachment" type="file" required>
-          <p class="info-text">Upload the imaging file for review</p>
+        <div class="form-row" style="grid-column: 1 / -1;">
+          <label>Assign Radiologist</label>
+          <select data-add-radiologist></select>
         </div>
       </div>
-
-      <!-- Actions -->
-      <div class="actions">
-        <button type="submit" class="btn" name="action" value="submit">Submit</button>
-        <button type="submit" class="btn" name="action" value="submit_another">Submit Another Case</button>
-        <a href="/admin" class="btn secondary">Cancel</a>
+      <div class="add-study-actions">
+        <button type="button" class="btn secondary" onclick="closeAddStudyModal()">Cancel</button>
+        <button type="button" class="btn" onclick="confirmAddStudy()">Add Study</button>
       </div>
-    </form>
+    </div>
   </div>
 
-  <div class="page-footer">
-    <p>Vetting Suite - Healthcare Applications</p>
+  <div class="protocol-modal" id="protocolModal" role="dialog" aria-modal="true">
+    <div class="protocol-modal-card">
+      <div class="protocol-modal-header">
+        <div>
+          <div class="protocol-modal-title" data-modal-title>Study Description Protocols</div>
+          <div class="protocol-modal-meta" data-modal-meta></div>
+        </div>
+        <button class="protocol-modal-close" type="button" onclick="closeProtocolModal()">Close</button>
+      </div>
+      <input class="protocol-modal-search" type="text" data-modal-search placeholder="Search protocols" oninput="filterProtocolModal()">
+      <div class="protocol-modal-list" data-modal-list></div>
+    </div>
   </div>
 </body>
 </html>

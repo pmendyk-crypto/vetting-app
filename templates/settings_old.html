@@ -367,7 +367,7 @@
                             <tr>
                                 <td>{{ inst.name }}</td>
                                 <td>{{ inst.sla_hours }}</td>
-                                <td>{{ inst.created_at if inst.created_at else 'N/A' }}</td>
+                                <td>{{ inst.created_at | display_datetime if inst.created_at else 'N/A' }}</td>
                                 <td>
                                     <div class="action-buttons">
                                         <button class="btn btn-secondary btn-small" onclick="editInstitution({{ inst.id }}, '{{ inst.name }}', {{ inst.sla_hours }})">Edit</button>
@@ -491,7 +491,7 @@
                                     <span style="text-transform: uppercase; font-size: 11px; font-weight: 400; color: #1f6feb;">{{ user.role }}</span>
                                 </td>
                                 <td>{{ user.email if user.email else 'N/A' }}</td>
-                                <td>{{ user.created_at if user.created_at else 'N/A' }}</td>
+                                <td>{{ user.created_at | display_datetime if user.created_at else 'N/A' }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -560,7 +560,7 @@
                                         {{ 'Active' if proto.is_active else 'Inactive' }}
                                     </span>
                                 </td>
-                                <td>{{ proto.last_modified if proto.last_modified else 'N/A' }}</td>
+                                <td>{{ proto.last_modified | display_datetime if proto.last_modified else 'N/A' }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>

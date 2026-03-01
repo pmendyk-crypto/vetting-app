@@ -104,7 +104,7 @@
           <p><b>Organisation:</b> {{ org_name }}</p>
         {% endif %}
         <p><b>Status:</b> {{ case["status"] }}</p>
-        <p><b>Created:</b> {{ case["created_at"] }}</p>
+        <p><b>Created:</b> {{ case["created_at"] | display_datetime }}</p>
         <p><b>Patient ID:</b> {{ case["patient_referral_id"] or "—" }}</p>
         <p><b>Patient DOB:</b> {{ case["patient_dob"] or "—" }}</p>
         <p><b>Study:</b> {{ case["study_description"] }}</p>
@@ -180,7 +180,7 @@
               {% for e in events %}
                 {% set ev = e["event_type"] | upper %}
                 <tr>
-                  <td class="ts">{{ e["created_at"] }}</td>
+                  <td class="ts">{{ e["created_at"] | display_datetime }}</td>
                   <td>
                     <span class="ev-badge ev-{% if ev in ['SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','EDITED'] %}{{ ev }}{% else %}OTHER{% endif %}">
                       {{ ev }}
@@ -197,6 +197,23 @@
                     {% if e["comment"] %}
                       <div class="detail-row"><span>Note: </span>{{ e["comment"] }}</div>
                     {% endif %}
+                    {% if not e["decision"] and not e["protocol"] and not e["comment"] %}
+                      {% if ev == "SUBMITTED" %}
+                        <div class="detail-row"><span>Details: </span>Case submitted.</div>
+                      {% elif ev == "ASSIGNED" %}
+                        <div class="detail-row"><span>Details: </span>Radiologist assignment updated.</div>
+                      {% elif ev == "VETTED" %}
+                        <div class="detail-row"><span>Details: </span>Case vetted.</div>
+                      {% elif ev == "REJECTED" %}
+                        <div class="detail-row"><span>Details: </span>Case rejected.</div>
+                      {% elif ev == "REOPENED" %}
+                        <div class="detail-row"><span>Details: </span>Case reopened.</div>
+                      {% elif ev == "EDITED" %}
+                        <div class="detail-row"><span>Details: </span>Case details updated.</div>
+                      {% else %}
+                        <div class="detail-row"><span>Details: </span>Activity recorded.</div>
+                      {% endif %}
+                    {% endif %}
                   </td>
                 </tr>
               {% endfor %}
@@ -211,7 +228,6 @@
     </div>
 
     <div class="page-footer">
-      <p>Powered by <strong>Vetting Suite</strong> - Healthcare Applications</p>
     </div>
   </div>
   <script src="/static/js/session.js"></script>

@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Description Presets - Settings</title>
+    <link rel="stylesheet" href="/static/css/site.css">
+    <style>
+        .settings-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .section-title {
+            font-size: 22px;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .form-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.75);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid rgba(31, 111, 235, 0.2);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 14px;
+            font-family: inherit;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #1f6feb;
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.15);
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 6px;
+            background: #1f6feb;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 400;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+        
+        .btn:hover {
+            filter: brightness(1.1);
+        }
+        
+        .btn.secondary {
+            background: rgba(255, 255, 255, 0.06);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        
+        .btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.09);
+        }
+        
+        .btn.danger {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ff6b6b;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .btn.danger:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #1f6feb;
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        
+        .presets-list {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .preset-item {
+            display: grid;
+            grid-template-columns: 1fr 3fr auto;
+            gap: 15px;
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            align-items: center;
+        }
+        
+        .preset-item:last-child {
+            border-bottom: none;
+        }
+        
+        .preset-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        
+        .preset-modality {
+            font-weight: 600;
+            color: #1f6feb;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        
+        .preset-description {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 14px;
+        }
+        
+        .preset-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .action-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+        
+        .action-btn.edit {
+            background: rgba(31, 111, 235, 0.2);
+            color: #1f6feb;
+        }
+        
+        .action-btn.edit:hover {
+            background: rgba(31, 111, 235, 0.3);
+        }
+        
+        .action-btn.delete {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ff6b6b;
+        }
+        
+        .action-btn.delete:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .alert.error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ff6b6b;
+        }
+        
+        .alert.success {
+            background: rgba(52, 211, 153, 0.1);
+            border: 1px solid rgba(52, 211, 153, 0.3);
+            color: #34d399;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255, 255, 255, 0.5);
+            font-style: italic;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: #0f1724;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            font-size: 18px;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 20px;
+        }
+        
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 30px;
+            height: 30px;
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            font-size: 24px;
+            transition: all 0.2s ease;
+        }
+        
+        .modal-close:hover {
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="settings-container">
+        <a href="/settings" class="back-link">← Back to Settings</a>
+        
+        <div class="section-title">📋 Study Description Presets</div>
+        <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 20px; font-size: 14px;">
+            Manage standard study descriptions for UK radiology examinations. These presets will appear as searchable dropdowns when submitting cases.
+        </p>
+        
+        {% if request.query_params.get('error') %}
+            <div class="alert error">
+                {% if request.query_params.get('error') == 'duplicate' %}
+                    This preset already exists for this modality.
+                {% elif request.query_params.get('error') == 'empty' %}
+                    Please fill in all fields.
+                {% endif %}
+            </div>
+        {% endif %}
+        
+        <!-- Add New Preset Form -->
+        <div class="form-card">
+            <h3 style="margin: 0 0 20px 0; color: white; font-size: 16px;">Add New Preset</h3>
+            <form method="POST" action="/settings/study-descriptions/add">
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">
+                    <div class="form-group">
+                        <label>Modality</label>
+                        <select name="modality" required>
+                            <option value="">Select Modality</option>
+                            <option value="MR">MR (Magnetic Resonance)</option>
+                            <option value="CT">CT (Computed Tomography)</option>
+                            <option value="XR">XR (X-Ray)</option>
+                            <option value="PET">PET (Positron Emission Tomography)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" name="description" placeholder="e.g., MRI Brain" required>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button type="submit" class="btn">Add Preset</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Presets List -->
+        <div>
+            <h3 style="margin: 0 0 15px 0; color: white; font-size: 16px;">Current Presets ({{ presets|length }})</h3>
+            {% if presets|length == 0 %}
+                <div class="empty-state">No presets found. Add one using the form above.</div>
+            {% else %}
+                <div class="presets-list">
+                    {% for preset in presets %}
+                        <div class="preset-item">
+                            <div class="preset-modality">{{ preset.modality }}</div>
+                            <div class="preset-description">{{ preset.description }}</div>
+                            <div class="preset-actions">
+                                <button 
+                                    type="button" 
+                                    class="action-btn edit"
+                                    onclick="editPreset({{ preset.id }}, '{{ preset.modality }}', '{{ preset.description }}')"
+                                >
+                                    Edit
+                                </button>
+                                <form method="POST" action="/settings/study-descriptions/delete/{{ preset.id }}" style="display: inline;">
+                                    <button type="submit" class="action-btn delete" onclick="return confirm('Delete this preset?')">Delete</button>
+                                </form>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Edit Modal -->
+    <div class="modal" id="editModal">
+        <div class="modal-content" style="position: relative;">
+            <button type="button" class="modal-close" onclick="closeModal()">&times;</button>
+            <div class="modal-header">Edit Preset</div>
+            <form method="POST" id="editForm">
+                <div class="form-group">
+                    <label>Modality</label>
+                    <select name="modality" id="editModality" required>
+                        <option value="MR">MR (Magnetic Resonance)</option>
+                        <option value="CT">CT (Computed Tomography)</option>
+                        <option value="XR">XR (X-Ray)</option>
+                        <option value="PET">PET (Positron Emission Tomography)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" name="description" id="editDescription" required>
+                </div>
+                <div class="button-group">
+                    <button type="submit" class="btn">Save Changes</button>
+                    <button type="button" class="btn secondary" onclick="closeModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        function editPreset(id, modality, description) {
+            document.getElementById('editModality').value = modality;
+            document.getElementById('editDescription').value = description;
+            document.getElementById('editForm').action = `/settings/study-descriptions/edit/${id}`;
+            document.getElementById('editModal').classList.add('active');
+        }
+        
+        function closeModal() {
+            document.getElementById('editModal').classList.remove('active');
+        }
+        
+        // Close modal when clicking outside
+        document.getElementById('editModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>

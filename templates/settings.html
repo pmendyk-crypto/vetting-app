@@ -64,7 +64,7 @@
         }
 
         .form-group label {
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 400;
             color: rgba(255, 255, 255, 0.75);
             margin-bottom: 6px;
@@ -395,7 +395,7 @@
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             margin-top: 50px;
             color: rgba(255, 255, 255, 0.6);
-            font-size: 13px;
+            font-size: 14px;
         }
 
         .page-footer p {
@@ -444,6 +444,7 @@
             <button class="tab-btn active" onclick="switchTab('institutions', this)">Institutions</button>
             <button class="tab-btn" onclick="switchTab('users', this)">Users</button>
             <button class="tab-btn" onclick="switchTab('protocols', this)">Protocols</button>
+            <a href="/settings/study-descriptions" class="tab-btn" style="text-decoration: none; display: inline-block; padding: 8px 16px;">📋 Study Presets</a>
         </div>
 
         {% if error == 'email_taken' %}
@@ -500,8 +501,8 @@
                             <tr>
                                 <td>{{ inst.name }}</td>
                                 <td>{{ inst.sla_hours }}</td>
-                                <td>{{ inst.created_at if inst.created_at else 'N/A' }}</td>
-                                <td>{{ inst.modified_at if inst.modified_at else 'N/A' }}</td>
+                                <td>{{ inst.created_at | display_datetime if inst.created_at else 'N/A' }}</td>
+                                <td>{{ inst.modified_at | display_datetime if inst.modified_at else 'N/A' }}</td>
                                 <td>
                                     <button class="btn btn-secondary btn-small" onclick="editInstitution({{ inst.id }}, '{{ inst.name }}', {{ inst.sla_hours }})">Edit</button>
                                 </td>
@@ -520,7 +521,7 @@
         <div id="users" class="tab-content">
             <div class="settings-section">
                 <div class="section-title">Manage Users</div>
-                <p style="color: rgba(255,255,255,0.7); margin: 0 0 16px 0; font-size: 13px;">
+                <p style="color: rgba(255,255,255,0.7); margin: 0 0 16px 0; font-size: 14px;">
                     Access levels control what each user can do: <strong>Admin</strong> manages cases and settings,
                     <strong>Radiologist</strong> can only vet assigned cases, and <strong>User</strong> has limited access.
                 </p>
@@ -707,7 +708,7 @@
                                         {{ 'Active' if proto.is_active else 'Inactive' }}
                                     </span>
                                 </td>
-                                <td>{% if proto.last_modified %}{{ proto.last_modified }}{% else %}N/A{% endif %}</td>
+                                <td>{% if proto.last_modified %}{{ proto.last_modified | display_datetime }}{% else %}N/A{% endif %}</td>
                                 <td>
                                     <div class="action-buttons">
                                         <button class="btn btn-secondary btn-small" onclick='editProtocol({{ proto.id }}, {{ proto.name|tojson }}, {{ proto.institution_id }}, {{ proto.instructions|tojson if proto.instructions else "\"\"" }})'>Edit</button>
@@ -1041,7 +1042,6 @@
         </div>
 
         <div class="page-footer">
-            <p>Powered by <strong>Vetting Suite</strong> - Healthcare Applications</p>
         </div>
     </div>
   <script src="/static/js/session.js"></script>

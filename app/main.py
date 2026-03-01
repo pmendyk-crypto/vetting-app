@@ -28,12 +28,21 @@ import csv
 import io
 import random
 import string
+import shutil
+import re
 
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 import urllib.request
 import urllib.parse
 import json as _json
+
+# Azure Blob Storage
+try:
+    from azure.storage.blob import BlobServiceClient, BlobSasPermissions, generate_blob_sas
+except ImportError:
+    BlobServiceClient = None
+    print("[WARNING] azure-storage-blob not installed, blob storage disabled")
 
 
 # -------------------------
@@ -47,6 +56,16 @@ UPLOAD_DIR.mkdir(exist_ok=True, parents=True)
 # Storage TTL constants (in days)
 REFERRAL_FILE_TTL_DAYS = int(os.environ.get("REFERRAL_FILE_TTL_DAYS", "7"))   # delete uploaded file after 7 days
 CASE_RECORD_TTL_DAYS   = int(os.environ.get("CASE_RECORD_TTL_DAYS",   "28"))  # keep case record/PDF for 28 days
+
+# Azure Blob Storage config
+AZURE_STORAGE_CONNECTION_STRING = os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "")
+REFERRAL_BLOB_CONTAINER = os.environ.get("REFERRAL_BLOB_CONTAINER", "referrals")
+BLOB_STORAGE_ENABLED = bool(AZURE_STORAGE_CONNECTION_STRING and BlobServiceClient)
+
+if BLOB_STORAGE_ENABLED:
+    print(f"[startup] Azure Blob Storage ENABLED (container={REFERRAL_BLOB_CONTAINER})")
+else:
+    print("[startup] Azure Blob Storage DISABLED - using local filesystem")
 
 # SMTP notification settings
 SMTP_HOST = os.environ.get("SMTP_HOST", "")
@@ -66,10 +85,133 @@ print(f"[startup] BASE_DIR={BASE_DIR}, DB_PATH={DB_PATH}, UPLOAD_DIR={UPLOAD_DIR
 # Helper Functions
 # -------------------------
 def generate_case_id() -> str:
-    """Generate a unique readable case ID in format: YYYYMMDD-XXXX"""
+    """Generate a unique readable case ID in format: YYYYMMDD-0001."""
+    return generate_case_ids(1)[0]
+
+
+def generate_case_ids(count: int) -> list[str]:
+    """Generate consecutive unique case IDs for a batch submission."""
+    total = max(1, int(count or 1))
     date_prefix = datetime.now(timezone.utc).strftime("%Y%m%d")
-    random_suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-    return f"{date_prefix}-{random_suffix}"
+    like_pattern = f"{date_prefix}-%"
+
+    conn = get_db()
+    try:
+        rows = conn.execute("SELECT id FROM cases WHERE id LIKE ?", (like_pattern,)).fetchall()
+    finally:
+        conn.close()
+
+    max_seq = 0
+    for row in rows or []:
+        case_id = row.get("id") if isinstance(row, dict) else row[0]
+        if not case_id or "-" not in case_id:
+            continue
+        suffix = str(case_id).rsplit("-", 1)[-1]
+        if suffix.isdigit():
+            max_seq = max(max_seq, int(suffix))
+
+    return [f"{date_prefix}-{max_seq + idx + 1:04d}" for idx in range(total)]
+
+
+def format_csv_timestamp(value: str | None) -> str:
+    return format_display_datetime(value)
+
+
+def clear_case_stored_filepath(case_id: str) -> None:
+    if not case_id:
+        return
+    conn = get_db()
+    conn.execute("UPDATE cases SET stored_filepath = NULL WHERE id = ?", (case_id,))
+    conn.commit()
+    conn.close()
+
+
+def normalize_case_attachment(case_dict: dict) -> dict:
+    path = case_dict.get("stored_filepath")
+    if path and not Path(path).exists():
+        clear_case_stored_filepath(case_dict.get("id"))
+        case_dict["stored_filepath"] = None
+    return case_dict
+
+
+# -------------------------
+# Azure Blob Storage Helpers
+# -------------------------
+def get_blob_service_client():
+    """Get BlobServiceClient from connection string."""
+    if not BLOB_STORAGE_ENABLED:
+        return None
+    try:
+        return BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+    except Exception as e:
+        print(f"[BLOB] Failed to create blob service client: {e}")
+        return None
+
+
+def upload_to_blob(case_id: str, file_bytes: bytes, original_filename: str) -> str | None:
+    """
+    Upload file to Azure Blob Storage.
+    Returns the blob name (stored in DB as stored_filepath), or None if upload fails.
+    """
+    if not BLOB_STORAGE_ENABLED:
+        return None
+    
+    try:
+        # Use short blob name: case_id.ext (blob names have length limits)
+        ext = Path(original_filename).suffix or ".bin"
+        blob_name = f"{case_id}{ext}"
+        client = get_blob_service_client()
+        if not client:
+            return None
+        
+        container_client = client.get_container_client(REFERRAL_BLOB_CONTAINER)
+        container_client.upload_blob(blob_name, file_bytes, overwrite=True)
+        print(f"[BLOB] Uploaded {blob_name} to {REFERRAL_BLOB_CONTAINER}")
+        return blob_name  # Store blob name in DB
+    except Exception as e:
+        print(f"[BLOB] Upload failed for {case_id}: {e}")
+        return None
+
+
+def download_from_blob(blob_name: str) -> bytes | None:
+    """
+    Download file from Azure Blob Storage.
+    Returns file bytes, or None if download fails.
+    """
+    if not BLOB_STORAGE_ENABLED or not blob_name:
+        return None
+    
+    try:
+        client = get_blob_service_client()
+        if not client:
+            return None
+        
+        container_client = client.get_container_client(REFERRAL_BLOB_CONTAINER)
+        blob_client = container_client.get_blob_client(blob_name)
+        
+        download_stream = blob_client.download_blob()
+        return download_stream.readall()
+    except Exception as e:
+        print(f"[BLOB] Download failed for {blob_name}: {e}")
+        return None
+
+
+def blob_exists(blob_name: str) -> bool:
+    """Check if a blob exists in storage."""
+    if not BLOB_STORAGE_ENABLED or not blob_name:
+        return False
+    
+    try:
+        client = get_blob_service_client()
+        if not client:
+            return False
+        
+        container_client = client.get_container_client(REFERRAL_BLOB_CONTAINER)
+        blob_client = container_client.get_blob_client(blob_name)
+        return blob_client.exists()
+    except Exception as e:
+        print(f"[BLOB] exists() check failed for {blob_name}: {e}")
+        return False
 
 app = FastAPI(title="Vetting App")
 
@@ -77,7 +219,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 APP_SECRET = os.environ.get("APP_SECRET", "dev-secret-change-me")
-SESSION_TIMEOUT_MINUTES = 30  # Session expires after 30 minutes of inactivity
+SESSION_TIMEOUT_MINUTES = 20  # Session expires after 20 minutes of inactivity
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8000")
 SMTP_HOST = os.environ.get("SMTP_HOST")
@@ -160,6 +302,21 @@ def parse_iso_dt(value: str | None) -> datetime | None:
         return dt.astimezone(timezone.utc)
     except Exception:
         return None
+
+
+def format_display_datetime(value: str | None, fallback: str = "") -> str:
+    if value is None:
+        return fallback
+    value_str = str(value).strip()
+    if not value_str:
+        return fallback
+    dt = parse_iso_dt(value_str)
+    if not dt:
+        return value_str
+    return dt.strftime("%d/%m/%Y %H:%M")
+
+
+templates.env.filters["display_datetime"] = format_display_datetime
 
 
 def tat_seconds(created_at: str | None, vetted_at: str | None) -> int:
@@ -320,6 +477,17 @@ def init_db() -> None:
 
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                user_id INTEGER PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS memberships (
                 id SERIAL PRIMARY KEY,
                 org_id INTEGER NOT NULL,
@@ -395,6 +563,22 @@ def init_db() -> None:
             """
         )
 
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notify_events (
+                id SERIAL PRIMARY KEY,
+                org_id INTEGER,
+                radiologist_name TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                recipient TEXT,
+                message TEXT,
+                created_at TEXT NOT NULL,
+                created_by TEXT,
+                created_by_id INTEGER
+            )
+            """
+        )
+
         # Legacy operational tables (used by main app)
         conn.execute(
             """
@@ -420,6 +604,7 @@ def init_db() -> None:
                 patient_dob TEXT,
                 institution_id INTEGER,
                 study_description TEXT NOT NULL,
+                modality TEXT,
                 admin_notes TEXT,
                 radiologist TEXT NOT NULL,
                 uploaded_filename TEXT,
@@ -470,6 +655,28 @@ def init_db() -> None:
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS study_description_presets (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL,
+                modality TEXT NOT NULL,
+                description TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                created_by INTEGER NOT NULL,
+                UNIQUE(organization_id, modality, description)
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_presets_org_modality
+            ON study_description_presets(organization_id, modality)
             """
         )
 
@@ -608,6 +815,44 @@ def init_db() -> None:
         """
     )
 
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS notify_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id INTEGER,
+            radiologist_name TEXT NOT NULL,
+            channel TEXT NOT NULL,
+            recipient TEXT,
+            message TEXT,
+            created_at TEXT NOT NULL,
+            created_by TEXT,
+            created_by_id INTEGER
+        )
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS study_description_presets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL,
+            modality TEXT NOT NULL,
+            description TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            created_by INTEGER NOT NULL,
+            UNIQUE(organization_id, modality, description)
+        )
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_presets_org_modality
+        ON study_description_presets(organization_id, modality)
+        """
+    )
+
     conn.commit()
     conn.close()
 
@@ -649,6 +894,8 @@ def ensure_cases_schema() -> None:
         cur.execute("ALTER TABLE cases ADD COLUMN patient_dob TEXT")
     if "institution_id" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN institution_id INTEGER")
+    if "modality" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN modality TEXT")
     if "contrast_required" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN contrast_required TEXT")
     if "contrast_details" not in cols:
@@ -768,6 +1015,29 @@ def ensure_protocols_schema() -> None:
     if "org_id" not in cols:
         cur.execute("ALTER TABLE protocols ADD COLUMN org_id INTEGER")
 
+    conn.commit()
+    conn.close()
+
+
+def ensure_notify_events_schema() -> None:
+    if using_postgres():
+        return
+    conn = get_db()
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS notify_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id INTEGER,
+            radiologist_name TEXT NOT NULL,
+            channel TEXT NOT NULL,
+            recipient TEXT,
+            message TEXT,
+            created_at TEXT NOT NULL,
+            created_by TEXT,
+            created_by_id INTEGER
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -920,6 +1190,102 @@ def ensure_default_protocols() -> None:
     conn.close()
 
 
+def _load_study_presets_from_migration() -> list[tuple[str, str]]:
+    full_csv_path = BASE_DIR / "database" / "migrations" / "004_study_description_presets_full.csv"
+    if full_csv_path.exists():
+        presets: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        try:
+            with full_csv_path.open("r", encoding="utf-8", errors="ignore", newline="") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    modality_clean = (row.get("modality") or "").strip().upper()
+                    description_clean = (row.get("description") or "").strip()
+                    if not modality_clean or not description_clean:
+                        continue
+                    key = (modality_clean, description_clean)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    presets.append(key)
+            if presets:
+                return presets
+        except Exception:
+            pass
+
+    migration_path = BASE_DIR / "database" / "migrations" / "003_study_description_presets.sql"
+    if not migration_path.exists():
+        return []
+
+    try:
+        sql_text = migration_path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return []
+
+    pattern = re.compile(r"\(\s*1\s*,\s*'([^']+)'\s*,\s*'((?:''|[^'])+)'\s*,")
+    presets: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    for modality, description in pattern.findall(sql_text):
+        modality_clean = modality.strip().upper()
+        description_clean = description.replace("''", "'").strip()
+        if not modality_clean or not description_clean:
+            continue
+        key = (modality_clean, description_clean)
+        if key in seen:
+            continue
+        seen.add(key)
+        presets.append(key)
+
+    return presets
+
+
+def ensure_default_study_description_presets() -> None:
+    if not table_exists("study_description_presets"):
+        return
+
+    conn = get_db()
+    row = conn.execute("SELECT COUNT(*) AS c FROM study_description_presets").fetchone()
+    if row and row["c"]:
+        conn.close()
+        return
+
+    presets = _load_study_presets_from_migration()
+    if not presets:
+        presets = [
+            ("CT", "CT Head"),
+            ("CT", "CT Thorax"),
+            ("MRI", "MRI Brain"),
+            ("MRI", "MRI Spine lumbar"),
+            ("XR", "XR Chest"),
+            ("PET", "PET FDG Whole body"),
+            ("DEXA", "DXA Whole body"),
+        ]
+
+    now = utc_now_iso()
+    for modality, description in presets:
+        if using_postgres():
+            conn.execute(
+                """
+                INSERT INTO study_description_presets (organization_id, modality, description, created_at, updated_at, created_by)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (organization_id, modality, description) DO NOTHING
+                """,
+                (1, modality, description, now, now, 1),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO study_description_presets (organization_id, modality, description, created_at, updated_at, created_by)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (1, modality, description, now, now, 1),
+            )
+
+    conn.commit()
+    conn.close()
+
+
 def list_protocols(active_only: bool = True, org_id: int | None = None) -> list[str]:
     conn = get_db()
     base_sql = "SELECT name FROM protocols"
@@ -942,7 +1308,6 @@ def list_protocols(active_only: bool = True, org_id: int | None = None) -> list[
 
 
 def list_protocol_rows(org_id: int | None = None) -> list[dict]:
-    from datetime import datetime
     conn = get_db()
     if org_id and table_has_column("protocols", "org_id"):
         rows = conn.execute(
@@ -959,13 +1324,7 @@ def list_protocol_rows(org_id: int | None = None) -> list[dict]:
     result = []
     for r in rows:
         d = dict(r)
-        # Format last_modified as DD-MM-YYYY HH:MM
-        if d.get("last_modified"):
-            try:
-                dt = datetime.fromisoformat(d["last_modified"])
-                d["last_modified"] = dt.strftime("%d-%m-%Y %H:%M")
-            except:
-                pass
+        d["last_modified"] = format_display_datetime(d.get("last_modified"), d.get("last_modified") or "")
         result.append(d)
     return result
 
@@ -1230,7 +1589,13 @@ def ensure_superadmin_user() -> None:
             """
             INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at)
             VALUES(?, ?, ?, ?, 1, 1, ?, ?)
-                        ON CONFLICT(username) DO NOTHING
+            ON CONFLICT(username) DO UPDATE SET
+                email = excluded.email,
+                password_hash = excluded.password_hash,
+                salt_hex = excluded.salt_hex,
+                is_superuser = 1,
+                is_active = 1,
+                modified_at = excluded.modified_at
             """,
             (username, email, pw_hash.hex(), salt.hex(), now, now),
         )
@@ -1250,34 +1615,27 @@ def ensure_superadmin_user() -> None:
 # -------------------------
 def list_institutions(org_id: int | None = None) -> list[dict]:
     conn = get_db()
-    if org_id and table_has_column("institutions", "org_id"):
-        rows = conn.execute(
-            "SELECT id, name, sla_hours, created_at, modified_at FROM institutions WHERE org_id = ? ORDER BY name",
-            (org_id,),
-        ).fetchall()
+    if table_has_column("institutions", "org_id"):
+        if org_id:
+            rows = conn.execute(
+                "SELECT id, name, sla_hours, created_at, modified_at, org_id FROM institutions WHERE org_id = ? ORDER BY name",
+                (org_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, name, sla_hours, created_at, modified_at, org_id FROM institutions ORDER BY name"
+            ).fetchall()
     else:
-        rows = conn.execute("SELECT id, name, sla_hours, created_at, modified_at FROM institutions ORDER BY name").fetchall()
+        rows = conn.execute(
+            "SELECT id, name, sla_hours, created_at, modified_at FROM institutions ORDER BY name"
+        ).fetchall()
     conn.close()
     result = []
     for r in rows:
         d = dict(r)
-        # Format created_at as DD-MM-YYYY HH:MM (Bug 2: Add timestamps)
-        if d.get("created_at"):
-            try:
-                dt = parse_iso_dt(d["created_at"])
-                if dt:
-                    d["created_at"] = dt.strftime("%d-%m-%Y %H:%M")
-            except:
-                pass
-        # Format modified_at as DD-MM-YYYY HH:MM (Bug 2: Add timestamps)
-        if d.get("modified_at"):
-            try:
-                dt = parse_iso_dt(d["modified_at"])
-                if dt:
-                    d["modified_at"] = dt.strftime("%d-%m-%Y %H:%M")
-            except:
-                pass
-        else:
+        d["created_at"] = format_display_datetime(d.get("created_at"), d.get("created_at") or "")
+        d["modified_at"] = format_display_datetime(d.get("modified_at"), d.get("modified_at") or "")
+        if not d.get("modified_at"):
             d["modified_at"] = d.get("created_at")  # Use created_at if modified_at not set
         result.append(d)
     return result
@@ -1334,21 +1692,41 @@ def delete_institution(inst_id: int, org_id: int | None = None) -> None:
 # Auth helpers
 # -------------------------
 def get_session_user(request: Request) -> dict | None:
-    """Get current user from session with expiration check"""
+    """Get current user from session with expiration check and multi-window detection"""
     user = request.session.get("user")
     if not user:
         return None
     
     # Check if session has login timestamp and if it's expired
     login_time = request.session.get("login_time")
+    session_id = request.session.get("session_id")
+    
     if login_time:
         try:
             import time
             current_time = time.time()
-            # Session timeout = 30 minutes of inactivity
+            # Session timeout = 20 minutes of inactivity
             if current_time - login_time > SESSION_TIMEOUT_MINUTES * 60:
                 request.session.clear()
                 return None
+            
+            # Validate session_id for multi-window logout (detect new login from another window)
+            if session_id and user.get("id"):
+                try:
+                    conn = get_db()
+                    cur = conn.cursor()
+                    cur.execute("SELECT session_id FROM user_sessions WHERE user_id = ? LIMIT 1", (user.get("id"),))
+                    row = cur.fetchone()
+                    conn.close()
+                    if row:
+                        stored_session_id = row[0] if isinstance(row, tuple) else row.get("session_id")
+                        if stored_session_id and stored_session_id != session_id:
+                            # User logged in from another window/browser - invalidate this session
+                            request.session.clear()
+                            return None
+                except Exception:
+                    pass  # Table might not exist for old schema, continue
+            
             # Update login_time on each request (sliding window)
             request.session["login_time"] = current_time
         except Exception:
@@ -1615,9 +1993,11 @@ try:
     ensure_radiologists_schema()
     ensure_users_schema()
     ensure_protocols_schema()
+    ensure_notify_events_schema()
     ensure_seed_data()
     ensure_superadmin_user()
     ensure_default_protocols()
+    ensure_default_study_description_presets()
     cleanup_old_files()
     print("[startup] Database initialization complete")
 except Exception as e:
@@ -1680,6 +2060,11 @@ def login_submit(
         )
 
     import time
+    import uuid
+    
+    # Generate unique session ID for multi-window logout
+    session_id = str(uuid.uuid4())
+    
     request.session["user"] = {
         "id": user.get("id"),  # May be None for old schema
         "username": user["username"],
@@ -1690,6 +2075,25 @@ def login_submit(
         "is_superuser": user.get("is_superuser", False),
     }
     request.session["login_time"] = time.time()  # Store login timestamp
+    request.session["session_id"] = session_id  # Track session for multi-window detection
+    
+    # Store session_id in database for multi-window logout detection
+    if user.get("id"):
+        try:
+            conn = get_db()
+            # Try to store in user_sessions table (new schema)
+            try:
+                conn.execute(
+                    "INSERT INTO user_sessions(user_id, session_id, created_at) VALUES(?, ?, datetime('now')) ON CONFLICT(user_id) DO UPDATE SET session_id=excluded.session_id, created_at=excluded.created_at",
+                    (user.get("id"), session_id)
+                )
+                conn.commit()
+            except Exception:
+                # Table might not exist, silently fail
+                pass
+            conn.close()
+        except Exception:
+            pass
 
     # Attach org context for non-superadmin users
     if not user.get("is_superuser") and user.get("id"):
@@ -2047,7 +2451,7 @@ def admin_dashboard(
 
         # Format created date
         created_dt = parse_iso_dt(d.get("created_at"))
-        d["created_display"] = created_dt.strftime("%d/%m/%Y %H:%M") if created_dt else ""
+        d["created_display"] = format_display_datetime(d.get("created_at"), "")
 
         # Calculate TAT
         secs = tat_seconds(d.get("created_at"), d.get("vetted_at"))
@@ -2145,6 +2549,27 @@ def admin_dashboard_csv(
     rows = conn.execute(sql, params).fetchall()
     conn.close()
 
+    case_ids = [r["id"] for r in rows]
+    events_map: dict[str, list[dict]] = {}
+    if case_ids and table_exists("case_events"):
+        placeholders = ",".join(["?"] * len(case_ids))
+        conn = get_db()
+        ev_rows = conn.execute(
+            f"SELECT * FROM case_events WHERE case_id IN ({placeholders}) ORDER BY created_at",
+            case_ids,
+        ).fetchall()
+        conn.close()
+        for e in ev_rows:
+            d = dict(e)
+            events_map.setdefault(d["case_id"], []).append(d)
+
+    org_names: dict[int, str] = {}
+    if table_exists("organisations"):
+        conn = get_db()
+        org_rows = conn.execute("SELECT id, name FROM organisations").fetchall()
+        conn.close()
+        org_names = {r["id"]: r["name"] for r in org_rows}
+
     def iter_csv():
         buf = io.StringIO()
         w = csv.writer(buf)
@@ -2211,15 +2636,15 @@ def admin_dashboard_csv(
                 d.get("id", ""),
                 d.get("org_id", ""),
                 org_names.get(d.get("org_id"), ""),
-                submitted_at,
+                format_csv_timestamp(submitted_at),
                 reopened,
-                reopened_at,
+                format_csv_timestamp(reopened_at),
                 reopened_by,
                 latest_decision,
-                latest_decision_at,
+                format_csv_timestamp(latest_decision_at),
                 latest_vetted_by,
                 latest_protocol,
-                latest_protocol_at,
+                format_csv_timestamp(latest_protocol_at),
                 d.get("status", ""),
                 d.get("radiologist", ""),
                 d.get("patient_referral_id", ""),
@@ -2277,7 +2702,7 @@ def admin_events_csv(request: Request):
                 d.get("case_id", ""),
                 d.get("org_id", ""),
                 d.get("event_type", ""),
-                d.get("created_at", ""),
+                format_csv_timestamp(d.get("created_at", "")),
                 d.get("user_id", ""),
                 d.get("username", ""),
                 d.get("org_role", ""),
@@ -2321,6 +2746,52 @@ def notify_radiologist_page(request: Request, name: str = "", sent: str = "", er
             ).fetchone()
         pending_counts[rname] = row["c"] if row else 0
         rad_emails[rname] = r.get("email") or ""
+
+    notify_history: list[dict[str, str]] = []
+    since_dt = datetime.now(timezone.utc) - timedelta(days=7)
+    since_iso = since_dt.isoformat()
+    try:
+        if org_id:
+            rows = conn.execute(
+                """
+                SELECT radiologist_name, channel, recipient, message, created_at, created_by
+                FROM notify_events
+                WHERE org_id = ? AND created_at >= ?
+                ORDER BY created_at DESC
+                LIMIT 50
+                """,
+                (org_id, since_iso),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT radiologist_name, channel, recipient, message, created_at, created_by
+                FROM notify_events
+                WHERE created_at >= ?
+                ORDER BY created_at DESC
+                LIMIT 50
+                """,
+                (since_iso,),
+            ).fetchall()
+        for row in rows or []:
+            data = row if isinstance(row, dict) else dict(row)
+            created_at = data.get("created_at", "")
+            dt = parse_iso_dt(created_at)
+            created_display = format_display_datetime(created_at, created_at)
+            notify_history.append(
+                {
+                    "radiologist_name": data.get("radiologist_name", ""),
+                    "channel": data.get("channel", ""),
+                    "recipient": data.get("recipient", ""),
+                    "message": data.get("message", ""),
+                    "created_at": created_at,
+                    "created_display": created_display,
+                    "created_by": data.get("created_by", ""),
+                }
+            )
+    except Exception as exc:
+        print(f"[NOTIFY] History load failed: {exc}")
+
     conn.close()
 
     return templates.TemplateResponse(
@@ -2335,6 +2806,7 @@ def notify_radiologist_page(request: Request, name: str = "", sent: str = "", er
             "error": error,
             "smtp_configured": bool(SMTP_HOST),
             "current_user": get_session_user(request),
+            "notify_history": notify_history,
         },
     )
 
@@ -2392,6 +2864,31 @@ def notify_radiologist_send(
             return RedirectResponse(
                 url=f"/admin/notify-radiologist?name={radiologist_name}&error=send_failed", status_code=303
             )
+
+        try:
+            _uid, _su, org_id, _role = get_current_org_context(request)
+            user = get_session_user(request) or {}
+            conn = get_db()
+            conn.execute(
+                """
+                INSERT INTO notify_events (org_id, radiologist_name, channel, recipient, message, created_at, created_by, created_by_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    org_id,
+                    radiologist_name,
+                    channel,
+                    recipient.strip(),
+                    message,
+                    utc_now_iso(),
+                    user.get("username"),
+                    user.get("id"),
+                ),
+            )
+            conn.commit()
+            conn.close()
+        except Exception as exc:
+            print(f"[NOTIFY] History save failed: {exc}")
         return RedirectResponse(
             url=f"/admin/notify-radiologist?name={radiologist_name}&sent=1", status_code=303
         )
@@ -2422,6 +2919,9 @@ def admin_case_view(request: Request, case_id: str):
     case_dict = None
     if row is not None:
         case_dict = row if isinstance(row, dict) else dict(row)
+
+    if case_dict:
+        case_dict = normalize_case_attachment(case_dict)
 
     if case_dict and case_dict.get("org_id"):
         org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (case_dict.get("org_id"),)).fetchone()
@@ -2493,10 +2993,11 @@ def admin_case_edit_view(request: Request, case_id: str):
         "case_edit.html",
         {
             "request": request,
-            "case": case,
+            "case": case_dict,
             "institutions": institutions,
             "radiologists": radiologists,
             "protocols": [p["protocol"] for p in protocols] if protocols else [],
+            "user_org_id": org_id,
         }
     )
 
@@ -2512,6 +3013,7 @@ def admin_case_edit_save(
     study_description: str = Form(""),
     admin_notes: str = Form(""),
     radiologist: str = Form(""),
+    modality: str = Form(""),
     protocol: str = Form(""),
 ):
     try:
@@ -2535,35 +3037,54 @@ def admin_case_edit_save(
         conn.close()
         raise HTTPException(status_code=403, detail="Cannot edit approved cases")
 
-    # Update case with new values
-    conn.execute(
-        """UPDATE cases 
-           SET patient_first_name = ?, patient_surname = ?, patient_referral_id = ?, patient_dob = ?,
-               institution_id = ?, study_description = ?, admin_notes = ?, 
-               radiologist = ?, protocol = ?
-           WHERE id = ?""",
-        (
-            patient_first_name.strip(),
-            patient_surname.strip(),
-            patient_referral_id.strip(),
-            patient_dob.strip() or None,
-            institution_id.strip() or None,
-            study_description.strip(),
-            admin_notes.strip(),
-            radiologist.strip() or None,
-            protocol.strip() or None,
-            case_id
-        )
-    )
+    def _clean(value: str | None) -> str:
+        return (value or "").strip()
+
+    update_fields = [
+        ("patient_first_name", patient_first_name.strip()),
+        ("patient_surname", patient_surname.strip()),
+        ("patient_referral_id", patient_referral_id.strip()),
+        ("patient_dob", patient_dob.strip() or None),
+        ("institution_id", institution_id.strip() or None),
+        ("study_description", study_description.strip()),
+        ("admin_notes", admin_notes.strip()),
+        ("radiologist", radiologist.strip() or None),
+        ("protocol", protocol.strip() or None),
+    ]
+
+    if table_has_column("cases", "modality"):
+        update_fields.append(("modality", modality.strip() or None))
+
+    changes: list[str] = []
+    old_case = dict(case)
+    for col, new_val in update_fields:
+        if col == "admin_notes":
+            continue
+        old_val = old_case.get(col)
+        old_text = _clean(str(old_val)) if old_val is not None else ""
+        new_text = _clean(str(new_val)) if new_val is not None else ""
+        if old_text != new_text:
+            changes.append(f"{col}: {old_text or '-'} -> {new_text or '-'}")
+
+    update_sql = "UPDATE cases SET " + ", ".join([f"{col} = ?" for col, _ in update_fields]) + " WHERE id = ?"
+    update_params = [value for _, value in update_fields] + [case_id]
+    conn.execute(update_sql, update_params)
     conn.commit()
     conn.close()
 
+    change_summary = "; ".join(changes) if changes else "No field changes"
+    note_text = admin_notes.strip()
+    event_comment = change_summary
+    if note_text:
+        event_comment = f"{change_summary}. Notes: {note_text}"
+
+    event_org_id = org_id or case_dict.get("org_id")
     insert_case_event(
         case_id=case_id,
-        org_id=org_id,
+        org_id=event_org_id,
         event_type="EDITED",
         user=user,
-        comment=admin_notes.strip() or None,
+        comment=event_comment,
     )
 
     return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
@@ -2730,7 +3251,7 @@ def radiologist_dashboard(request: Request, tab: str = "all"):
     for r in rows:
         d = dict(r)
         created_dt = parse_iso_dt(d.get("created_at"))
-        d["created_display"] = created_dt.strftime("%d/%m/%Y %H:%M") if created_dt else (d.get("created_at") or "")
+        d["created_display"] = format_display_datetime(d.get("created_at"), d.get("created_at") or "")
 
         secs = tat_seconds(d.get("created_at"), d.get("vetted_at"))
         d["tat_display"] = format_tat(secs)
@@ -3345,6 +3866,139 @@ def delete_protocol_route(request: Request, protocol_id: int):
     return RedirectResponse(url="/settings", status_code=303)
 
 # -------------------------
+# Study Description Presets (Multitenant - By Organization)
+# -------------------------
+@app.get("/api/study-descriptions/by-modality/{modality}")
+def get_study_descriptions(modality: str, request: Request, org_id: str = None):
+    """Get study description presets by modality for user's organization (searchable via form)"""
+    # If org_id is provided as query parameter, use it; otherwise get from session
+    if org_id:
+        try:
+            org_id = int(org_id)
+        except (ValueError, TypeError):
+            org_id = None
+    
+    if not org_id:
+        # Get user's organization from session
+        user = request.session.get("user")
+        if not user:
+            return []
+        
+        # Try both org_id and organization_id for backward compatibility
+        org_id = user.get("org_id") or user.get("organization_id")
+    
+    if not org_id:
+        return []
+    
+    conn = get_db()
+    modality = modality.upper().strip()
+    rows = conn.execute(
+        "SELECT id, description FROM study_description_presets WHERE organization_id = ? AND modality = ? ORDER BY description",
+        (org_id, modality)
+    ).fetchall()
+    if not rows and org_id != 1:
+        rows = conn.execute(
+            "SELECT id, description FROM study_description_presets WHERE organization_id = 1 AND modality = ? ORDER BY description",
+            (modality,)
+        ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+@app.get("/settings/study-descriptions", response_class=HTMLResponse)
+def study_descriptions_page(request: Request):
+    """Superuser page to manage study description presets for their organization"""
+    user = require_superuser(request)
+    org_id = user.get("org_id") or user.get("organization_id")
+    
+    conn = get_db()
+    presets = conn.execute(
+        "SELECT id, modality, description, created_at, updated_at FROM study_description_presets WHERE organization_id = ? ORDER BY modality, description",
+        (org_id,)
+    ).fetchall()
+    conn.close()
+    return templates.TemplateResponse("superuser_study_descriptions.html", {
+        "request": request,
+        "current_user": user,
+        "presets": [dict(row) for row in presets],
+        "modalities": ["MRI", "CT", "XR", "PET", "DEXA"]
+    })
+
+@app.post("/settings/study-descriptions/add")
+def add_study_description(request: Request, modality: str = Form(...), description: str = Form(...), org_id: str = Form("")):
+    """Add new study description preset for user's organization"""
+    user = require_superuser(request)
+    target_org_id = user.get("org_id") or user.get("organization_id")
+    if org_id:
+        try:
+            target_org_id = int(org_id)
+        except Exception:
+            pass
+    modality = modality.upper().strip()
+    description = description.strip()
+    
+    if not modality or not description:
+        return RedirectResponse(url="/settings/study-descriptions?error=empty", status_code=303)
+    
+    creator_id = user.get("id") or 1
+    try:
+        creator_id = int(creator_id)
+    except Exception:
+        creator_id = 1
+
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO study_description_presets (organization_id, modality, description, created_at, updated_at, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+            (target_org_id, modality, description, datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat(), creator_id)
+        )
+        conn.commit()
+    except (sqlite3.IntegrityError, SQLAlchemyError):
+        conn.close()
+        return RedirectResponse(url="/settings/study-descriptions?error=duplicate", status_code=303)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    
+    return RedirectResponse(url="/settings/study-descriptions", status_code=303)
+
+@app.post("/settings/study-descriptions/delete/{preset_id}")
+def delete_study_description(request: Request, preset_id: int):
+    """Delete study description preset from user's organization"""
+    user = require_superuser(request)
+    org_id = user.get("org_id") or user.get("organization_id")
+    conn = get_db()
+    conn.execute("DELETE FROM study_description_presets WHERE id = ? AND organization_id = ?", (preset_id, org_id))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/settings/study-descriptions", status_code=303)
+
+@app.post("/settings/study-descriptions/edit/{preset_id}")
+def edit_study_description(request: Request, preset_id: int, modality: str = Form(...), description: str = Form(...)):
+    """Edit study description preset for user's organization"""
+    user = require_superuser(request)
+    org_id = user.get("org_id") or user.get("organization_id")
+    modality = modality.upper().strip()
+    description = description.strip()
+    
+    if not modality or not description:
+        return RedirectResponse(url="/settings/study-descriptions?error=empty", status_code=303)
+    
+    try:
+        conn = get_db()
+        conn.execute(
+            "UPDATE study_description_presets SET modality = ?, description = ?, updated_at = ? WHERE id = ? AND organization_id = ?",
+            (modality, description, datetime.now(timezone.utc).isoformat(), preset_id, org_id)
+        )
+        conn.commit()
+        conn.close()
+    except sqlite3.IntegrityError:
+        return RedirectResponse(url="/settings/study-descriptions?error=duplicate", status_code=303)
+    
+    return RedirectResponse(url="/settings/study-descriptions", status_code=303)
+
+# -------------------------
 # Admin submit
 # -------------------------
 @app.get("/intake/{org_id}", response_class=HTMLResponse)
@@ -3393,41 +4047,39 @@ async def intake_submit(
 
     case_id = generate_case_id()
     original_name = attachment.filename
-    safe_name = f"{case_id}_{Path(original_name).name}"
-    stored_path = str(UPLOAD_DIR / safe_name)
-
+    
     file_bytes = await attachment.read()
-    with open(stored_path, "wb") as f:
-        f.write(file_bytes)
+    
+    # Try blob storage first, fallback to local
+    stored_path = None
+    if BLOB_STORAGE_ENABLED:
+        blob_name = upload_to_blob(case_id, file_bytes, original_name)
+        if blob_name:
+            stored_path = blob_name
+    
+    # Fallback: store locally if blob upload failed or disabled
+    if not stored_path:
+        safe_name = f"{case_id}_{Path(original_name).name}"
+        stored_path = str(UPLOAD_DIR / safe_name)
+        with open(stored_path, "wb") as f:
+            f.write(file_bytes)
 
     created_at = utc_now_iso()
     conn = get_db()
-    conn.execute(
-        """
-        INSERT INTO cases (
-            id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob,
-            institution_id, study_description, admin_notes,
-            radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            case_id,
-            created_at,
-            patient_first_name.strip(),
-            patient_surname.strip(),
-            patient_referral_id.strip(),
-            patient_dob.strip() or None,
-            inst_id,
-            study_description.strip(),
-            admin_notes.strip(),
-            "",
-            original_name,
-            stored_path,
-            "pending",
-            None,
-            org_id,
-        ),
-    )
+    
+    # Build insert conditionally based on columns that exist
+    has_dob_col = table_has_column("cases", "patient_dob")
+    if has_dob_col:
+        conn.execute(
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, study_description.strip(), admin_notes.strip(), "", original_name, stored_path, "pending", None, org_id),
+        )
+    else:
+        # PostgreSQL doesn't have patient_dob column, exclude it
+        conn.execute(
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, study_description.strip(), admin_notes.strip(), "", original_name, stored_path, "pending", None, org_id),
+        )
     conn.commit()
     conn.close()
 
@@ -3452,12 +4104,19 @@ def submit_form(request: Request):
     org_id = user.get("org_id")
     institutions = list_institutions(org_id)
     radiologists = list_radiologists(org_id)
+    
+    # Ensure each institution has org_id for multitenant study description filtering
+    for inst in institutions:
+        if "org_id" not in inst and org_id:
+            inst["org_id"] = org_id
+    
     return templates.TemplateResponse(
         "submit.html",
         {
             "request": request,
             "institutions": institutions,
             "radiologists": radiologists,
+            "user_org_id": org_id,
         },
     )
 
@@ -3470,14 +4129,20 @@ async def submit_case(
     patient_referral_id: str = Form(...),
     patient_dob: str = Form(""),
     institution_id: str = Form(...),
+    org_id_form: str = Form(""),
+    modality: str = Form(""),
     study_description: str = Form(...),
     admin_notes: str = Form(""),
     radiologist: str = Form(""),
     attachment: UploadFile | None = File(...),
     action: str = Form("submit"),
+    extra_study_description: list[str] = Form([]),
+    extra_modality: list[str] = Form([]),
+    extra_radiologist: list[str] = Form([]),
 ):
     user = require_admin(request)
     org_id = user.get("org_id")
+    form_org_id = (org_id_form or "").strip()
     if not user.get("is_superuser") and not org_id:
         raise HTTPException(status_code=403, detail="Organisation access required")
 
@@ -3490,6 +4155,16 @@ async def submit_case(
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid institution ID")
 
+    if user.get("is_superuser"):
+        inst_org_id = inst.get("org_id") if isinstance(inst, dict) else None
+        if inst_org_id:
+            org_id = inst_org_id
+        elif form_org_id:
+            try:
+                org_id = int(form_org_id)
+            except ValueError:
+                pass
+
     # Validate radiologist (optional - can assign later via bulk assignment)
     radiologist = radiologist.strip() if radiologist else ""
     if radiologist:
@@ -3501,56 +4176,121 @@ async def submit_case(
     if not attachment or not attachment.filename:
         raise HTTPException(status_code=400, detail="Attachment is required")
 
-    case_id = generate_case_id()
-    stored_path: str | None = None
-    original_name: str | None = None
+    cleaned_extra_cases: list[tuple[str, str | None, str]] = []
+    if extra_study_description:
+        valid_rads = {r["name"] for r in list_radiologists(org_id)}
+        for i, extra_desc in enumerate(extra_study_description):
+            normalized_desc = (extra_desc or "").strip()
+            if not normalized_desc:
+                continue
+            normalized_rad = extra_radiologist[i].strip() if i < len(extra_radiologist) else ""
+            if normalized_rad and normalized_rad not in valid_rads:
+                normalized_rad = ""
+            normalized_modality = (
+                extra_modality[i].strip().upper()
+                if i < len(extra_modality) and extra_modality[i].strip()
+                else None
+            )
+            cleaned_extra_cases.append((normalized_desc, normalized_modality, normalized_rad))
 
-    if attachment and attachment.filename:
-        original_name = attachment.filename
+    generated_case_ids = generate_case_ids(1 + len(cleaned_extra_cases))
+    case_id = generated_case_ids[0]
+    original_name = attachment.filename
+    
+    file_bytes = await attachment.read()
+    
+    # Try blob storage first, fallback to local
+    stored_path = None
+    if BLOB_STORAGE_ENABLED:
+        blob_name = upload_to_blob(case_id, file_bytes, original_name)
+        if blob_name:
+            stored_path = blob_name
+    
+    # Fallback: store locally if blob upload failed or disabled
+    if not stored_path:
         safe_name = f"{case_id}_{Path(original_name).name}"
         stored_path = str(UPLOAD_DIR / safe_name)
-
-        file_bytes = await attachment.read()
         with open(stored_path, "wb") as f:
             f.write(file_bytes)
 
     created_at = utc_now_iso()
 
     conn = get_db()
-    conn.execute(
-        """
-        INSERT INTO cases (
-            id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob,
-            institution_id, study_description, admin_notes,
-            radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            case_id,
-            created_at,
-            patient_first_name.strip(),
-            patient_surname.strip(),
-            patient_referral_id.strip(),
-            patient_dob.strip() or None,
-            inst_id,
-            study_description.strip(),
-            admin_notes.strip(),
-            radiologist,
-            original_name,
-            stored_path,
-            "pending",
-            None,
-            org_id,
-        ),
-    )
+    
+    # Build insert conditionally based on columns that exist
+    has_dob_col = table_has_column("cases", "patient_dob")
+    has_modality_col = table_has_column("cases", "modality")
+    case_modality = modality.strip().upper() if modality else None
+    if has_dob_col and has_modality_col:
+        conn.execute(
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, study_description.strip(), case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
+        )
+    elif has_dob_col:
+        conn.execute(
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, study_description.strip(), admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
+        )
+    elif has_modality_col:
+        conn.execute(
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, study_description.strip(), case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, study_description.strip(), admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
+        )
     conn.commit()
     conn.close()
 
-    # If action is "submit_another", redirect back to form; otherwise go to admin dashboard
-    if action == "submit_another":
-        return RedirectResponse(url="/submit", status_code=303)
-    else:
-        return RedirectResponse(url="/admin", status_code=303)
+    # Create additional cases for extra studies (same patient/institution/attachment)
+    if cleaned_extra_cases:
+        for idx, (extra_desc, extra_modality_value, extra_rad) in enumerate(cleaned_extra_cases, start=1):
+            extra_case_id = generated_case_ids[idx]
+            # Copy attachment for the extra case
+            extra_stored_path = stored_path
+            if stored_path and original_name:
+                if BLOB_STORAGE_ENABLED and not stored_path.startswith("/"):
+                    # Blob storage: copy blob
+                    blob_bytes = download_from_blob(stored_path)
+                    if blob_bytes:
+                        extra_blob_name = upload_to_blob(extra_case_id, blob_bytes, original_name)
+                        if extra_blob_name:
+                            extra_stored_path = extra_blob_name
+                else:
+                    # Local fallback: copy file
+                    extra_safe_name = f"{extra_case_id}_{Path(original_name).name}"
+                    extra_stored_path = str(UPLOAD_DIR / extra_safe_name)
+                    shutil.copy2(stored_path, extra_stored_path)
+            conn2 = get_db()
+            
+            # Build insert conditionally based on columns that exist
+            if has_dob_col and has_modality_col:
+                conn2.execute(
+                    "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (extra_case_id, utc_now_iso(), patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, extra_desc, extra_modality_value, admin_notes.strip(), extra_rad, original_name, extra_stored_path, "pending", None, org_id),
+                )
+            elif has_dob_col:
+                conn2.execute(
+                    "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (extra_case_id, utc_now_iso(), patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, extra_desc, admin_notes.strip(), extra_rad, original_name, extra_stored_path, "pending", None, org_id),
+                )
+            elif has_modality_col:
+                conn2.execute(
+                    "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (extra_case_id, utc_now_iso(), patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, extra_desc, extra_modality_value, admin_notes.strip(), extra_rad, original_name, extra_stored_path, "pending", None, org_id),
+                )
+            else:
+                conn2.execute(
+                    "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (extra_case_id, utc_now_iso(), patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, extra_desc, admin_notes.strip(), extra_rad, original_name, extra_stored_path, "pending", None, org_id),
+                )
+            conn2.commit()
+            conn2.close()
+
+    # Redirect to admin dashboard
+    return RedirectResponse(url="/admin", status_code=303)
 
 
 @app.get("/submitted/{case_id}", response_class=HTMLResponse)
@@ -3655,6 +4395,7 @@ def vet_form(request: Request, case_id: str):
         raise HTTPException(status_code=404, detail="Case not found")
 
     case = dict(row)
+    case = normalize_case_attachment(case)
     if case["radiologist"] != rad_name:
         raise HTTPException(status_code=403, detail="Not your case")
 
@@ -3805,11 +4546,25 @@ def download_attachment(request: Request, case_id: str):
     if org_id and not user.get("is_superuser") and case_data.get("org_id") and case_data.get("org_id") != org_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    path = case_data.get("stored_filepath")
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="File missing on disk")
-
-    return FileResponse(path, filename=case_data.get("uploaded_filename") or Path(path).name)
+    stored_path = case_data.get("stored_filepath")
+    
+    # Try blob storage first
+    file_bytes = None
+    if BLOB_STORAGE_ENABLED and stored_path and not stored_path.startswith("/"):
+        file_bytes = download_from_blob(stored_path)
+        if file_bytes:
+            return FileResponse(
+                io.BytesIO(file_bytes),
+                filename=case_data.get("uploaded_filename") or Path(stored_path).name
+            )
+    
+    # Fallback to local filesystem
+    if os.path.exists(stored_path):
+        return FileResponse(stored_path, filename=case_data.get("uploaded_filename") or Path(stored_path).name)
+    
+    # File not found
+    clear_case_stored_filepath(case_id)
+    raise HTTPException(status_code=410, detail="Referral file missing or expired")
 
 
 @app.get("/case/{case_id}/attachment/inline")
@@ -3838,15 +4593,29 @@ def view_attachment_inline(request: Request, case_id: str):
     if org_id and not user.get("is_superuser") and case_data.get("org_id") and case_data.get("org_id") != org_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    path = case_data.get("stored_filepath")
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="File missing on disk")
-
-    filename = case_data.get("uploaded_filename") or Path(path).name
+    stored_path = case_data.get("stored_filepath")
+    filename = case_data.get("uploaded_filename") or Path(stored_path).name
     media_type, _ = mimetypes.guess_type(filename)
     headers = {"Content-Disposition": f'inline; filename="{filename}"'}
-
-    return FileResponse(path, media_type=media_type or "application/octet-stream", headers=headers)
+    
+    # Try blob storage first
+    file_bytes = None
+    if BLOB_STORAGE_ENABLED and stored_path and not stored_path.startswith("/"):
+        file_bytes = download_from_blob(stored_path)
+        if file_bytes:
+            return FileResponse(
+                io.BytesIO(file_bytes),
+                media_type=media_type or "application/octet-stream",
+                headers=headers
+            )
+    
+    # Fallback to local filesystem
+    if os.path.exists(stored_path):
+        return FileResponse(stored_path, media_type=media_type or "application/octet-stream", headers=headers)
+    
+    # File not found
+    clear_case_stored_filepath(case_id)
+    raise HTTPException(status_code=410, detail="Referral file missing or expired")
 
 
 @app.get("/case/{case_id}/pdf")
@@ -3884,15 +4653,7 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
 
         # Helper function to format datetime
         def format_datetime(iso_string: str) -> str:
-            if not iso_string:
-                return ""
-            try:
-                dt = parse_iso_dt(iso_string)
-                if dt:
-                    return dt.strftime("%d-%m-%Y %H:%M")
-                return ""
-            except:
-                return ""
+            return format_display_datetime(iso_string)
 
         # Bug 8: Convert row to dict to avoid sqlite3.Row.get() issues
         if isinstance(row, dict):
@@ -6202,13 +6963,9 @@ def mt_protocols_page(request: Request):
     conn.close()
 
     # Format last_modified
-    from datetime import datetime as _dt
     for p in protocols:
         if p.get("last_modified"):
-            try:
-                p["last_modified"] = _dt.fromisoformat(p["last_modified"]).strftime("%d-%m-%Y %H:%M")
-            except Exception:
-                pass
+            p["last_modified"] = format_display_datetime(p.get("last_modified"), p.get("last_modified") or "")
 
     def _proto_rows_html():
         if not protocols:

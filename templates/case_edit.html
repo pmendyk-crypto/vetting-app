@@ -56,6 +56,110 @@
       .btn { width: 100%; text-align: center; }
       .form-row { grid-template-columns: 1fr; }
     }
+
+    .protocol-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(7, 12, 22, 0.75);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+
+    .protocol-modal.open {
+      display: flex;
+    }
+
+    .protocol-modal-card {
+      width: min(760px, 92vw);
+      max-height: min(70vh, 640px);
+      background: rgba(10, 18, 34, 0.98);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(6, 11, 24, 0.6);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .protocol-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .protocol-modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #f8fbff;
+    }
+
+    .protocol-modal-meta {
+      font-size: 12px;
+      color: rgba(148, 163, 184, 0.9);
+    }
+
+    .protocol-modal-close {
+      border: none;
+      background: rgba(148, 163, 184, 0.15);
+      color: #f8fbff;
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .protocol-modal-search {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(8, 16, 30, 0.95);
+      color: #f8fbff;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .protocol-modal-search:focus {
+      outline: none;
+      border-color: rgba(59, 130, 246, 0.6);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+
+    .protocol-modal-list {
+      flex: 1;
+      overflow-y: auto;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(8, 16, 30, 0.88);
+    }
+
+    .protocol-modal-item {
+      padding: 12px 14px;
+      color: #f8fbff;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      font-size: 14px;
+      transition: all 0.15s ease;
+    }
+
+    .protocol-modal-item:hover,
+    .protocol-modal-item.selected {
+      background: rgba(59, 130, 246, 0.28);
+      color: #ffffff;
+      padding-left: 16px;
+    }
+
+    .protocol-modal-empty {
+      padding: 16px 14px;
+      text-align: center;
+      color: rgba(148, 163, 184, 0.9);
+      font-size: 13px;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -77,6 +181,7 @@
 
     <div class="card">
       <form method="POST">
+        <input type="hidden" id="org_id_hidden" value="{{ case.get('org_id') or user_org_id or '' }}">
         <div class="form-row">
           <div class="form-group">
             <label>First Name</label>
@@ -102,10 +207,10 @@
         <div class="form-row">
           <div class="form-group">
             <label>Institution</label>
-            <select name="institution_id">
+            <select name="institution_id" id="institution_id" onchange="updateOrgContext()">
               <option value="">Select Institution</option>
               {% for inst in institutions %}
-                <option value="{{ inst['id'] }}" {% if case['institution_id'] == inst['id'] %}selected{% endif %}>
+                <option value="{{ inst['id'] }}" data-org-id="{{ inst['org_id'] or inst['organization_id'] or case.get('org_id') or user_org_id or 1 }}" {% if case['institution_id'] == inst['id'] %}selected{% endif %}>
                   {{ inst['name'] }}
                 </option>
               {% endfor %}
@@ -126,8 +231,30 @@
 
         <div class="form-row full">
           <div class="form-group">
+            <label>Modality</label>
+            <select name="modality" id="modality" onchange="loadStudyDescriptions()">
+              <option value="">Select Modality</option>
+              <option value="MRI" {% if case.get('modality') == 'MRI' %}selected{% endif %}>MRI (Magnetic Resonance)</option>
+              <option value="CT" {% if case.get('modality') == 'CT' %}selected{% endif %}>CT (Computed Tomography)</option>
+              <option value="XR" {% if case.get('modality') == 'XR' %}selected{% endif %}>XR (X-Ray)</option>
+              <option value="PET" {% if case.get('modality') == 'PET' %}selected{% endif %}>PET (Positron Emission Tomography)</option>
+              <option value="DEXA" {% if case.get('modality') == 'DEXA' %}selected{% endif %}>DEXA (Bone Densitometry)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row full">
+          <div class="form-group">
             <label>Study Description</label>
-            <textarea name="study_description" placeholder="Study Description">{{ case['study_description'] or '' }}</textarea>
+            <input
+              type="text"
+              name="study_description"
+              id="study_description"
+              value="{{ case['study_description'] or '' }}"
+              placeholder="Select modality, then choose from list"
+              onfocus="openProtocolModal()"
+              autocomplete="off"
+            >
           </div>
         </div>
 
@@ -147,9 +274,131 @@
     </div>
 
     <div class="page-footer">
-      <p>Powered by <strong>Vetting Suite</strong> - Healthcare Applications</p>
     </div>
   </div>
+  <div class="protocol-modal" id="protocolModal" role="dialog" aria-modal="true">
+    <div class="protocol-modal-card">
+      <div class="protocol-modal-header">
+        <div>
+          <div class="protocol-modal-title">Study Description Protocols</div>
+          <div class="protocol-modal-meta" id="protocolMeta"></div>
+        </div>
+        <button class="protocol-modal-close" type="button" onclick="closeProtocolModal()">Close</button>
+      </div>
+      <input class="protocol-modal-search" type="text" id="protocolSearch" placeholder="Search protocols" oninput="filterProtocolModal()">
+      <div class="protocol-modal-list" id="protocolList"></div>
+    </div>
+  </div>
+
+  <script>
+    let allDescriptions = [];
+
+    function resolveOrgId() {
+      const hidden = document.getElementById('org_id_hidden');
+      if (hidden && hidden.value) {
+        return hidden.value;
+      }
+      const institutionSelect = document.getElementById('institution_id');
+      if (institutionSelect) {
+        const selectedOption = institutionSelect.options[institutionSelect.selectedIndex];
+        const selectedOrg = selectedOption ? selectedOption.getAttribute('data-org-id') : '';
+        if (selectedOrg) {
+          return selectedOrg;
+        }
+      }
+      return '1';
+    }
+
+    function updateOrgContext() {
+      const institutionSelect = document.getElementById('institution_id');
+      const selectedOption = institutionSelect ? institutionSelect.options[institutionSelect.selectedIndex] : null;
+      const orgId = selectedOption ? selectedOption.getAttribute('data-org-id') : '';
+      if (orgId) {
+        document.getElementById('org_id_hidden').value = orgId;
+      }
+      if (document.getElementById('modality').value) {
+        loadStudyDescriptions();
+      }
+    }
+
+    async function fetchStudyDescriptions() {
+      const modality = document.getElementById('modality').value;
+      const orgId = resolveOrgId();
+
+      if (!modality) {
+        allDescriptions = [];
+        return [];
+      }
+
+      try {
+        const response = await fetch(`/api/study-descriptions/by-modality/${modality}?org_id=${orgId}`);
+        allDescriptions = await response.json();
+      } catch (error) {
+        console.error('Error loading study descriptions:', error);
+        allDescriptions = [];
+      }
+
+      return allDescriptions;
+    }
+
+    async function loadStudyDescriptions() {
+      await fetchStudyDescriptions();
+      await openProtocolModal();
+    }
+
+    async function openProtocolModal() {
+      const modality = document.getElementById('modality').value;
+      const modal = document.getElementById('protocolModal');
+      const meta = document.getElementById('protocolMeta');
+      const list = document.getElementById('protocolList');
+      const search = document.getElementById('protocolSearch');
+
+      if (!modality) {
+        meta.textContent = 'Select a modality to load protocols.';
+        list.innerHTML = '<div class="protocol-modal-empty">No modality selected.</div>';
+        modal.classList.add('open');
+        return;
+      }
+
+      if (allDescriptions.length === 0) {
+        await fetchStudyDescriptions();
+      }
+
+      meta.textContent = `Modality: ${modality} | ${allDescriptions.length}`;
+      search.value = '';
+      renderProtocolModalList(allDescriptions);
+      modal.classList.add('open');
+      search.focus();
+    }
+
+    function closeProtocolModal() {
+      document.getElementById('protocolModal').classList.remove('open');
+    }
+
+    function renderProtocolModalList(items) {
+      const list = document.getElementById('protocolList');
+      if (!items || items.length === 0) {
+        list.innerHTML = '<div class="protocol-modal-empty">No protocols found for this modality.</div>';
+        return;
+      }
+      list.innerHTML = items.map(item =>
+        `<div class="protocol-modal-item" onclick="selectProtocol('${item.description.replace(/'/g, "\\'")}')">${item.description}</div>`
+      ).join('');
+    }
+
+    function filterProtocolModal() {
+      const search = document.getElementById('protocolSearch').value.toLowerCase();
+      const filtered = allDescriptions.filter(item =>
+        item.description.toLowerCase().includes(search)
+      );
+      renderProtocolModalList(filtered);
+    }
+
+    function selectProtocol(description) {
+      document.getElementById('study_description').value = description;
+      closeProtocolModal();
+    }
+  </script>
   <script src="/static/js/session.js"></script>
 </body>
 </html>

@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Vetting Suite</title>
+  <title>FlowRad</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    html, body { height: 100%; overflow: hidden; margin: 0; }
+    html, body { height: 100%; margin: 0; }
     body {
       display: flex;
       flex-direction: column;
@@ -31,13 +31,25 @@
       flex: 1;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      min-height: 100dvh;
       padding: 0 60px;
       box-sizing: border-box;
       gap: 0;
       max-width: 1100px;
       margin: 0 auto;
       width: 100%;
+    }
+    .corner-logo {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      z-index: 2;
+    }
+    .corner-logo img {
+      width: 140px;
+      max-width: 45vw;
+      height: auto;
+      border-radius: 24px;
     }
     .left-section {
       flex: 2;
@@ -47,9 +59,17 @@
       padding-right: 48px;
       border-right: 1px solid rgba(255,255,255,0.12);
     }
+    .app-name {
+      margin: 0;
+      font-size: 64px;
+      line-height: 1.1;
+      font-weight: 500;
+      color: #ffffff;
+      letter-spacing: 0.2px;
+    }
     .left-section img {
       width: 100%;
-      max-width: 420px;
+      max-width: 220px;
       height: auto;
       border-radius: 16px;
     }
@@ -66,6 +86,33 @@
       font-weight: 300;
     }
     @media (max-width: 900px) { .left-section { display: none; } }
+    @media (max-width: 700px) {
+      .corner-logo { top: 16px; left: 16px; }
+      .corner-logo img { width: 110px; }
+      .main-content {
+        align-items: flex-start;
+        padding: 88px 14px 18px;
+        min-height: 100dvh;
+      }
+      .right-section {
+        flex: none;
+        width: 100%;
+        max-width: 440px;
+        margin: 0 auto;
+        padding: 0;
+      }
+      .login-card {
+        max-width: none;
+        width: 100%;
+        padding: 20px 16px;
+        border-radius: 12px;
+      }
+      .right-section h2 { font-size: 20px; }
+      .right-section .intro-text { font-size: 12px; margin-bottom: 16px; }
+      .form-row { margin-bottom: 12px; }
+      .form-row input { font-size: 16px; }
+      .btn-signin { padding: 12px; font-size: 15px; }
+    }
     .right-section {
       flex: 1;
       display: flex;
@@ -91,23 +138,41 @@
     .form-row input {
       width: 100%; padding: 9px 11px; border-radius: 6px;
       border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(0,0,0,0.3); color: white; font-size: 13px; box-sizing: border-box;
+      background: rgba(0,0,0,0.3); color: white; font-size: 14px; box-sizing: border-box;
     }
     .form-row input:focus { outline: none; border-color: rgba(255,255,255,0.2); background: rgba(0,0,0,0.4); }
     .btn-signin {
       width: 100%; padding: 10px; background: #1f6feb; color: white;
-      border: none; border-radius: 6px; font-weight: 400; cursor: pointer; font-size: 13px; margin-top: 8px;
+      border: none; border-radius: 6px; font-weight: 400; cursor: pointer; font-size: 14px; margin-top: 8px;
     }
     .btn-signin:hover { filter: brightness(1.07); }
     .small { font-size: 12px; color: rgba(255,255,255,0.5); }
     .err { color: #ffb4b4; background: rgba(255,180,180,0.08); padding: 8px 10px; border-radius: 6px; font-size: 12px; margin-top: 8px; }
-    @media (max-width: 600px) { .right-section { flex: 1; padding: 40px 20px; border-left: none; } }
+    @media (max-width: 600px) {
+      body { overflow-y: auto; }
+      .main-content {
+        padding: 84px 12px 16px;
+        align-items: flex-start;
+      }
+      .right-section {
+        width: 100%;
+        padding: 0;
+      }
+      .login-card {
+        padding: 18px 14px;
+      }
+      .small { font-size: 11px; }
+      .err { font-size: 11px; }
+    }
   </style>
 </head>
 <body>
+  <div class="corner-logo">
+    <img src="/static/images/logo-light.png" alt="Lumos Lab" onerror="this.style.display='none'">
+  </div>
   <div class="main-content">
     <div class="left-section">
-      <img src="/static/images/logo-light.png" alt="Lumos Lab" onerror="this.style.display='none'">
+      <h1 class="app-name">FlowRad</h1>
       <div class="taglines">
         <p>One platform for referrals and real-time justification, built for modern radiology workflows.</p>
         <p>Faster triage, consistent decisions, and smoother turnaround across every modality.</p>
@@ -117,7 +182,7 @@
     <div class="right-section">
       <div class="login-card">
       <h2>Sign In</h2>
-      <p class="intro-text">Enter your credentials to access the Vetting Suite. Your role determines your access level.</p>
+      <p class="intro-text">Enter your credentials to access FlowRad. Your role determines your access level.</p>
       <form method="post" action="/login">
         <input type="hidden" name="next" value="/">
         <div class="form-row">

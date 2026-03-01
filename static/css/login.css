@@ -62,9 +62,9 @@ body::before{
   box-shadow: 0 8px 40px rgba(2,6,23,0.75);
 }
 .form-row{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
-label{font-size:13px;color:var(--text-muted)}
+label{font-size:14px;color:var(--text-muted)}
 input[type=text],input[type=password]{
-  padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(0,0,0,0.25);color:white;outline:none;font-size:15px
+  padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(0,0,0,0.25);color:white;outline:none;font-size:14px
 }
 input::placeholder{color:rgba(255,255,255,0.45)}
 .btn-primary{display:inline-block;padding:10px 14px;border-radius:8px;background:var(--accent);color:white !important;text-decoration:none;border:none;font-weight:600;cursor:pointer}

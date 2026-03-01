@@ -1,0 +1,1263 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\pmend\\project\\Vetting app']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [44528] using WatchFiles
+INFO:     Started server process [58820]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [58820]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=44528, pipe_handle=560)
+                                                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\spawn.py", line 122, in spawn_main
+    exitcode = _main(fd, parent_sentinel)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\spawn.py", line 132, in _main
+    self = reduction.pickle.load(from_parent)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\reduction.py", line 238, in _rebuild_socket
+    return ds.detach()
+           ~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\resource_sharer.py", line 40, in detach
+    return socket.fromshare(share)
+           ~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\socket.py", line 598, in fromshare
+    return socket(0, 0, 0, info)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+INFO:     Started server process [28460]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [28460]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Process SpawnProcess-4:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 577, in configure
+    _clearExistingHandlers()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 290, in _clearExistingHandlers
+    logging.shutdown(logging._handlerList[:])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 2233, in shutdown
+    for wr in reversed(handlerList[:]):
+              ~~~~~~~~^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+INFO:     Started server process [51968]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [51968]
+INFO:     Started server process [58188]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [58188]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=44528, pipe_handle=1008)
+                                                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\spawn.py", line 122, in spawn_main
+    exitcode = _main(fd, parent_sentinel)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\spawn.py", line 132, in _main
+    self = reduction.pickle.load(from_parent)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\reduction.py", line 238, in _rebuild_socket
+    return ds.detach()
+           ~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\resource_sharer.py", line 38, in detach
+    with _resource_sharer.get_connection(self._id) as conn:
+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\resource_sharer.py", line 86, in get_connection
+    c = Client(address, authkey=process.current_process().authkey)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\connection.py", line 542, in Client
+    answer_challenge(c, authkey)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\connection.py", line 977, in answer_challenge
+    digest = _create_response(authkey, message)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\connection.py", line 902, in _create_response
+    import hmac
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1333, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1267, in _find_spec
+  File "<frozen importlib._bootstrap_external>", line 1292, in find_spec
+  File "<frozen importlib._bootstrap_external>", line 1266, in _get_spec
+  File "<frozen importlib._bootstrap_external>", line 1365, in find_spec
+  File "<frozen importlib._bootstrap_external>", line 152, in _path_stat
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\connection.py", line 338, in _recv_bytes
+    nread, err = ov.GetOverlappedResult(True)
+                 ~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+BrokenPipeError: [WinError 109] The pipe has been ended
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\resource_sharer.py", line 138, in _serve
+    with self._listener.accept() as conn:
+         ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\connection.py", line 499, in accept
+    deliver_challenge(c, self._authkey)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\connection.py", line 956, in deliver_challenge
+    response = connection.recv_bytes(256)        # reject large message
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\connection.py", line 222, in recv_bytes
+    buf = self._recv_bytes(maxlength)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\connection.py", line 353, in _recv_bytes
+    raise EOFError
+EOFError
+INFO:     Started server process [60012]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [60012]
+INFO:     Started server process [55540]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [55540]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Process SpawnProcess-10:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 543, in configure
+    with logging._lock:
+         ^^^^^^^^^^^^^
+KeyboardInterrupt
+INFO:     Started server process [57572]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [57572]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Process SpawnProcess-12:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 577, in configure
+    _clearExistingHandlers()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 289, in _clearExistingHandlers
+    logging._handlers.clear()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "<frozen _collections_abc>", line 955, in clear
+KeyboardInterrupt
+INFO:     Started server process [56076]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [56076]
+Process SpawnProcess-14:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 577, in configure
+    _clearExistingHandlers()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 290, in _clearExistingHandlers
+    logging.shutdown(logging._handlerList[:])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 2226, in shutdown
+    def shutdown(handlerList=_handlerList):
+    
+KeyboardInterrupt
+INFO:     Stopping reloader process [44528]
+ |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\_utils.py", line 79, in collapse_excgroups
+  |     yield
+  |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\responses.py", line 270, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |                ~~~~~~~~~~~~~~~~~~~~~~~^^
+  |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 783, in __aexit__
+  |     raise BaseExceptionGroup(
+  |         "unhandled errors in a TaskGroup", self._exceptions
+  |     ) from None
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 416, in run_asgi
+    |     result = await app(  # type: ignore[func-returns-value]
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |         self.scope, self.receive, self.send
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     )
+    |     ^
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    |     return await self.app(scope, receive, send)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\fastapi\applications.py", line 1135, in __call__
+    |     await super().__call__(scope, receive, send)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\applications.py", line 107, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    |     raise exc
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\middleware\base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\middleware\sessions.py", line 85, in __call__
+    |     await self.app(scope, receive, send_wrapper)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\routing.py", line 716, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\routing.py", line 736, in app
+    |     await route.handle(scope, receive, send)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\routing.py", line 290, in handle
+    |     await self.app(scope, receive, send)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\fastapi\routing.py", line 115, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\fastapi\routing.py", line 102, in app
+    |     await response(scope, receive, send)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\responses.py", line 269, in __call__
+    |     with collapse_excgroups():
+    |          ~~~~~~~~~~~~~~~~~~^^
+    |   File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\contextlib.py", line 162, in __exit__
+    |     self.gen.throw(value)
+    |     ~~~~~~~~~~~~~~^^^^^^^
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\_utils.py", line 85, in collapse_excgroups
+    |     raise exc
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\responses.py", line 273, in wrap
+    |     await func()
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\responses.py", line 253, in stream_response
+    |     async for chunk in self.body_iterator:
+    |     ...<2 lines>...
+    |         await send({"type": "http.response.body", "body": chunk, "more_body": True})
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\concurrency.py", line 55, in iterate_in_threadpool
+    |     yield await anyio.to_thread.run_sync(_next, as_iterator)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    |     return await get_async_backend().run_sync_in_worker_thread(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |         func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     )
+    |     ^
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2502, in run_sync_in_worker_thread
+    |     return await future
+    |            ^^^^^^^^^^^^
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 986, in run
+    |     result = context.run(func, *args)
+    |   File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\concurrency.py", line 44, in _next
+    |     return next(iterator)
+    |   File "C:\Users\pmend\project\Vetting app\app\main.py", line 2178, in iter_csv
+    |     events = events_map.get(d.get("id"), [])
+    |              ^^^^^^^^^^
+    | NameError: name 'events_map' is not defined
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self.scope, self.receive, self.send
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\fastapi\applications.py", line 1135, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\middleware\base.py", line 198, in __call__
+    raise app_exc
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\middleware\sessions.py", line 85, in __call__
+    await self.app(scope, receive, send_wrapper)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\fastapi\routing.py", line 102, in app
+    await response(scope, receive, send)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\responses.py", line 269, in __call__
+    with collapse_excgroups():
+         ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\_utils.py", line 85, in collapse_excgroups
+    raise exc
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\responses.py", line 273, in wrap
+    await func()
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\responses.py", line 253, in stream_response
+    async for chunk in self.body_iterator:
+    ...<2 lines>...
+        await send({"type": "http.response.body", "body": chunk, "more_body": True})
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\concurrency.py", line 55, in iterate_in_threadpool
+    yield await anyio.to_thread.run_sync(_next, as_iterator)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2502, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 986, in run
+    result = context.run(func, *args)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\starlette\concurrency.py", line 44, in _next
+    return next(iterator)
+  File "C:\Users\pmend\project\Vetting app\app\main.py", line 2178, in iter_csv
+    events = events_map.get(d.get("id"), [])
+             ^^^^^^^^^^
+NameError: name 'events_map' is not defined
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [54116]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Process SpawnProcess-22:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 577, in configure
+    _clearExistingHandlers()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 290, in _clearExistingHandlers
+    logging.shutdown(logging._handlerList[:])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 2226, in shutdown
+    def shutdown(handlerList=_handlerList):
+    
+KeyboardInterrupt
+INFO:     Started server process [57724]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [57724]
+INFO:     Started server process [55044]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [55044]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=6276, pipe_handle=1156)
+                                                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\spawn.py", line 122, in spawn_main
+    exitcode = _main(fd, parent_sentinel)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\spawn.py", line 132, in _main
+    self = reduction.pickle.load(from_parent)
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\__init__.py", line 2, in <module>
+    from uvicorn.main import Server, main, run
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\main.py", line 32, in <module>
+    from uvicorn.supervisors import ChangeReload, Multiprocess
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\supervisors\__init__.py", line 12, in <module>
+    from uvicorn.supervisors.watchfilesreload import WatchFilesReload as ChangeReload
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\supervisors\watchfilesreload.py", line 7, in <module>
+    from watchfiles import watch
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\watchfiles\__init__.py", line 2, in <module>
+    from .main import Change, awatch, watch
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\watchfiles\main.py", line 9, in <module>
+    import anyio
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\anyio\__init__.py", line 26, in <module>
+    from ._core._fileio import AsyncFile as AsyncFile
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\anyio\_core\_fileio.py", line 27, in <module>
+    from .. import to_thread
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\anyio\to_thread.py", line 14, in <module>
+    from .abc import CapacityLimiter
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\anyio\abc\__init__.py", line 5, in <module>
+    from ._sockets import ConnectedUDPSocket as ConnectedUDPSocket
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\anyio\abc\_sockets.py", line 20, in <module>
+    from ._streams import ByteStream, Listener, UnreliableObjectStream
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\anyio\abc\_streams.py", line 90, in <module>
+    class ObjectReceiveStream(UnreliableObjectReceiveStream[T_co]):
+    ...<3 lines>...
+        """
+  File "<frozen abc>", line 106, in __new__
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\typing.py", line 1186, in _generic_init_subclass
+    tvars = _collect_type_parameters(cls.__orig_bases__)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\typing.py", line 302, in _collect_type_parameters
+    if _is_unpacked_typevartuple(t):
+       ~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\typing.py", line 1026, in _is_unpacked_typevartuple
+    def _is_unpacked_typevartuple(x: Any) -> bool:
+    
+KeyboardInterrupt
+INFO:     Started server process [51544]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [51544]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Process SpawnProcess-27:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+                ~~~~~~~~~^^^^^^^^^^^^^^
+  File "<frozen os>", line 1076, in fdopen
+  File "<frozen codecs>", line 312, in __init__
+KeyboardInterrupt
+INFO:     Started server process [57208]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [57208]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Process SpawnProcess-29:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 577, in configure
+    _clearExistingHandlers()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 290, in _clearExistingHandlers
+    logging.shutdown(logging._handlerList[:])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 2245, in shutdown
+    h.flush()
+    ~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 1136, in flush
+    if self.stream and hasattr(self.stream, "flush"):
+                       ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+INFO:     Started server process [34132]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [34132]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Process SpawnProcess-31:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 577, in configure
+    _clearExistingHandlers()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 289, in _clearExistingHandlers
+    logging._handlers.clear()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "<frozen _collections_abc>", line 955, in clear
+KeyboardInterrupt
+INFO:     Started server process [59904]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'verify_migration.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [59904]
+WARNING:  WatchFiles detected changes in 'verify_migration.py'. Reloading...
+Process SpawnProcess-33:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+                ~~~~~~~~~^^^^^^^^^^^^^^
+  File "<frozen os>", line 1076, in fdopen
+  File "<frozen codecs>", line 312, in __init__
+KeyboardInterrupt
+INFO:     Started server process [59852]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'test_api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for connections to close. (CTRL+C to force quit)
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [59852]
+WARNING:  WatchFiles detected changes in 'test_api.py'. Reloading...
+Process SpawnProcess-35:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 580, in configure
+    formatters = config.get('formatters', EMPTY_DICT)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 346, in get
+    return self.convert_with_key(key, value)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 308, in convert_with_key
+    result = self.configurator.convert(value)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 459, in convert
+    value = ConvertingDict(value)
+KeyboardInterrupt
+INFO:     Started server process [54980]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'check_data.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [54980]
+WARNING:  WatchFiles detected changes in 'reload_all_descriptions.py', 'analyze_csv.py', 'check_data.py'. Reloading...
+Process SpawnProcess-37:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 580, in configure
+    formatters = config.get('formatters', EMPTY_DICT)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 346, in get
+    return self.convert_with_key(key, value)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 308, in convert_with_key
+    result = self.configurator.convert(value)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 459, in convert
+    value = ConvertingDict(value)
+KeyboardInterrupt
+INFO:     Started server process [53492]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'analyze_csv.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [53492]
+WARNING:  WatchFiles detected changes in 'test_api_final.py', 'load_all_descriptions.py', 'verify_final_load.py'. Reloading...
+Process SpawnProcess-39:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+                ~~~~~~~~~^^^^^^^^^^^^^^
+  File "<frozen os>", line 1076, in fdopen
+  File "<frozen codecs>", line 312, in __init__
+KeyboardInterrupt
+INFO:     Started server process [53164]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [53164]
+WARNING:  WatchFiles detected changes in 'reload_all_descriptions.py', 'test_api_final.py', 'verify_migration.py', 'load_all_descriptions.py', 'app\main.py', 'analyze_csv.py', 'verify_final_load.py', 'check_data.py', 'test_api.py'. Reloading...
+Process SpawnProcess-41:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 575, in configure
+    disable_existing = config.pop('disable_existing_loggers', True)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 350, in pop
+    return self.convert_with_key(key, value, replace=False)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 308, in convert_with_key
+    result = self.configurator.convert(value)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 452, in convert
+    def convert(self, value):
+    
+KeyboardInterrupt
+INFO:     Started server process [39064]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'test_endpoints.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [39064]
+WARNING:  WatchFiles detected changes in 'test_endpoints.py'. Reloading...
+Process SpawnProcess-43:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+                ~~~~~~~~~^^^^^^^^^^^^^^
+  File "<frozen os>", line 1076, in fdopen
+  File "<frozen codecs>", line 312, in __init__
+KeyboardInterrupt
+INFO:     Started server process [53620]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'test_e2e.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [53620]
+WARNING:  WatchFiles detected changes in 'test_e2e.py'. Reloading...
+Process SpawnProcess-45:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 577, in configure
+    _clearExistingHandlers()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 287, in _clearExistingHandlers
+    def _clearExistingHandlers():
+    
+KeyboardInterrupt
+INFO:     Started server process [57628]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py', 'test_e2e.py', 'test_endpoints.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [57628]
+INFO:     Started server process [55796]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [55796]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Process SpawnProcess-48:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+                ~~~~~~~~~^^^^^^^^^^^^^^
+  File "<frozen os>", line 1076, in fdopen
+  File "<frozen codecs>", line 312, in __init__
+KeyboardInterrupt
+INFO:     Started server process [47040]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'test_study_descriptions_fix.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [47040]
+WARNING:  WatchFiles detected changes in 'app\main.py', 'test_study_descriptions_fix.py'. Reloading...
+Process SpawnProcess-50:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 583, in configure
+    formatters[name] = self.configure_formatter(
+    ~~~~~~~~~~^^^^^^
+KeyboardInterrupt
+INFO:     Started server process [46844]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'test_e2e.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [46844]
+WARNING:  WatchFiles detected changes in 'test_e2e.py'. Reloading...
+Process SpawnProcess-52:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+                ~~~~~~~~~^^^^^^^^^^^^^^
+  File "<frozen os>", line 1076, in fdopen
+  File "<frozen codecs>", line 312, in __init__
+KeyboardInterrupt
+INFO:     Started server process [54216]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [54216]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Process SpawnProcess-54:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 580, in configure
+    formatters = config.get('formatters', EMPTY_DICT)
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 346, in get
+    return self.convert_with_key(key, value)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 313, in convert_with_key
+    if type(result) in (ConvertingDict, ConvertingList,
+       ~~~~^^^^^^^^
+KeyboardInterrupt
+INFO:     Started server process [7612]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for connections to close. (CTRL+C to force quit)
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [7612]
+INFO:     Started server process [61152]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [61152]
+INFO:     Started server process [34232]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [34232]
+INFO:     Started server process [56252]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [56252]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Process SpawnProcess-59:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+                ~~~~~~~~~^^^^^^^^^^^^^^
+  File "<frozen os>", line 1076, in fdopen
+  File "<frozen codecs>", line 312, in __init__
+KeyboardInterrupt
+INFO:     Started server process [48352]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [48352]
+INFO:     Started server process [55108]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [55108]
+INFO:     Started server process [56660]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [56660]
+INFO:     Started server process [58852]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for connections to close. (CTRL+C to force quit)
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [58852]
+WARNING:  WatchFiles detected changes in '.venv\Lib\site-packages\cffi\_shimmed_dist_utils.py', '.venv\Lib\site-packages\cryptography\hazmat\backends\openssl\__init__.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\ciphers\aead.py', '.venv\Lib\site-packages\azure\core\utils\_pipeline_transport_rest_shared.py', '.venv\Lib\site-packages\azure\core\pipeline\transport\_requests_trio.py', '.venv\Lib\site-packages\azure\core\rest\_helpers.py', '.venv\Lib\site-packages\azure\storage\blob\_version.py', '.venv\Lib\site-packages\azure\core\polling\_async_poller.py', '.venv\Lib\site-packages\azure\core\pipeline\_tools.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\operations\_page_blob_operations.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\_utils\__init__.py', '.venv\Lib\site-packages\azure\core\exceptions.py', '.venv\Lib\site-packages\cryptography\__init__.py', '.venv\Lib\site-packages\azure\core\pipeline\transport\__init__.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\avro\datafile.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\uploads.py', '.venv\Lib\site-packages\pycparser\_ast_gen.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\operations\_service_operations.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\policies_async.py', '.venv\Lib\site-packages\azure\core\pipeline\_base.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\operations\_append_blob_operations.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\operations\_container_operations.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\kdf\kbkdf.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\asymmetric\dh.py', '.venv\Lib\site-packages\cffi\pkgconfig.py', '.venv\Lib\site-packages\azure\storage\blob\aio\_list_blobs_helper.py', '.venv\Lib\site-packages\azure\core\_enum_meta.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\aio\_azure_blob_storage.py', '.venv\Lib\site-packages\cffi\backend_ctypes.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\_base_async.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\ciphers\__init__.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\_retry.py', '.venv\Lib\site-packages\azure\core\pipeline\transport\_bigger_block_size_http_adapters.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\kdf\pbkdf2.py', '.venv\Lib\site-packages\cryptography\hazmat\decrepit\ciphers\algorithms.py', '.venv\Lib\site-packages\cryptography\x509\__init__.py', '.venv\Lib\site-packages\cryptography\hazmat\backends\__init__.py', '.venv\Lib\site-packages\azure\core\rest\__init__.py', '.venv\Lib\site-packages\cffi\commontypes.py', '.venv\Lib\site-packages\isodate\isotime.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\kdf\__init__.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\ciphers\modes.py', '.venv\Lib\site-packages\isodate\isotzinfo.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\asymmetric\x25519.py', '.venv\Lib\site-packages\azure\core\credentials_async.py', '.venv\Lib\site-packages\azure\storage\blob\aio\_models.py', '.venv\Lib\site-packages\cffi\model.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\_configuration.py', '.venv\Lib\site-packages\isodate\duration.py', '.venv\Lib\site-packages\azure\storage\blob\_encryption.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\avro\avro_io_async.py', '.venv\Lib\site-packages\cryptography\x509\name.py', '.venv\Lib\site-packages\azure\core\tracing\__init__.py', '.venv\Lib\site-packages\pycparser\__init__.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\operations\_blob_operations.py', '.venv\Lib\site-packages\cryptography\x509\ocsp.py', '.venv\Lib\site-packages\azure\core\rest\_requests_basic.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\base_client.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\asymmetric\ec.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\asymmetric\padding.py', '.venv\Lib\site-packages\cryptography\x509\verification.py', '.venv\Lib\site-packages\azure\core\paging.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\__init__.py', '.venv\Lib\site-packages\azure\storage\blob\_deserialize.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\asymmetric\ed448.py', '.venv\Lib\site-packages\azure\core\utils\_messaging_shared.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\avro\datafile_async.py', '.venv\Lib\site-packages\isodate\version.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\_base.py', '.venv\Lib\site-packages\cffi\vengine_cpy.py', '.venv\Lib\site-packages\pycparser\c_generator.py', '.venv\Lib\site-packages\cffi\verifier.py', '.venv\Lib\site-packages\azure\core\polling\_poller.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\asymmetric\rsa.py', '.venv\Lib\site-packages\azure\core\_pipeline_client.py', '.venv\Lib\site-packages\azure\core\tracing\common.py', '.venv\Lib\site-packages\cryptography\x509\oid.py', '.venv\Lib\site-packages\azure\core\utils\_connection_string_parser.py', '.venv\Lib\site-packages\cryptography\hazmat\decrepit\ciphers\__init__.py', '.venv\Lib\site-packages\cryptography\fernet.py', '.venv\Lib\site-packages\cffi\cparser.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\policies.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\_universal.py', '.venv\Lib\site-packages\azure\core\tracing\_abstract_span.py', '.venv\Lib\site-packages\azure\core\utils\_utils.py', '.venv\Lib\site-packages\azure\core\serialization.py', '.venv\Lib\site-packages\azure\core\tracing\opentelemetry.py', '.venv\Lib\site-packages\azure\storage\blob\_models.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\serialization\pkcs12.py', '.venv\Lib\site-packages\azure\core\credentials.py', '.venv\Lib\site-packages\azure\storage\blob\aio\__init__.py', '.venv\Lib\site-packages\azure\core\rest\_http_response_impl_async.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\_asymmetric.py', '.venv\Lib\site-packages\azure\core\_match_conditions.py', '.venv\Lib\site-packages\pycparser\c_parser.py', '.venv\Lib\site-packages\azure\core\pipeline\transport\_base_requests_async.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\authentication.py', '.venv\Lib\site-packages\azure\core\polling\async_base_polling.py', '.venv\Lib\site-packages\cryptography\hazmat\bindings\openssl\_conditional.py', '.venv\Lib\site-packages\azure\core\pipeline\transport\_aiohttp.py', '.venv\Lib\site-packages\azure\core\pipeline\transport\_base_async.py', '.venv\Lib\site-packages\cffi\_imp_emulation.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\operations\__init__.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\aio\_patch.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\response_handlers.py', '.venv\Lib\site-packages\azure\core\utils\__init__.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\uploads_async.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\__init__.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\kdf\scrypt.py', '.venv\Lib\site-packages\azure\storage\blob\aio\_blob_client_async.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\_authentication.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\aio\operations\_blob_operations.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\__init__.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\ciphers\algorithms.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\twofactor\__init__.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\request_handlers.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\asymmetric\x448.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\models\__init__.py', '.venv\Lib\site-packages\cffi\error.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\twofactor\hotp.py', '.venv\Lib\site-packages\azure\storage\blob\_shared_access_signature.py', '.venv\Lib\site-packages\azure\core\pipeline\__init__.py', '.venv\Lib\site-packages\azure\core\pipeline\transport\_base.py', '.venv\Lib\site-packages\azure\core\tracing\ext\__init__.py', '.venv\Lib\site-packages\isodate\isoerror.py', '.venv\Lib\site-packages\azure\storage\blob\_serialize.py', '.venv\Lib\site-packages\cryptography\__about__.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\parser.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\aio\operations\_append_blob_operations.py', '.venv\Lib\site-packages\azure\storage\blob\_blob_client.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\aio\operations\_page_blob_operations.py', '.venv\Lib\site-packages\cryptography\x509\general_name.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\aio\__init__.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\padding.py', '.venv\Lib\site-packages\isodate\isostrf.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\constants.py', '.venv\Lib\site-packages\cffi\api.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\avro\schema.py', '.venv\Lib\site-packages\cryptography\exceptions.py', '.venv\Lib\site-packages\isodate\isodatetime.py', '.venv\Lib\site-packages\azure\storage\blob\_blob_service_client.py', '.venv\Lib\site-packages\azure\core\rest\_requests_asyncio.py', '.venv\Lib\site-packages\azure\storage\blob\_container_client_helpers.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\asymmetric\__init__.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\avro\avro_io.py', '.venv\Lib\site-packages\azure\core\_azure_clouds.py', '.venv\Lib\site-packages\cryptography\x509\extensions.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\operations\_patch.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\twofactor\totp.py', '.venv\Lib\site-packages\cryptography\hazmat\bindings\openssl\binding.py', '.venv\Lib\site-packages\azure\core\rest\_http_response_impl.py', '.venv\Lib\site-packages\cffi\setuptools_ext.py', '.venv\Lib\site-packages\cffi\ffiplatform.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\_utils\serialization.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\kdf\concatkdf.py', '.venv\Lib\site-packages\isodate\isodates.py', '.venv\Lib\site-packages\isodate\isoduration.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\cmac.py', '.venv\Lib\site-packages\cryptography\hazmat\bindings\__init__.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\_azure_blob_storage.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\asymmetric\ed25519.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\__init__.py', '.venv\Lib\site-packages\cffi\recompiler.py', '.venv\Lib\site-packages\cffi\cffi_opcode.py', '.venv\Lib\site-packages\pycparser\c_lexer.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\hashes.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\_cipheralgorithm.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\aio\operations\_patch.py', '.venv\Lib\site-packages\azure\storage\blob\_upload_helpers.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\aio\operations\__init__.py', '.venv\Lib\site-packages\azure\core\rest\_rest_py3.py', '.venv\Lib\site-packages\azure\core\utils\_pipeline_transport_rest_shared_async.py', '.venv\Lib\site-packages\cryptography\hazmat\__init__.py', '.venv\Lib\site-packages\azure\core\async_paging.py', '.venv\Lib\site-packages\azure\core\tracing\_models.py', '.venv\Lib\site-packages\cryptography\utils.py', '.venv\Lib\site-packages\azure\storage\blob\aio\_lease_async.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\_custom_hook.py', '.venv\Lib\site-packages\cryptography\hazmat\asn1\asn1.py', '.venv\Lib\site-packages\azure\core\_pipeline_client_async.py', '.venv\Lib\site-packages\azure\core\tracing\decorator_async.py', '.venv\Lib\site-packages\azure\core\configuration.py', '.venv\Lib\site-packages\azure\storage\blob\_blob_service_client_helpers.py', '.venv\Lib\site-packages\azure\storage\blob\_quick_query_helper.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\models\_patch.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\_patch.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\serialization\base.py', '.venv\Lib\site-packages\azure\core\pipeline\_tools_async.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\avro\__init__.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\serialization\ssh.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\kdf\x963kdf.py', '.venv\Lib\site-packages\azure\core\rest\_requests_trio.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\models\_azure_blob_storage_enums.py', '.venv\Lib\site-packages\azure\core\polling\base_polling.py', '.venv\Lib\site-packages\cffi\__init__.py', '.venv\Lib\site-packages\azure\core\__init__.py', '.venv\Lib\site-packages\isodate\__init__.py', '.venv\Lib\site-packages\azure\core\polling\_utils.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\_redirect_async.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\asymmetric\types.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\kdf\argon2.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\operations\_block_blob_operations.py', '.venv\Lib\site-packages\azure\storage\blob\_container_client.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\asymmetric\utils.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\serialization\__init__.py', '.venv\Lib\site-packages\azure\storage\blob\aio\_download_async.py', '.venv\Lib\site-packages\azure\core\pipeline\transport\_requests_asyncio.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\models.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\constant_time.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\_authentication_async.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\keywrap.py', '.venv\Lib\site-packages\azure\core\messaging.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\_retry_async.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\asymmetric\dsa.py', '.venv\Lib\site-packages\azure\core\tracing\decorator.py', '.venv\Lib\site-packages\azure\core\instrumentation.py', '.venv\Lib\site-packages\azure\storage\blob\aio\_blob_service_client_async.py', '.venv\Lib\site-packages\cryptography\hazmat\bindings\openssl\__init__.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\hmac.py', '.venv\Lib\site-packages\azure\core\polling\__init__.py', '.venv\Lib\site-packages\cryptography\hazmat\decrepit\__init__.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\base_client_async.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\ciphers\base.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\_sensitive_header_cleanup_policy.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\_utils.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\serialization\pkcs7.py', '.venv\Lib\site-packages\azure\core\pipeline\transport\_requests_basic.py', '.venv\Lib\site-packages\pycparser\c_ast.py', '.venv\Lib\site-packages\cffi\vengine_gen.py', '.venv\Lib\site-packages\azure\storage\blob\aio\_container_client_async.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\_serialization.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\aio\operations\_service_operations.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\aio\operations\_block_blob_operations.py', '.venv\Lib\site-packages\azure\core\rest\_aiohttp.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\models\_models_py3.py', '.venv\Lib\site-packages\azure\storage\blob\_list_blobs_helper.py', '.venv\Lib\site-packages\azure\storage\blob\aio\_upload_helpers.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\_redirect.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\aio\_configuration.py', '.venv\Lib\site-packages\cryptography\hazmat\_oid.py', '.venv\Lib\site-packages\azure\storage\blob\_blob_client_helpers.py', '.venv\Lib\site-packages\azure\storage\blob\_generated\aio\operations\_container_operations.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\poly1305.py', '.venv\Lib\site-packages\azure\storage\blob\aio\_quick_query_helper_async.py', '.venv\Lib\site-packages\azure\storage\blob\__init__.py', '.venv\Lib\site-packages\cffi\lock.py', 'app\main.py', '.venv\Lib\site-packages\isodate\tzinfo.py', '.venv\Lib\site-packages\cryptography\hazmat\asn1\__init__.py', '.venv\Lib\site-packages\azure\storage\blob\aio\_encryption_async.py', '.venv\Lib\site-packages\azure\storage\blob\_lease.py', '.venv\Lib\site-packages\azure\core\pipeline\_base_async.py', '.venv\Lib\site-packages\pycparser\ast_transforms.py', '.venv\Lib\site-packages\cryptography\x509\base.py', '.venv\Lib\site-packages\azure\core\settings.py', '.venv\Lib\site-packages\azure\storage\blob\_shared\shared_access_signature.py', '.venv\Lib\site-packages\azure\core\pipeline\policies\_distributed_tracing.py', '.venv\Lib\site-packages\azure\core\_version.py', '.venv\Lib\site-packages\cryptography\x509\certificate_transparency.py', '.venv\Lib\site-packages\azure\storage\blob\_download.py', '.venv\Lib\site-packages\cryptography\hazmat\primitives\kdf\hkdf.py', '.venv\Lib\site-packages\cryptography\hazmat\backends\openssl\backend.py'. Reloading...
+Process SpawnProcess-64:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+                ~~~~~~~~~^^^^^^^^^^^^^^
+  File "<frozen os>", line 1076, in fdopen
+  File "<frozen codecs>", line 312, in __init__
+KeyboardInterrupt
+INFO:     Started server process [60992]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [60992]
+INFO:     Started server process [44572]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [44572]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Process SpawnProcess-67:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+                ~~~~~~~~~^^^^^^^^^^^^^^
+  File "<frozen os>", line 1076, in fdopen
+  File "<frozen codecs>", line 312, in __init__
+KeyboardInterrupt
+INFO:     Started server process [49860]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in '__check_presets.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [49860]
+WARNING:  WatchFiles detected changes in '__bulk_study_upload.py', '__check_presets.py'. Reloading...
+Process SpawnProcess-69:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 2240, in shutdown
+    h.acquire()
+    ~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 968, in acquire
+    def acquire(self):
+    
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 577, in configure
+    _clearExistingHandlers()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 290, in _clearExistingHandlers
+    logging.shutdown(logging._handlerList[:])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 2254, in shutdown
+    h.release()
+    ~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 980, in release
+    self.lock.release()
+    ~~~~~~~~~~~~~~~~~^^
+RuntimeError: cannot release un-acquired lock
+INFO:     Started server process [59608]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in '__export_full_presets.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [59608]
+WARNING:  WatchFiles detected changes in 'app\main.py', '__bulk_upload_live_presets.py', '__export_full_presets.py'. Reloading...
+Process SpawnProcess-71:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 577, in configure
+    _clearExistingHandlers()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 290, in _clearExistingHandlers
+    logging.shutdown(logging._handlerList[:])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 2226, in shutdown
+    def shutdown(handlerList=_handlerList):
+    
+KeyboardInterrupt
+INFO:     Started server process [42920]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [42920]
+WARNING:  WatchFiles detected changes in '__bulk_upload_live_presets.py'. Reloading...
+Process SpawnProcess-73:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 577, in configure
+    _clearExistingHandlers()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 290, in _clearExistingHandlers
+    logging.shutdown(logging._handlerList[:])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 2226, in shutdown
+    def shutdown(handlerList=_handlerList):
+    
+KeyboardInterrupt
+INFO:     Started server process [13896]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in '__check_session_counts.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [13896]
+WARNING:  WatchFiles detected changes in 'app\main.py', '__bulk_upload_org1.py', '__check_session_counts.py'. Reloading...
+Process SpawnProcess-75:
+Traceback (most recent call last):
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\project\Vetting app\.venv\Lib\site-packages\uvicorn\config.py", line 370, in configure_logging
+    logging.config.dictConfig(self.log_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 946, in dictConfig
+    dictConfigClass(config).configure()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 577, in configure
+    _clearExistingHandlers()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\config.py", line 290, in _clearExistingHandlers
+    logging.shutdown(logging._handlerList[:])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pmend\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 2237, in shutdown
+    h = wr()
+KeyboardInterrupt
+INFO:     Started server process [57300]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in '__bulk_upload_org1.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [57300]
+INFO:     Started server process [57236]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [57236]
+INFO:     Started server process [29456]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [29456]
+WARNING:  WatchFiles detected changes in 'app\main.py'. Reloading...
+Fatal Python error: init_sys_streams: can't initialize sys standard streams
+Python runtime state: core initialized
+Traceback (most recent call last):
+  File "<frozen codecs>", line 312, in __init__
+KeyboardInterrupt
+INFO:     Started server process [112796]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

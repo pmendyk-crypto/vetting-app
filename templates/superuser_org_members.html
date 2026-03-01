@@ -71,7 +71,7 @@
                             <span class="badge" style="background-color: #dc3545; color: white;">Inactive</span>
                         {% endif %}
                     </td>
-                    <td>{{ membership.created_at[:10] }}</td>
+                    <td>{{ membership.created_at | display_datetime }}</td>
                     <td>
                         <a href="/superuser/organisations/{{ org.id }}/members/{{ membership.id }}/edit" 
                            class="btn btn-sm btn-warning">Edit Role</a>
