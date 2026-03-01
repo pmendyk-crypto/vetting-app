@@ -1583,22 +1583,43 @@ def ensure_superadmin_user() -> None:
 
     if table_has_column("users", "password_hash") and table_has_column("users", "is_superuser"):
         conn = get_db()
+        
+        # Check if superadmin user already exists
+        existing = conn.execute("SELECT id, email FROM users WHERE username = ?", (username,)).fetchone()
+        
         salt = secrets.token_bytes(16)
         pw_hash = hash_password(password, salt)
-        conn.execute(
-            """
-            INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at)
-            VALUES(?, ?, ?, ?, 1, 1, ?, ?)
-            ON CONFLICT(username) DO UPDATE SET
-                email = excluded.email,
-                password_hash = excluded.password_hash,
-                salt_hex = excluded.salt_hex,
-                is_superuser = 1,
-                is_active = 1,
-                modified_at = excluded.modified_at
-            """,
-            (username, email, pw_hash.hex(), salt.hex(), now, now),
-        )
+        
+        if existing:
+            # User exists - just update password and ensure superuser status
+            conn.execute(
+                """
+                UPDATE users 
+                SET password_hash = ?, salt_hex = ?, is_superuser = 1, is_active = 1, modified_at = ?
+                WHERE username = ?
+                """,
+                (pw_hash.hex(), salt.hex(), now, username),
+            )
+            print(f"[startup] Updated superadmin user: {username}")
+        else:
+            # Create new superadmin user
+            # Check if email is already taken by another user
+            email_exists = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+            if email_exists:
+                # Use a unique email if the configured one is taken
+                unique_email = f"superadmin-{secrets.token_hex(4)}@lumoslab.com"
+                print(f"[WARNING] Email {email} already in use. Using {unique_email} for superadmin.")
+                email = unique_email
+            
+            conn.execute(
+                """
+                INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at)
+                VALUES(?, ?, ?, ?, 1, 1, ?, ?)
+                """,
+                (username, email, pw_hash.hex(), salt.hex(), now, now),
+            )
+            print(f"[startup] Created superadmin user: {username} ({email})")
+        
         conn.commit()
         conn.close()
         return
