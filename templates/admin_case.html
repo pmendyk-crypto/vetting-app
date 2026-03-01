@@ -42,22 +42,34 @@
     .preview-frame { width: 100%; height: 100%; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; background: #fff; }
 
     /* Timeline */
-    .timeline-table { width: 100%; border-collapse: collapse; }
-    .timeline-table thead th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(255,255,255,0.45); border-bottom: 1px solid rgba(255,255,255,0.1); }
-    .timeline-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .timeline-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .timeline-header h3 { margin: 0; color: rgba(255,255,255,0.9); font-size: 16px; }
+    .timeline-buttons { display: flex; gap: 8px; }
+    .timeline-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+    .timeline-table thead th { text-align: left; padding: 12px 12px; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.12); }
+    .timeline-table thead th:nth-child(1) { width: 160px; }
+    .timeline-table thead th:nth-child(2) { width: 130px; }
+    .timeline-table thead th:nth-child(3) { width: 140px; }
+    .timeline-table thead th:nth-child(4) { width: auto; }
+    .timeline-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s; }
+    .timeline-table tbody tr:hover { background: rgba(255,255,255,0.02); }
     .timeline-table tbody tr:last-child { border-bottom: none; }
-    .timeline-table tbody td { padding: 10px 12px; font-size: 13px; vertical-align: top; color: rgba(255,255,255,0.82); }
-    .timeline-table .ts { font-size: 11px; color: rgba(255,255,255,0.45); white-space: nowrap; }
-    .ev-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 400; letter-spacing: 0.3px; white-space: nowrap; }
-    .ev-SUBMITTED  { background: rgba(31,111,235,0.2);  color: #93c5fd; border: 1px solid rgba(31,111,235,0.4); }
-    .ev-ASSIGNED   { background: rgba(139,92,246,0.18); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.4); }
-    .ev-VETTED     { background: rgba(16,185,129,0.18); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.4); }
-    .ev-REJECTED   { background: rgba(239,68,68,0.18);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
-    .ev-REOPENED   { background: rgba(234,179,8,0.18);  color: #fde68a; border: 1px solid rgba(234,179,8,0.4); }
-    .ev-EDITED     { background: rgba(234,88,12,0.18);  color: #fdba74; border: 1px solid rgba(234,88,12,0.4); }
-    .ev-OTHER      { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.15); }
-    .detail-row { margin: 2px 0; font-size: 12px; color: rgba(255,255,255,0.6); }
-    .detail-row span { color: rgba(255,255,255,0.4); }
+    .timeline-table tbody td { padding: 12px 12px; font-size: 13px; vertical-align: top; color: rgba(255,255,255,0.82); }
+    .timeline-table tbody td:nth-child(1) { width: 160px; }
+    .timeline-table tbody td:nth-child(2) { width: 130px; }
+    .timeline-table tbody td:nth-child(3) { width: 140px; }
+    .timeline-table tbody td:nth-child(4) { width: auto; }
+    .timeline-table .ts { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; font-family: 'Courier New', monospace; }
+    .ev-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; }
+    .ev-SUBMITTED  { background: rgba(31,111,235,0.18);  color: #93c5fd; border: 1px solid rgba(31,111,235,0.35); }
+    .ev-ASSIGNED   { background: rgba(139,92,246,0.18);  color: #c4b5fd; border: 1px solid rgba(139,92,246,0.35); }
+    .ev-VETTED     { background: rgba(16,185,129,0.18);  color: #6ee7b7; border: 1px solid rgba(16,185,129,0.35); }
+    .ev-REJECTED   { background: rgba(239,68,68,0.18);   color: #fca5a5; border: 1px solid rgba(239,68,68,0.35); }
+    .ev-REOPENED   { background: rgba(234,179,8,0.18);   color: #fde68a; border: 1px solid rgba(234,179,8,0.35); }
+    .ev-EDITED     { background: rgba(234,88,12,0.18);   color: #fdba74; border: 1px solid rgba(234,88,12,0.35); }
+    .ev-OTHER      { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.15); }
+    .detail-row { margin: 3px 0; font-size: 12px; line-height: 1.5; color: rgba(255,255,255,0.65); }
+    .detail-row span { color: rgba(255,255,255,0.45); font-weight: 500; }
 
     @media (max-width: 1200px) {
       .case-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -165,9 +177,9 @@
       </div>
 
       <div class="card card-full-width">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-          <h3 style="margin-top: 0; margin-bottom: 0; color: rgba(255,255,255,0.9);">Case Timeline</h3>
-          <div style="display:flex;gap:8px;">
+        <div class="timeline-header">
+          <h3>Case Timeline</h3>
+          <div class="timeline-buttons">
             <a href="/admin/case/{{ case['id'] }}/timeline.pdf" class="btn" style="padding:6px 12px;font-size:12px;">⬇ Download (PDF)</a>
             <a href="/admin/case/{{ case['id'] }}/timeline.csv" class="btn" style="padding:6px 12px;font-size:12px;">⬇ Download (Excel)</a>
           </div>
@@ -192,7 +204,7 @@
                       {{ ev }}
                     </span>
                   </td>
-                  <td style="font-size:13px;">{{ e["username"] or "-" }}</td>
+                  <td>{{ e["username"] or "-" }}</td>
                   <td>
                     {% if e["decision"] %}
                       <div class="detail-row"><span>Decision: </span>{{ e["decision"] }}</div>
