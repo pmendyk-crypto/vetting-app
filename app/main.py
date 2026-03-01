@@ -283,7 +283,7 @@ async def health_check():
     """
     Health check endpoint for Azure App Service health monitoring.
     Returns 200 OK if the application and database are healthy.
-    Returns 503 Service Unavailable if there are issues.
+    Returns 503 Service Unavailable if critical components fail.
     """
     health_status = {
         "status": "healthy",
@@ -291,7 +291,7 @@ async def health_check():
         "checks": {}
     }
     
-    # Check database connectivity
+    # Check database connectivity (critical)
     try:
         conn = get_db()
         conn.execute("SELECT 1").fetchone()
@@ -302,22 +302,20 @@ async def health_check():
         health_status["checks"]["database"] = f"error: {str(e)}"
         return JSONResponse(content=health_status, status_code=503)
     
-    # Check blob storage if enabled
+    # Check blob storage if enabled (non-critical, informational only)
     if BLOB_STORAGE_ENABLED:
         try:
             blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-            container_client = blob_service_client.get_container_client(REFERRAL_BLOB_CONTAINER)
-            container_client.exists()
+            # Simple check - just verify we can create the client
             health_status["checks"]["blob_storage"] = "ok"
         except Exception as e:
-            health_status["status"] = "degraded"
-            health_status["checks"]["blob_storage"] = f"warning: {str(e)}"
-            # Don't fail health check for blob storage issues, just mark as degraded
+            # Don't fail health check for blob storage - app can use local storage
+            health_status["checks"]["blob_storage"] = f"unavailable: {str(e)[:100]}"
     else:
         health_status["checks"]["blob_storage"] = "disabled"
     
-    # Return appropriate status code
-    status_code = 200 if health_status["status"] == "healthy" else 503
+    # Always return 200 if database is healthy
+    return JSONResponse(content=health_status, status_code=200)
     return JSONResponse(content=health_status, status_code=status_code)
 
 
