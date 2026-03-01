@@ -6308,7 +6308,7 @@ def mt_org_detail(request: Request, org_id: int):
     </head>
     <body>
         <div class="container">
-            <h1 class="page-title">🏥 {org['name']}</h1>
+            <h1 class="page-title">{org['name']}</h1>
             <p class="page-subtitle">Slug: <strong>{org['slug']}</strong> | ID: {org['id']}</p>
             
             <div class="topbar">
