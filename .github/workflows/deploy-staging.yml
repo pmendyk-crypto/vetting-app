@@ -24,9 +24,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Build web app
-        uses: azure/appservice-build@v2
-
       - name: Deploy to Azure Web App (staging)
         uses: azure/webapps-deploy@v3
         with:
