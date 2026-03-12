@@ -42,3 +42,5 @@ Add these repository secrets:
 - `AZUREAPPSERVICE_PUBLISHPROFILE_PRODUCTION`
 
 Use the publish profile downloaded from each App Service.
+
+Test deploy from develop branch.
