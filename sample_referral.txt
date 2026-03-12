@@ -1,0 +1,49 @@
+CONFIDENTIAL PATIENT INFORMATION
+
+Hospital Referral Letter
+
+---
+
+Date: 04/03/2026
+
+Patient Name: John Smith
+Date of Birth: 15/06/1978
+NHS Number: 123 456 7890
+Hospital Number: H987654
+
+Referring Clinician: Dr. Sarah Johnson
+Department: General Practice
+Practice: Central Medical Centre
+
+---
+
+REFERRAL DETAILS
+
+Referral ID: GP-2026-03-0412
+Urgency: Routine
+Priority: Standard
+
+---
+
+CLINICAL INFORMATION
+
+Indication: Patient presenting with persistent lower back pain for 6 weeks. Conservative management attempted without improvement.
+
+Requested Study: MRI Scan - Lumbar Spine
+
+Modality: MRI
+
+Clinical History: 45-year-old with mechanical low back pain. No neurological symptoms. Previous imaging 2 years ago normal.
+
+Clinical Question: Rule out disc herniation or other structural pathology explaining ongoing pain.
+
+Comments: Patient unable to work due to symptoms. Urgent management needed. Preferably within 2 weeks.
+
+---
+
+Contact details:
+Central Medical Centre
+Tel: 01234 567890
+Email: referrals@centralmed.co.uk
+
+---

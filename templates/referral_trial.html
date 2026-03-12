@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Referral Trial Parser</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+  <style>
+    .trial-wrap { max-width: 980px; margin: 20px auto; padding: 12px; }
+    .card { border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+    .form-row.full { grid-column: 1 / -1; }
+    input, select, textarea { padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: inherit; }
+    textarea { min-height: 90px; }
+    .meta { font-size: 12px; opacity: 0.8; }
+    .warn { color: #ffbe55; }
+    .err { color: #ff6b6b; }
+    .actions { display: flex; gap: 8px; }
+    .btn { padding: 9px 14px; border-radius: 8px; border: 0; cursor: pointer; }
+    .btn-primary { background: #1f6feb; color: #fff; }
+    .btn-secondary { background: #3a3a3a; color: #fff; text-decoration: none; }
+    pre { white-space: pre-wrap; max-height: 180px; overflow: auto; background: rgba(0,0,0,0.25); padding: 10px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div class="trial-wrap">
+    <h1>Referral Parser Trial (Local Test)</h1>
+    <p class="meta">Upload a referral file, review extracted fields, then create a booking/case.</p>
+
+    {% if error %}
+      <div class="err">{{ error }}</div>
+    {% endif %}
+
+    <div class="card">
+      <h3>1) Parse referral file</h3>
+      <form method="post" action="/submit/referral-trial/parse" enctype="multipart/form-data">
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Institution</label>
+            <select name="institution_id" required>
+              <option value="">Select institution</option>
+              {% for inst in institutions %}
+                <option value="{{ inst.id }}" {% if draft and draft.institution_id == (inst.id | string) %}selected{% endif %}>{{ inst.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Referral file</label>
+            <input type="file" name="attachment" required>
+          </div>
+        </div>
+        <div class="actions" style="margin-top: 8px;">
+          <button type="submit" class="btn btn-primary">Parse referral</button>
+          <a class="btn btn-secondary" href="/submit">Back to manual submit</a>
+        </div>
+      </form>
+    </div>
+
+    {% if parse_confidence is not none %}
+    <div class="card">
+      <h3>2) Review extracted data</h3>
+      <p class="meta">Parser confidence: {{ (parse_confidence * 100) | round(0) }}%</p>
+      {% if parse_warnings %}
+        {% for warning in parse_warnings %}
+          <div class="warn">⚠ {{ warning }}</div>
+        {% endfor %}
+      {% endif %}
+
+      <form method="post" action="/submit/referral-trial/create">
+        <input type="hidden" name="attachment_token" value="{{ draft.attachment_token }}">
+        <input type="hidden" name="attachment_original_name" value="{{ draft.attachment_original_name }}">
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Patient first name</label>
+            <input name="patient_first_name" value="{{ draft.patient_first_name }}" required>
+          </div>
+          <div class="form-row">
+            <label>Patient surname</label>
+            <input name="patient_surname" value="{{ draft.patient_surname }}" required>
+          </div>
+          <div class="form-row">
+            <label>Referral ID</label>
+            <input name="patient_referral_id" value="{{ draft.patient_referral_id }}" required>
+          </div>
+          <div class="form-row">
+            <label>DOB</label>
+            <input name="patient_dob" value="{{ draft.patient_dob }}">
+          </div>
+          <div class="form-row">
+            <label>Institution</label>
+            <select name="institution_id" required>
+              <option value="">Select institution</option>
+              {% for inst in institutions %}
+                <option value="{{ inst.id }}" {% if draft and draft.institution_id == (inst.id | string) %}selected{% endif %}>{{ inst.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Modality</label>
+            <input name="modality" value="{{ draft.modality }}" placeholder="CT/MRI/XR">
+          </div>
+          <div class="form-row full">
+            <label>Study description</label>
+            <textarea name="study_description" required>{{ draft.study_description }}</textarea>
+          </div>
+          <div class="form-row full">
+            <label>Admin notes</label>
+            <textarea name="admin_notes">{{ draft.admin_notes }}</textarea>
+          </div>
+          <div class="form-row">
+            <label>Radiologist (optional)</label>
+            <select name="radiologist">
+              <option value="">Assign later</option>
+              {% for rad in radiologists %}
+                <option value="{{ rad.name }}">{{ rad.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="actions" style="margin-top: 8px;">
+          <button type="submit" class="btn btn-primary">Create booking/case</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>Extracted text preview</h3>
+      <pre>{{ parse_preview }}</pre>
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>

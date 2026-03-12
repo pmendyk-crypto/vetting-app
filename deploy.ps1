@@ -30,4 +30,4 @@ az webapp restart --name $APP_NAME --resource-group $RG
 if ($LASTEXITCODE -ne 0) { Write-Host "App restart failed." -ForegroundColor Red; exit 1 }
 
 Write-Host "`n=== Deploy complete! ===" -ForegroundColor Green
-Write-Host "Live URL: https://lumosradflow-h0dggngdg8a2hgbd.ukwest-01.azurewebsites.net`n" -ForegroundColor Green
+Write-Host "Live URL: https://radflow.co.uk`n" -ForegroundColor Green

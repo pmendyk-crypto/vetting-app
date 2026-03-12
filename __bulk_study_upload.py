@@ -2,7 +2,7 @@
 import requests
 from collections import Counter
 
-BASE = 'https://lumosradflow-h0dggngdg8a2hgbd.ukwest-01.azurewebsites.net'
+BASE = 'https://radflow.co.uk'
 USER = 'superadmin'
 PASS = 'admin111'
 

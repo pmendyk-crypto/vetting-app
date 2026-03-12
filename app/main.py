@@ -6,14 +6,6 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-# Multi-tenant imports
-try:
-    from app.routers import multitenant
-    MULTITENANT_ENABLED = True
-except ImportError:
-    MULTITENANT_ENABLED = False
-    print("[WARNING] Multi-tenant router not found - running in single-tenant mode")
-
 from pathlib import Path
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
@@ -30,6 +22,14 @@ import random
 import string
 import shutil
 import re
+
+# Security utilities
+from app.security import (
+    get_client_ip, check_rate_limit, reset_rate_limit,
+    should_lock_account, get_lockout_until, is_account_locked, 
+    get_lockout_remaining_minutes
+)
+from app.referral_ingest import parse_referral_attachment
 
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -227,10 +227,6 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
 SMTP_FROM = os.environ.get("SMTP_FROM") or SMTP_USER
-AUTO_PROVISION_SUPERADMIN = os.environ.get("AUTO_PROVISION_SUPERADMIN", "false").strip().lower() in ("1", "true", "yes", "on")
-SUPERADMIN_USERNAME = os.environ.get("SUPERADMIN_USERNAME", "superadmin").strip() or "superadmin"
-SUPERADMIN_EMAIL = os.environ.get("SUPERADMIN_EMAIL", "superadmin@lumoslab.com").strip() or "superadmin@lumoslab.com"
-SUPERADMIN_PASSWORD = os.environ.get("SUPERADMIN_PASSWORD", "").strip()
 LOGO_DARK_URL = os.environ.get("LOGO_DARK_URL", "/static/images/logo-light.png")
 
 # Warn if using default secret in production
@@ -252,6 +248,20 @@ class NoCacheMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(NoCacheMiddleware)
+
+# Middleware to add no-index headers for search engine discoverability
+class NoIndexMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        try:
+            response = await call_next(request)
+            # Add no-index directive to prevent search engine indexing
+            response.headers["X-Robots-Tag"] = "noindex, nofollow"
+            return response
+        except Exception as e:
+            print(f"[ERROR] NoIndexMiddleware exception: {e}")
+            raise
+
+app.add_middleware(NoIndexMiddleware)
 
 
 # Global 401/403 handler — redirect to login instead of showing a raw error
@@ -281,48 +291,84 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 @app.get("/healthz")
 async def health_check():
     """
-    Health check endpoint for Azure App Service health monitoring.
-    Returns 200 OK if the application and database are healthy.
-    Returns 503 Service Unavailable if critical components fail.
+    Lightweight health check endpoint.
+    Returns 200 OK immediately without any external checks.
+    Used for Azure App Service health monitoring and load balancer probes.
     """
-    health_status = {
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "checks": {}
-    }
-    
-    # Check database connectivity (critical)
+    return JSONResponse(content={"status": "healthy"}, status_code=200)
+
+
+@app.get("/diag/schema")
+async def diagnostic_schema():
+    """
+    Diagnostic endpoint to check database schema state.
+    Shows which tables and key columns exist.
+    """
     try:
         conn = get_db()
-        conn.execute("SELECT 1").fetchone()
+        
+        # Get all tables
+        if using_postgres():
+            result = conn.execute(text("""
+                SELECT tablename 
+                FROM pg_tables 
+                WHERE schemaname = 'public' 
+                ORDER BY tablename
+            """))
+            tables = [row[0] for row in result.fetchall()]
+            
+            # Check institutions columns
+            result = conn.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'institutions'
+                ORDER BY ordinal_position
+            """))
+            institutions_columns = [row[0] for row in result.fetchall()]
+        else:
+            # SQLite
+            result = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            tables = [row[0] for row in result.fetchall()]
+            
+            # Check institutions columns
+            result = conn.execute("PRAGMA table_info(institutions)")
+            institutions_columns = [row[1] for row in result.fetchall()]
+        
         conn.close()
-        health_status["checks"]["database"] = "ok"
+        
+        return JSONResponse(content={
+            "database_type": "PostgreSQL" if using_postgres() else "SQLite",
+            "tables": tables,
+            "institutions_columns": institutions_columns,
+            "has_modified_at": "modified_at" in institutions_columns,
+            "has_case_events": "case_events" in tables,
+            "has_password_reset": "password_reset_tokens" in tables,
+            "has_study_presets": "study_description_presets" in tables,
+            "status": "ok"
+        }, status_code=200)
     except Exception as e:
-        health_status["status"] = "unhealthy"
-        health_status["checks"]["database"] = f"error: {str(e)}"
-        return JSONResponse(content=health_status, status_code=503)
-    
-    # Check blob storage if enabled (non-critical, informational only)
-    if BLOB_STORAGE_ENABLED:
-        try:
-            blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-            # Simple check - just verify we can create the client
-            health_status["checks"]["blob_storage"] = "ok"
-        except Exception as e:
-            # Don't fail health check for blob storage - app can use local storage
-            health_status["checks"]["blob_storage"] = f"unavailable: {str(e)[:100]}"
-    else:
-        health_status["checks"]["blob_storage"] = "disabled"
-    
-    # Always return 200 if database is healthy
-    return JSONResponse(content=health_status, status_code=200)
-    return JSONResponse(content=health_status, status_code=status_code)
+        return JSONResponse(content={
+            "status": "error",
+            "error": str(e)
+        }, status_code=500)
 
 
-# Multi-tenant routes disabled for now - using existing login system
-# if MULTITENANT_ENABLED:
-#     app.include_router(multitenant.router)
-#     print("[INFO] Multi-tenant features enabled")
+# -------------------------
+# Robots.txt Endpoint
+# -------------------------
+@app.get("/robots.txt", response_class=None, include_in_schema=False)
+async def robots_txt():
+    """
+    Robots.txt endpoint to prevent search engine indexing.
+    Returns plain text disallowing all crawlers.
+    """
+    content = """User-agent: *
+Disallow: /"""
+    return StreamingResponse(
+        iter([content]),
+        media_type="text/plain; charset=utf-8"
+    )
+
 
 DECISIONS = ["Approve", "Reject", "Approve with comment"]
 
@@ -482,7 +528,7 @@ def init_db() -> None:
     if using_postgres():
         conn = get_db()
 
-        # Core multi-tenant tables
+        # Extended schema tables retained for current database compatibility
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS organisations (
@@ -1496,7 +1542,7 @@ def list_users(org_id: int | None = None) -> list[dict]:
     conn = get_db()
     # Check which table structure we have (old vs new)
     if table_has_column("users", "is_superuser"):
-        # New multi-tenant structure
+        # Extended schema structure
         if org_id:
             rows = conn.execute(
                 """
@@ -1601,78 +1647,6 @@ def ensure_seed_data() -> None:
     conn.close()
     if row and row["c"] == 0:
         create_user("admin", "admin123", "admin", None, "Admin", "User", "admin@lumoslab.com")
-
-
-def ensure_superadmin_user() -> None:
-    """
-    Ensure a dedicated superadmin user exists for multi-tenant dashboard access.
-    Controlled by environment variables to avoid hardcoded credentials.
-    """
-    if not AUTO_PROVISION_SUPERADMIN:
-        return
-
-    if not SUPERADMIN_PASSWORD:
-        print("[WARNING] AUTO_PROVISION_SUPERADMIN is enabled but SUPERADMIN_PASSWORD is empty. Skipping superadmin bootstrap.")
-        return
-
-    username = SUPERADMIN_USERNAME
-    password = SUPERADMIN_PASSWORD
-    email = SUPERADMIN_EMAIL
-    now = utc_now_iso()
-
-    if table_has_column("users", "password_hash") and table_has_column("users", "is_superuser"):
-        conn = get_db()
-        
-        # Check if superadmin user already exists
-        existing = conn.execute("SELECT id, email FROM users WHERE username = ?", (username,)).fetchone()
-        
-        salt = secrets.token_bytes(16)
-        pw_hash = hash_password(password, salt)
-        
-        if existing:
-            # User exists - just update password and ensure superuser status
-            conn.execute(
-                """
-                UPDATE users 
-                SET password_hash = ?, salt_hex = ?, is_superuser = 1, is_active = 1, modified_at = ?
-                WHERE username = ?
-                """,
-                (pw_hash.hex(), salt.hex(), now, username),
-            )
-            print(f"[startup] Updated superadmin user: {username}")
-        else:
-            # Create new superadmin user
-            # Check if email is already taken by another user
-            email_exists = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
-            if email_exists:
-                # Use a unique email if the configured one is taken
-                unique_email = f"superadmin-{secrets.token_hex(4)}@lumoslab.com"
-                print(f"[WARNING] Email {email} already in use. Using {unique_email} for superadmin.")
-                email = unique_email
-            
-            conn.execute(
-                """
-                INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at)
-                VALUES(?, ?, ?, ?, 1, 1, ?, ?)
-                """,
-                (username, email, pw_hash.hex(), salt.hex(), now, now),
-            )
-            print(f"[startup] Created superadmin user: {username} ({email})")
-        
-        conn.commit()
-        conn.close()
-        return
-
-    # Legacy schema fallback
-    try:
-        create_user(username, password, "admin", None, "Super", "Admin", email)
-    except Exception:
-        pass
-
-
-# -------------------------
-# Institutions
-# -------------------------
 def list_institutions(org_id: int | None = None) -> list[dict]:
     conn = get_db()
     if table_has_column("institutions", "org_id"):
@@ -2055,7 +2029,6 @@ try:
     ensure_protocols_schema()
     ensure_notify_events_schema()
     ensure_seed_data()
-    ensure_superadmin_user()
     ensure_default_protocols()
     ensure_default_study_description_presets()
     cleanup_old_files()
@@ -2074,8 +2047,6 @@ except Exception as e:
 def landing(request: Request, expired: str = ""):
     user = get_session_user(request)
     if user:
-        if user.get("is_superuser"):
-            return RedirectResponse(url="/mt", status_code=303)
         if user.get("role") == "admin":
             return RedirectResponse(url="/admin", status_code=303)
         return RedirectResponse(url="/radiologist", status_code=303)
@@ -2087,8 +2058,6 @@ def login_page(request: Request, expired: str = ""):
     # Redirect to home if already logged in
     user = get_session_user(request)
     if user:
-        if user.get("is_superuser"):
-            return RedirectResponse(url="/mt", status_code=303)
         if user.get("role") == "admin":
             return RedirectResponse(url="/admin", status_code=303)
         return RedirectResponse(url="/radiologist", status_code=303)
@@ -2101,6 +2070,18 @@ def login_submit(
     username: str = Form(...),
     password: str = Form(...),
 ):
+    # Rate limiting: max 5 login attempts per 60 seconds per IP
+    client_ip = get_client_ip(request)
+    is_allowed, remaining = check_rate_limit(client_ip, max_attempts=5, window_seconds=60)
+    
+    if not is_allowed:
+        # Rate limited - return 429 Too Many Requests
+        return templates.TemplateResponse(
+            "index.html",
+            {"request": request, "error": "Too many login attempts. Please try again in a few moments."},
+            status_code=429,
+        )
+    
     try:
         user = verify_user(username, password)
         if not user:
@@ -2132,7 +2113,6 @@ def login_submit(
         "surname": user.get("surname"),
         "role": user["role"],
         "radiologist_name": user["radiologist_name"],
-        "is_superuser": user.get("is_superuser", False),
     }
     request.session["login_time"] = time.time()  # Store login timestamp
     request.session["session_id"] = session_id  # Track session for multi-window detection
@@ -2155,16 +2135,7 @@ def login_submit(
         except Exception:
             pass
 
-    # Attach org context for non-superadmin users
-    if not user.get("is_superuser") and user.get("id"):
-        membership = get_user_primary_membership(user["id"])
-        if membership:
-            request.session["user"]["org_id"] = membership.get("org_id")
-            request.session["user"]["org_role"] = membership.get("org_role")
-
     # Auto-route based on user role
-    if user.get("is_superuser"):
-        return RedirectResponse(url="/mt", status_code=303)
     if user["role"] == "admin":
         return RedirectResponse(url="/admin", status_code=303)
     else:
@@ -3856,7 +3827,7 @@ def add_user(
     if role == "admin" or role == "user":
         radiologist_name = None
 
-    # Multi-tenant schema: create user + membership
+    # Extended schema: create user plus membership when org-scoped records exist
     if table_has_column("users", "is_superuser") and org_id:
         salt = secrets.token_bytes(16)
         pw_hash = hash_password(password, salt)
@@ -4016,7 +3987,7 @@ def edit_user(
             return RedirectResponse(url="/settings?error=email_taken", status_code=303)
     
     if table_has_column("users", "is_superuser"):
-        # Multi-tenant schema
+        # Extended schema
         conn = get_db()
         if password.strip():
             salt = secrets.token_bytes(16)
@@ -4402,6 +4373,203 @@ async def intake_submit(
     return RedirectResponse(url="/", status_code=303)
 
 
+@app.get("/submit/referral-trial", response_class=HTMLResponse)
+def referral_trial_form(request: Request):
+    user = require_admin(request)
+    org_id = user.get("org_id")
+    institutions = list_institutions(org_id)
+    radiologists = list_radiologists(org_id)
+
+    return templates.TemplateResponse(
+        "referral_trial.html",
+        {
+            "request": request,
+            "institutions": institutions,
+            "radiologists": radiologists,
+            "draft": {
+                "patient_first_name": "",
+                "patient_surname": "",
+                "patient_referral_id": "",
+                "patient_dob": "",
+                "study_description": "",
+                "modality": "",
+                "admin_notes": "",
+                "radiologist": "",
+                "institution_id": "",
+                "attachment_token": "",
+                "attachment_original_name": "",
+            },
+            "parse_warnings": [],
+            "parse_confidence": None,
+            "parse_preview": "",
+            "error": "",
+        },
+    )
+
+
+@app.post("/submit/referral-trial/parse", response_class=HTMLResponse)
+async def referral_trial_parse(
+    request: Request,
+    institution_id: str = Form(""),
+    attachment: UploadFile | None = File(...),
+):
+    user = require_admin(request)
+    org_id = user.get("org_id")
+    institutions = list_institutions(org_id)
+    radiologists = list_radiologists(org_id)
+
+    if not attachment or not attachment.filename:
+        return templates.TemplateResponse(
+            "referral_trial.html",
+            {
+                "request": request,
+                "institutions": institutions,
+                "radiologists": radiologists,
+                "draft": {"institution_id": institution_id or ""},
+                "parse_warnings": [],
+                "parse_confidence": None,
+                "parse_preview": "",
+                "error": "Please select a referral file to parse.",
+            },
+        )
+
+    file_bytes = await attachment.read()
+    parsed = parse_referral_attachment(attachment.filename, file_bytes)
+
+    temp_name = f"trial_{uuid4().hex}_{Path(attachment.filename).name}"
+    temp_path = UPLOAD_DIR / temp_name
+    with open(temp_path, "wb") as temp_file:
+        temp_file.write(file_bytes)
+
+    draft = parsed.get("fields", {})
+    draft["institution_id"] = (institution_id or "").strip()
+    draft["radiologist"] = ""
+    draft["attachment_token"] = temp_name
+    draft["attachment_original_name"] = attachment.filename
+
+    return templates.TemplateResponse(
+        "referral_trial.html",
+        {
+            "request": request,
+            "institutions": institutions,
+            "radiologists": radiologists,
+            "draft": draft,
+            "parse_warnings": parsed.get("warnings", []),
+            "parse_confidence": parsed.get("confidence"),
+            "parse_preview": parsed.get("text_preview", ""),
+            "error": "",
+        },
+    )
+
+
+@app.post("/submit/referral-trial/create")
+def referral_trial_create(
+    request: Request,
+    patient_first_name: str = Form(""),
+    patient_surname: str = Form(""),
+    patient_referral_id: str = Form(""),
+    patient_dob: str = Form(""),
+    institution_id: str = Form(...),
+    modality: str = Form(""),
+    study_description: str = Form(...),
+    admin_notes: str = Form(""),
+    radiologist: str = Form(""),
+    attachment_token: str = Form(...),
+    attachment_original_name: str = Form("referral_upload"),
+):
+    user = require_admin(request)
+    org_id = user.get("org_id")
+
+    if not patient_first_name.strip() or not patient_surname.strip() or not patient_referral_id.strip() or not study_description.strip():
+        raise HTTPException(status_code=400, detail="Patient name, referral ID, and study description are required")
+
+    try:
+        inst_id = int(institution_id)
+        inst = get_institution(inst_id, org_id)
+        if not inst:
+            raise HTTPException(status_code=400, detail="Invalid institution selection")
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid institution ID")
+
+    radiologist = radiologist.strip() if radiologist else ""
+    if radiologist:
+        valid_rads = {r["name"] for r in list_radiologists(org_id)}
+        if radiologist not in valid_rads:
+            raise HTTPException(status_code=400, detail="Invalid radiologist selection")
+
+    token_name = Path(attachment_token).name
+    if not token_name.startswith("trial_"):
+        raise HTTPException(status_code=400, detail="Invalid attachment token")
+
+    temp_path = UPLOAD_DIR / token_name
+    if not temp_path.exists():
+        raise HTTPException(status_code=400, detail="Trial attachment not found. Please parse again.")
+
+    with open(temp_path, "rb") as temp_file:
+        file_bytes = temp_file.read()
+
+    case_id = generate_case_id()
+    original_name = (attachment_original_name or "referral_upload").strip() or "referral_upload"
+
+    stored_path = None
+    if BLOB_STORAGE_ENABLED:
+        blob_name = upload_to_blob(case_id, file_bytes, original_name)
+        if blob_name:
+            stored_path = blob_name
+
+    if not stored_path:
+        safe_name = f"{case_id}_{Path(original_name).name}"
+        stored_path = str(UPLOAD_DIR / safe_name)
+        with open(stored_path, "wb") as f:
+            f.write(file_bytes)
+
+    try:
+        temp_path.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    created_at = utc_now_iso()
+    conn = get_db()
+
+    has_dob_col = table_has_column("cases", "patient_dob")
+    has_modality_col = table_has_column("cases", "modality")
+    case_modality = modality.strip().upper() if modality else None
+
+    if has_dob_col and has_modality_col:
+        conn.execute(
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, study_description.strip(), case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
+        )
+    elif has_dob_col:
+        conn.execute(
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, study_description.strip(), admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
+        )
+    elif has_modality_col:
+        conn.execute(
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, study_description.strip(), case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, study_description.strip(), admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
+        )
+
+    conn.commit()
+    conn.close()
+
+    insert_case_event(
+        case_id=case_id,
+        org_id=org_id,
+        event_type="SUBMITTED",
+        user={"username": user.get("username") or "admin"},
+        comment="Created via referral trial parser",
+    )
+
+    return RedirectResponse(url=f"/submitted/{case_id}", status_code=303)
+
+
 @app.get("/submit", response_class=HTMLResponse)
 def submit_form(request: Request):
     try:
@@ -4413,7 +4581,7 @@ def submit_form(request: Request):
     institutions = list_institutions(org_id)
     radiologists = list_radiologists(org_id)
     
-    # Ensure each institution has org_id for multitenant study description filtering
+    # Keep institution org_id available for existing study description filtering
     for inst in institutions:
         if "org_id" not in inst and org_id:
             inst["org_id"] = org_id
@@ -5189,1797 +5357,6 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
 # SUPERUSER ROUTES - Multi-Tenant Management
 # -------------------------
 
-@app.get("/mt", response_class=HTMLResponse)
-@app.get("/mt/dashboard", response_class=HTMLResponse)
-def mt_dashboard(request: Request):
-    """Superuser: Multi-tenant dashboard overview"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", "/mt")
-    
-    user = get_session_user(request)
-    conn = get_db()
-    
-    # Check if user is superuser
-    row = conn.execute("SELECT is_superuser FROM users WHERE username = ?", (user["username"],)).fetchone()
-    if not row or not row["is_superuser"]:
-        conn.close()
-        raise HTTPException(status_code=403, detail="Superuser access required")
-    
-    # Get stats
-    stats = {}
-    stats['org_count'] = conn.execute("SELECT COUNT(*) as count FROM organisations").fetchone()['count']
-    stats['user_count'] = conn.execute("SELECT COUNT(*) as count FROM users").fetchone()['count']
-    stats['case_count'] = conn.execute("SELECT COUNT(*) as count FROM cases").fetchone()['count']
-    stats['superuser_count'] = conn.execute("SELECT COUNT(*) as count FROM users WHERE is_superuser = 1").fetchone()['count']
-    
-    # Get organisations with member counts
-    orgs = conn.execute("""
-        SELECT o.id, o.name, o.slug, o.is_active,
-               COUNT(DISTINCT m.user_id) as member_count,
-               COUNT(DISTINCT c.id) as case_count
-        FROM organisations o
-        LEFT JOIN memberships m ON o.id = m.org_id AND m.is_active = 1
-        LEFT JOIN cases c ON o.id = c.org_id
-        GROUP BY o.id
-        ORDER BY o.name
-    """).fetchall()
-    
-    conn.close()
-    
-    # Create simple HTML dashboard with improved visuals
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Multi-Tenant Dashboard</title>
-        <link rel="stylesheet" href="/static/css/site.css">
-        <style>
-            .mt-stats {{ 
-                display: grid; 
-                grid-template-columns: repeat(4, 1fr); 
-                gap: 20px; 
-                margin-bottom: 30px; 
-            }}
-            .stat-card {{ 
-                background: var(--card-bg);
-                border: 1px solid var(--card-border);
-                padding: 24px; 
-                border-radius: 10px; 
-                text-align: center;
-            }}
-            .stat-number {{ 
-                font-size: 2.8em; 
-                font-weight: bold; 
-                color: white; 
-                margin-bottom: 8px; 
-            }}
-            .stat-label {{ 
-                color: var(--muted); 
-                font-size: 0.95em; 
-                text-transform: uppercase; 
-                letter-spacing: 1px; 
-            }}
-            .org-table {{ 
-                width: 100%; 
-                margin-top: 20px;
-            }}
-            .org-table td {{ padding: 14px 10px; }}
-            .org-table th {{ padding: 14px 10px; }}
-            .active-badge {{ 
-                background: #2fbf71; 
-                color: #04210d; 
-                padding: 6px 12px; 
-                border-radius: 999px; 
-                font-size: 12px; 
-                font-weight: 700; 
-                text-transform: uppercase;
-            }}
-            .inactive-badge {{ 
-                background: #d9534f; 
-                color: #2b0e0e; 
-                padding: 6px 12px; 
-                border-radius: 999px; 
-                font-size: 12px; 
-                font-weight: 700; 
-                text-transform: uppercase;
-            }}
-            .info-card {{ 
-                background: var(--card-bg);
-                border: 1px solid var(--card-border);
-                padding: 22px;
-                border-radius: 10px;
-                margin-top: 30px;
-            }}
-            .info-card h3 {{ 
-                color: white; 
-                margin-bottom: 15px; 
-                font-size: 1.3em; 
-            }}
-            .info-card ul {{ 
-                margin-left: 20px; 
-                line-height: 1.8; 
-            }}
-            .info-card li {{ 
-                font-size: 1em; 
-                color: var(--muted); 
-            }}
-            .page-title {{ 
-                font-size: 2.2em; 
-                color: white; 
-                margin-bottom: 8px; 
-            }}
-            .page-subtitle {{ 
-                color: var(--muted); 
-                font-size: 1.1em; 
-                margin-bottom: 24px; 
-            }}
-            .section-title {{ 
-                font-size: 1.5em; 
-                color: white; 
-                margin: 30px 0 15px 0; 
-            }}
-            .topbar {{ 
-                display: flex; 
-                justify-content: flex-start; 
-                gap: 12px; 
-                margin-bottom: 24px; 
-            }}
-            .page-header {{
-                display: flex;
-                align-items: flex-start;
-                justify-content: space-between;
-                gap: 24px;
-                margin-bottom: 24px;
-            }}
-            .page-header-left {{
-                flex: 1;
-            }}
-            .brand-logo {{
-                width: 180px;
-                max-width: 100%;
-                height: auto;
-                display: block;
-                border-radius: 10px;
-                flex-shrink: 0;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="page-header">
-                <div class="page-header-left">
-                    <h1 class="page-title">Multi-Tenant Management Dashboard</h1>
-                    <p class="page-subtitle">Welcome, <strong>{user['username']}</strong> (Superuser)</p>
-                    <div class="topbar">
-                        <a href="/logout" class="btn secondary">Logout</a>
-                        <a href="/mt/create-org" class="btn">Create Organisation</a>
-                        <a href="/mt/users" class="btn">View All Superusers</a>
-                        <a href="/mt/protocols" class="btn">Protocol Templates</a>
-                    </div>
-                </div>
-                <img class="brand-logo" src="{LOGO_DARK_URL}" alt="Lumos Lab"
-                     onerror="this.style.display='none';">
-            </div>
-            
-            <h2 class="section-title">Platform Statistics</h2>
-            <div class="mt-stats">
-                <div class="stat-card">
-                    <div class="stat-number">{stats['org_count']}</div>
-                    <div class="stat-label">Organisations</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{stats['user_count']}</div>
-                    <div class="stat-label">Total Users</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{stats['case_count']}</div>
-                    <div class="stat-label">Total Cases</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{stats['superuser_count']}</div>
-                    <div class="stat-label">Superusers</div>
-                </div>
-            </div>
-            
-            <h2 class="section-title">Organisations</h2>
-            <table class="org-table">
-                <thead>
-                    <tr>
-                        <th style="width: 60px;">ID</th>
-                        <th>Name</th>
-                        <th>Slug</th>
-                        <th style="width: 120px;">Members</th>
-                        <th style="width: 120px;">Cases</th>
-                        <th style="width: 100px;">Status</th>
-                        <th style="width: 150px;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-    """
-    
-    for org in orgs:
-        status_badge = '<span class="active-badge">Active</span>' if org['is_active'] else '<span class="inactive-badge">Inactive</span>'
-        html += f"""
-                    <tr>
-                        <td><strong>#{org['id']}</strong></td>
-                        <td><strong style="font-size: 1.05em;">{org['name']}</strong></td>
-                        <td><span class="pill">{org['slug']}</span></td>
-                        <td><strong>{org['member_count']}</strong> users</td>
-                        <td><strong>{org['case_count']}</strong> cases</td>
-                        <td>{status_badge}</td>
-                        <td>
-                            <a href="/mt/org/{org['id']}" class="btn btn-primary">View Details</a>
-                        </td>
-                    </tr>
-        """
-    
-    html += """
-                </tbody>
-            </table>
-            
-        </div>
-    </body>
-    </html>
-    """
-    
-    return HTMLResponse(content=html)
-
-
-@app.get("/super/orgs", response_class=HTMLResponse)
-def super_orgs_page(request: Request):
-    require_superuser(request)
-    conn = get_db()
-    orgs = conn.execute(
-        """
-        SELECT o.id, o.name, o.slug, o.is_active,
-               COUNT(DISTINCT m.user_id) as member_count
-        FROM organisations o
-        LEFT JOIN memberships m ON o.id = m.org_id AND m.is_active = 1
-        GROUP BY o.id
-        ORDER BY o.name
-        """
-    ).fetchall()
-    conn.close()
-    orgs = [dict(o) for o in orgs]
-    return templates.TemplateResponse("admin_orgs.html", {"request": request, "orgs": orgs})
-
-
-@app.get("/super/users", response_class=HTMLResponse)
-def super_users_page(request: Request):
-    require_superuser(request)
-    conn = get_db()
-    rows = conn.execute(
-        """
-        SELECT u.id as user_id, u.username, u.email, u.is_active,
-               m.org_role as org_role,
-               o.name as org_name
-        FROM users u
-        LEFT JOIN memberships m ON m.user_id = u.id AND m.is_active = 1
-        LEFT JOIN organisations o ON o.id = m.org_id
-        ORDER BY u.username
-        """
-    ).fetchall()
-    conn.close()
-    users = [dict(r) for r in rows]
-    return templates.TemplateResponse("admin_users.html", {"request": request, "users": users})
-
-
-@app.get("/super/billing", response_class=HTMLResponse)
-def super_billing_page(request: Request):
-    require_superuser(request)
-    return templates.TemplateResponse("admin_billing.html", {"request": request})
-
-
-@app.get("/super/billing.csv")
-def super_billing_csv(request: Request, from_date: str = "", to_date: str = ""):
-    require_superuser(request)
-    if not from_date or not to_date:
-        raise HTTPException(status_code=400, detail="from and to dates are required")
-
-    try:
-        start_dt = datetime.fromisoformat(from_date).replace(tzinfo=timezone.utc)
-        end_dt = datetime.fromisoformat(to_date).replace(tzinfo=timezone.utc)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format")
-
-    if not table_exists("case_events"):
-        raise HTTPException(status_code=404, detail="case_events table not found")
-
-    conn = get_db()
-    events = conn.execute(
-        """
-        SELECT org_id, event_type, created_at
-        FROM case_events
-        WHERE created_at >= ? AND created_at <= ?
-        """,
-        (start_dt.isoformat(), end_dt.isoformat()),
-    ).fetchall()
-
-    orgs = conn.execute("SELECT id, name FROM organisations").fetchall()
-    conn.close()
-
-    org_names = {o["id"]: o["name"] for o in orgs}
-    submitted_counts: dict[int, int] = {}
-    vetted_counts: dict[int, int] = {}
-
-    for e in events:
-        org_id = e.get("org_id")
-        if e.get("event_type") == "SUBMITTED":
-            submitted_counts[org_id] = submitted_counts.get(org_id, 0) + 1
-        elif e.get("event_type") == "VETTED":
-            vetted_counts[org_id] = vetted_counts.get(org_id, 0) + 1
-
-    def iter_csv():
-        buf = io.StringIO()
-        w = csv.writer(buf)
-        w.writerow(["org_id", "org_name", "submitted_count", "vetted_count", "period_from", "period_to"])
-        yield buf.getvalue()
-        buf.seek(0)
-        buf.truncate(0)
-
-        for org_id, org_name in org_names.items():
-            w.writerow([
-                org_id,
-                org_name,
-                submitted_counts.get(org_id, 0),
-                vetted_counts.get(org_id, 0),
-                from_date,
-                to_date,
-            ])
-            yield buf.getvalue()
-            buf.seek(0)
-            buf.truncate(0)
-
-    filename = f"billing_{from_date}_{to_date}.csv"
-    return StreamingResponse(iter_csv(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
-
-
-@app.get("/mt/create-org", response_class=HTMLResponse)
-def mt_create_org_page(request: Request):
-    """Superuser: Create new organisation form"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", "/mt/create-org")
-    
-    user = get_session_user(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser access required")
-    
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Create Organisation</title>
-        <link rel="stylesheet" href="/static/css/site.css">
-        <style>
-            .form-card {{
-                background: var(--card-bg);
-                border: 1px solid var(--card-border);
-                padding: 30px;
-                border-radius: 10px;
-                max-width: 600px;
-                margin: 20px auto;
-            }}
-            .form-group {{
-                margin-bottom: 20px;
-            }}
-            .form-group label {{
-                display: block;
-                color: var(--muted);
-                margin-bottom: 8px;
-                font-weight: 600;
-            }}
-            .form-group input {{
-                width: 100%;
-                padding: 12px;
-                border-radius: 8px;
-                border: 1px solid rgba(255,255,255,0.06);
-                background: rgba(0,0,0,0.3);
-                color: white;
-                font-size: 14px;
-                box-sizing: border-box;
-            }}
-            .form-group input:focus {{
-                outline: none;
-                border-color: var(--accent);
-            }}
-            .form-group small {{
-                display: block;
-                color: rgba(255,255,255,0.6);
-                margin-top: 5px;
-                font-size: 12px;
-            }}
-            .btn-submit {{
-                background: var(--accent);
-                color: white;
-                padding: 12px 24px;
-                border: none;
-                border-radius: 8px;
-                font-weight: 600;
-                cursor: pointer;
-                font-size: 14px;
-            }}
-            .btn-submit:hover {{
-                filter: brightness(1.1);
-            }}
-            .page-title {{
-                font-size: 2em;
-                color: white;
-                margin-bottom: 10px;
-            }}
-            .topbar {{
-                display: flex;
-                gap: 12px;
-                margin-bottom: 30px;
-            }}
-            .brand-wrap {{
-                margin-bottom: 16px;
-            }}
-            .brand-logo {{
-                width: 220px;
-                max-width: 100%;
-                height: auto;
-                display: block;
-                border-radius: 10px;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="brand-wrap">
-                <img class="brand-logo" src="{LOGO_DARK_URL}" alt="Lumos Lab"
-                     onerror="this.style.display='none';">
-            </div>
-            <div class="topbar">
-                <a href="/mt" class="btn secondary">← Back to Dashboard</a>
-                <a href="/logout" class="btn secondary">🚪 Logout</a>
-            </div>
-            
-            <h1 class="page-title">➕ Create New Organisation</h1>
-            <p style="color: var(--muted); margin-bottom: 30px;">Add a new tenant organisation to the platform. Each organisation will have isolated data.</p>
-            
-            <div class="form-card">
-                <form method="post" action="/mt/create-org">
-                    <div class="form-group">
-                        <label for="name">Organisation Name *</label>
-                        <input type="text" id="name" name="name" required placeholder="e.g., Acme Hospital">
-                        <small>The full name of the organisation</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="slug">Slug *</label>
-                        <input type="text" id="slug" name="slug" required placeholder="e.g., acme-hospital" pattern="[a-z0-9-]+">
-                        <small>URL-friendly identifier (lowercase, hyphens only)</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <button type="submit" class="btn-submit">Create Organisation</button>
-                    </div>
-                </form>
-            </div>
-            
-            <script>
-                // Auto-generate slug from name
-                document.getElementById('name').addEventListener('input', function(e) {{
-                    const slug = e.target.value
-                        .toLowerCase()
-                        .replace(/[^a-z0-9\\s-]/g, '')
-                        .replace(/\\s+/g, '-')
-                        .replace(/-+/g, '-')
-                        .trim();
-                    document.getElementById('slug').value = slug;
-                }});
-            </script>
-        </div>
-    </body>
-    </html>
-    """
-    
-    return HTMLResponse(content=html)
-
-
-@app.post("/mt/create-org")
-def mt_create_org_submit(
-    request: Request,
-    name: str = Form(...),
-    slug: str = Form(...)
-):
-    """Superuser: Create new organisation"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", "/mt/create-org")
-    
-    user = get_session_user(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser access required")
-    
-    # Validate inputs
-    name = name.strip()
-    slug = slug.strip().lower()
-    
-    if not name or not slug:
-        raise HTTPException(status_code=400, detail="Name and slug are required")
-    
-    # Check slug format
-    import re
-    if not re.match(r'^[a-z0-9-]+$', slug):
-        raise HTTPException(status_code=400, detail="Slug must contain only lowercase letters, numbers, and hyphens")
-    
-    # Create organisation
-    conn = get_db()
-    try:
-        now = utc_now_iso()
-        if using_postgres():
-            row = conn.execute(
-                """
-                INSERT INTO organisations (name, slug, is_active, created_at, modified_at)
-                VALUES (?, ?, 1, ?, ?)
-                RETURNING id
-                """,
-                (name, slug, now, now),
-            ).fetchone()
-            org_id = row["id"] if isinstance(row, dict) else row[0]
-            conn.commit()
-        else:
-            conn.execute(
-                """
-                INSERT INTO organisations (name, slug, is_active, created_at, modified_at)
-                VALUES (?, ?, 1, ?, ?)
-                """,
-                (name, slug, now, now)
-            )
-            conn.commit()
-            org_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        
-        # Create default institution with same name as org
-        if table_has_column("institutions", "org_id"):
-            conn.execute(
-                """
-                INSERT INTO institutions (name, sla_hours, org_id, created_at, modified_at)
-                VALUES (?, 48, ?, ?, ?)
-                """,
-                (name, org_id, now, now)
-            )
-            conn.commit()
-        
-        conn.close()
-        
-        # Redirect to new org details
-        return RedirectResponse(url=f"/mt/org/{org_id}", status_code=303)
-    except Exception as e:
-        conn.close()
-        if "UNIQUE constraint" in str(e):
-            raise HTTPException(status_code=400, detail=f"Organisation with slug '{slug}' already exists")
-        raise HTTPException(status_code=500, detail=f"Failed to create organisation: {str(e)}")
-
-
-@app.get("/mt/org/{org_id}/edit", response_class=HTMLResponse)
-def mt_edit_org_page(request: Request, org_id: int):
-    """Superuser: Edit organisation form"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", f"/mt/org/{org_id}/edit")
-    
-    user = get_session_user(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser access required")
-    
-    conn = get_db()
-    org = conn.execute("SELECT * FROM organisations WHERE id = ?", (org_id,)).fetchone()
-    conn.close()
-    
-    if not org:
-        raise HTTPException(status_code=404, detail="Organisation not found")
-    
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Edit {org['name']}</title>
-        <link rel="stylesheet" href="/static/css/site.css">
-        <style>
-            .form-card {{
-                background: var(--card-bg);
-                border: 1px solid var(--card-border);
-                padding: 30px;
-                border-radius: 10px;
-                max-width: 600px;
-                margin: 20px auto;
-            }}
-            .form-group {{
-                margin-bottom: 20px;
-            }}
-            .form-group label {{
-                display: block;
-                color: var(--muted);
-                margin-bottom: 8px;
-                font-weight: 600;
-            }}
-            .form-group input, .form-group select {{
-                width: 100%;
-                padding: 12px;
-                border-radius: 8px;
-                border: 1px solid rgba(255,255,255,0.06);
-                background: rgba(0,0,0,0.3);
-                color: white;
-                font-size: 14px;
-                box-sizing: border-box;
-            }}
-            .form-group input:focus, .form-group select:focus {{
-                outline: none;
-                border-color: var(--accent);
-            }}
-            .form-group small {{
-                display: block;
-                color: rgba(255,255,255,0.6);
-                margin-top: 5px;
-                font-size: 12px;
-            }}
-            .btn-submit {{
-                background: var(--accent);
-                color: white;
-                padding: 12px 24px;
-                border: none;
-                border-radius: 8px;
-                font-weight: 600;
-                cursor: pointer;
-                font-size: 14px;
-            }}
-            .page-title {{
-                font-size: 2em;
-                color: white;
-                margin-bottom: 10px;
-            }}
-            .topbar {{
-                display: flex;
-                gap: 12px;
-                margin-bottom: 30px;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="topbar">
-                <a href="/mt/org/{org_id}" class="btn secondary">← Back to Org</a>
-                <a href="/mt" class="btn secondary">Dashboard</a>
-                <a href="/logout" class="btn secondary">🚪 Logout</a>
-            </div>
-            
-            <h1 class="page-title">✏️ Edit Organisation</h1>
-            <p style="color: var(--muted); margin-bottom: 30px;">Update organisation details</p>
-            
-            <div class="form-card">
-                <form method="post" action="/mt/org/{org_id}/edit">
-                    <div class="form-group">
-                        <label for="name">Organisation Name *</label>
-                        <input type="text" id="name" name="name" value="{org['name']}" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="slug">Slug *</label>
-                        <input type="text" id="slug" name="slug" value="{org['slug']}" required pattern="[a-z0-9-]+">
-                        <small>URL-friendly identifier (lowercase, hyphens only)</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="is_active">Status</label>
-                        <select id="is_active" name="is_active">
-                            <option value="1" {'selected' if org['is_active'] else ''}>Active</option>
-                            <option value="0" {'selected' if not org['is_active'] else ''}>Inactive</option>
-                        </select>
-                        <small>Inactive organisations cannot be accessed by users</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <button type="submit" class="btn-submit">Save Changes</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    
-    return HTMLResponse(content=html)
-
-
-@app.post("/mt/org/{org_id}/edit")
-def mt_edit_org_submit(
-    request: Request,
-    org_id: int,
-    name: str = Form(...),
-    slug: str = Form(...),
-    is_active: int = Form(...)
-):
-    """Superuser: Update organisation"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", f"/mt/org/{org_id}/edit")
-    
-    user = get_session_user(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser access required")
-    
-    name = name.strip()
-    slug = slug.strip().lower()
-    
-    if not name or not slug:
-        raise HTTPException(status_code=400, detail="Name and slug are required")
-    
-    import re
-    if not re.match(r'^[a-z0-9-]+$', slug):
-        raise HTTPException(status_code=400, detail="Invalid slug format")
-    
-    conn = get_db()
-    try:
-        now = utc_now_iso()
-        conn.execute(
-            """
-            UPDATE organisations
-            SET name = ?, slug = ?, is_active = ?, modified_at = ?
-            WHERE id = ?
-            """,
-            (name, slug, is_active, now, org_id)
-        )
-        conn.commit()
-        conn.close()
-        return RedirectResponse(url=f"/mt/org/{org_id}", status_code=303)
-    except Exception as e:
-        conn.close()
-        if "UNIQUE constraint" in str(e):
-            raise HTTPException(status_code=400, detail=f"Slug '{slug}' is already in use")
-        raise HTTPException(status_code=500, detail=f"Failed to update: {str(e)}")
-
-
-@app.get("/mt/org/{org_id}/add-user", response_class=HTMLResponse)
-def mt_add_user_page(request: Request, org_id: int):
-    """Superuser: Add user to organisation form"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", f"/mt/org/{org_id}/add-user")
-    
-    user = get_session_user(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser access required")
-    
-    conn = get_db()
-    org = conn.execute("SELECT * FROM organisations WHERE id = ?", (org_id,)).fetchone()
-    conn.close()
-    
-    if not org:
-        raise HTTPException(status_code=404, detail="Organisation not found")
-    
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Add User to {org['name']}</title>
-        <link rel="stylesheet" href="/static/css/site.css">
-        <style>
-            .form-card {{
-                background: var(--card-bg);
-                border: 1px solid var(--card-border);
-                padding: 30px;
-                border-radius: 10px;
-                max-width: 600px;
-                margin: 20px auto;
-            }}
-            .form-group {{
-                margin-bottom: 20px;
-            }}
-            .form-group label {{
-                display: block;
-                color: var(--muted);
-                margin-bottom: 8px;
-                font-weight: 600;
-            }}
-            .form-group input, .form-group select {{
-                width: 100%;
-                padding: 12px;
-                border-radius: 8px;
-                border: 1px solid rgba(255,255,255,0.06);
-                background: rgba(0,0,0,0.3);
-                color: white;
-                font-size: 14px;
-                box-sizing: border-box;
-            }}
-            .form-group small {{
-                display: block;
-                color: rgba(255,255,255,0.6);
-                margin-top: 5px;
-                font-size: 12px;
-            }}
-            .btn-submit {{
-                background: var(--accent);
-                color: white;
-                padding: 12px 24px;
-                border: none;
-                border-radius: 8px;
-                font-weight: 600;
-                cursor: pointer;
-                font-size: 14px;
-            }}
-            .page-title {{
-                font-size: 2em;
-                color: white;
-                margin-bottom: 10px;
-            }}
-            .topbar {{
-                display: flex;
-                gap: 12px;
-                margin-bottom: 30px;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="topbar">
-                <a href="/mt/org/{org_id}" class="btn secondary">← Back to Org</a>
-                <a href="/logout" class="btn secondary">Logout</a>
-            </div>
-            
-            <h1 class="page-title">Add User to {org['name']}</h1>
-            <p style="color: var(--muted); margin-bottom: 30px;">Create a new user and assign an access level for this organisation</p>
-            
-            <div class="form-card">
-                <form method="post" action="/mt/org/{org_id}/add-user">
-                    <div class="form-group">
-                        <label for="username">Username *</label>
-                        <input type="text" id="username" name="username" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="email">Email *</label>
-                        <input type="email" id="email" name="email" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="first_name">First Name *</label>
-                        <input type="text" id="first_name" name="first_name" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="surname">Surname *</label>
-                        <input type="text" id="surname" name="surname" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="password">Password *</label>
-                        <input type="password" id="password" name="password" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="role">Access Level *</label>
-                        <select id="role" name="role" required>
-                            <option value="admin">Admin</option>
-                            <option value="radiologist">Radiologist</option>
-                            <option value="user">User</option>
-                        </select>
-                        <small>Admin: full org access. Radiologist: vetting queue only. User: limited access.</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="display_name">Radiologist Display Name</label>
-                        <input type="text" id="display_name" name="display_name" placeholder="e.g., Dr John Smith">
-                        <small>Only required for radiologists</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="gmc">GMC</label>
-                        <input type="text" id="gmc" name="gmc">
-                        <small>Only required for radiologists</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="speciality">Speciality</label>
-                        <input type="text" id="speciality" name="speciality">
-                        <small>Only required for radiologists</small>
-                    </div>
-
-                    <div class="form-group">
-                        <button type="submit" class="btn-submit">Create User</button>
-                    </div>
-                </form>
-            """
-    
-    html += """
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    
-    return HTMLResponse(content=html)
-
-
-@app.post("/mt/org/{org_id}/add-user")
-def mt_add_user_submit(
-    request: Request,
-    org_id: int,
-    username: str = Form(...),
-    email: str = Form(...),
-    first_name: str = Form(...),
-    surname: str = Form(...),
-    password: str = Form(...),
-    role: str = Form(...),
-    display_name: str = Form(""),
-    gmc: str = Form(""),
-    speciality: str = Form("")
-):
-    """Superuser: Add user to organisation"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", f"/mt/org/{org_id}/add-user")
-    
-    user = get_session_user(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser access required")
-    
-    username = username.strip()
-    email = email.strip()
-    first_name = first_name.strip()
-    surname = surname.strip()
-    role = role.strip().lower()
-    display_name = display_name.strip()
-    gmc = gmc.strip()
-    speciality = speciality.strip()
-
-    if role not in ("admin", "radiologist", "user"):
-        raise HTTPException(status_code=400, detail="Invalid role")
-
-    if not username or not email or not first_name or not surname or not password:
-        raise HTTPException(status_code=400, detail="All required fields must be completed")
-
-    org_role = "org_user"
-    if role == "admin":
-        org_role = "org_admin"
-    elif role == "radiologist":
-        org_role = "radiologist"
-
-    conn = get_db()
-    try:
-        now = utc_now_iso()
-        salt = secrets.token_bytes(16)
-        pw_hash = hash_password(password, salt)
-
-        email_val = email or None  # store NULL not '' to avoid UNIQUE constraint clashes
-        if using_postgres():
-            user_row = conn.execute(
-                """
-                INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname)
-                VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
-                RETURNING id
-                """,
-                (username, email_val, pw_hash.hex(), salt.hex(), now, now, first_name, surname),
-            ).fetchone()
-            user_id = user_row["id"] if isinstance(user_row, dict) else user_row[0]
-        else:
-            conn.execute(
-                """
-                INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname)
-                VALUES(?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
-                """,
-                (username, email_val, pw_hash.hex(), salt.hex(), now, now, first_name, surname),
-            )
-
-            user_row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
-            user_id = user_row["id"] if user_row else None
-        if not user_id:
-            raise HTTPException(status_code=500, detail="Failed to create user")
-
-        conn.execute(
-            """
-            INSERT INTO memberships (org_id, user_id, org_role, is_active, created_at, modified_at)
-            VALUES (?, ?, ?, 1, ?, ?)
-            """,
-            (org_id, user_id, org_role, now, now),
-        )
-
-        if role == "radiologist":
-            display = display_name or f"{first_name} {surname}".strip() or username
-            if using_postgres():
-                conn.execute(
-                    """
-                    INSERT INTO radiologists(name, first_name, email, surname, gmc, speciality)
-                    VALUES(?, ?, ?, ?, ?, ?)
-                    ON CONFLICT DO NOTHING
-                    """,
-                    (display, first_name, email, surname, gmc, speciality),
-                )
-                conn.execute(
-                    """
-                    INSERT INTO radiologist_profiles(user_id, gmc, specialty, display_name, created_at, modified_at)
-                    VALUES(?, ?, ?, ?, ?, ?)
-                    ON CONFLICT (user_id) DO NOTHING
-                    """,
-                    (user_id, gmc or None, speciality or None, display, now, now),
-                )
-            else:
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO radiologists(name, first_name, email, surname, gmc, speciality)
-                    VALUES(?, ?, ?, ?, ?, ?)
-                    """,
-                    (display, first_name, email, surname, gmc, speciality),
-                )
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO radiologist_profiles(user_id, gmc, specialty, display_name, created_at, modified_at)
-                    VALUES(?, ?, ?, ?, ?, ?)
-                    """,
-                    (user_id, gmc or None, speciality or None, display, now, now),
-                )
-
-        conn.commit()
-        conn.close()
-        return RedirectResponse(url=f"/mt/org/{org_id}", status_code=303)
-    except Exception as e:
-        conn.close()
-        if "UNIQUE constraint" in str(e):
-            raise HTTPException(status_code=400, detail="Username or email already exists")
-        raise HTTPException(status_code=500, detail=f"Failed to add user: {str(e)}")
-
-
-@app.get("/mt/org/{org_id}/edit-user/{user_id}", response_class=HTMLResponse)
-def mt_edit_user_page(request: Request, org_id: int, user_id: int):
-    """Superuser: Edit user form"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", f"/mt/org/{org_id}/edit-user/{user_id}")
-    
-    user = get_session_user(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser access required")
-    
-    conn = get_db()
-    
-    # Get user details
-    user_row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-    if not user_row:
-        conn.close()
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Get membership
-    membership = conn.execute(
-        "SELECT org_role, is_active FROM memberships WHERE user_id = ? AND org_id = ?",
-        (user_id, org_id)
-    ).fetchone()
-    
-    if not membership:
-        conn.close()
-        raise HTTPException(status_code=404, detail="User not member of this org")
-    
-    # Get org
-    org = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
-    conn.close()
-    
-    org_role = membership["org_role"]
-    role_display = "Admin" if org_role == "org_admin" else "Radiologist" if org_role == "radiologist" else "User"
-    
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Edit {user_row['username']} - {org['name']}</title>
-        <link rel="stylesheet" href="/static/css/site.css">
-        <style>
-            .form-card {{
-                background: var(--card-bg);
-                border: 1px solid var(--card-border);
-                padding: 24px;
-                border-radius: 10px;
-                max-width: 600px;
-                margin: 30px 0;
-            }}
-            .form-group {{
-                margin-bottom: 20px;
-            }}
-            .form-group label {{
-                display: block;
-                margin-bottom: 8px;
-                color: rgba(255,255,255,0.9);
-                font-weight: 500;
-            }}
-            .form-group input,
-            .form-group select {{
-                width: 100%;
-                padding: 10px;
-                border: 1px solid rgba(31, 111, 235, 0.2);
-                border-radius: 6px;
-                background: rgba(255, 255, 255, 0.05);
-                color: rgba(255, 255, 255, 0.95);
-                font-size: 14px;
-                box-sizing: border-box;
-            }}
-            .form-group select option {{
-                background: #07133a;
-                color: rgba(255, 255, 255, 0.95);
-            }}
-            .button-group {{
-                display: flex;
-                gap: 10px;
-                margin-top: 30px;
-            }}
-            .btn {{
-                padding: 10px 20px;
-                border: none;
-                border-radius: 6px;
-                cursor: pointer;
-                font-weight: 500;
-                text-decoration: none;
-                display: inline-block;
-            }}
-            .btn-primary {{
-                background: #1f6feb;
-                color: white;
-            }}
-            .btn-primary:hover {{
-                background: #388bfd;
-            }}
-            .btn-secondary {{
-                background: rgba(255, 255, 255, 0.1);
-                color: rgba(255, 255, 255, 0.9);
-            }}
-            .btn-secondary:hover {{
-                background: rgba(255, 255, 255, 0.15);
-            }}
-            .page-title {{
-                font-size: 2.2em;
-                color: white;
-                margin-bottom: 8px;
-            }}
-            .page-subtitle {{
-                color: var(--muted);
-                font-size: 1.1em;
-                margin-bottom: 24px;
-            }}
-            .info-box {{
-                background: rgba(31, 111, 235, 0.1);
-                border: 1px solid rgba(31, 111, 235, 0.3);
-                padding: 12px;
-                border-radius: 6px;
-                margin-bottom: 20px;
-                color: rgba(255, 255, 255, 0.8);
-                font-size: 0.95em;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1 class="page-title">✏️ Edit User</h1>
-            <p class="page-subtitle">Editing <strong>{user_row['username']}</strong> in <strong>{org['name']}</strong></p>
-            
-            <div class="form-card">
-                <div class="info-box">
-                    <strong>User ID:</strong> {user_id} | <strong>Created:</strong> {user_row['created_at'][:10] if user_row['created_at'] else 'N/A'}
-                </div>
-                
-                <form method="post" action="/mt/org/{org_id}/edit-user/{user_id}">
-                    <div class="form-group">
-                        <label>Username</label>
-                        <input type="text" value="{user_row['username']}" disabled style="background: rgba(255,255,255,0.03); cursor: not-allowed;">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Email</label>
-                        <input type="email" name="email" value="{user_row['email'] or ''}">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>First Name</label>
-                        <input type="text" name="first_name" value="{user_row['first_name'] or ''}">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Surname</label>
-                        <input type="text" name="surname" value="{user_row['surname'] or ''}">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Change Password (leave blank to keep current)</label>
-                        <input type="password" name="password" placeholder="Leave blank if no change">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Role in {org['name']}</label>
-                        <select name="org_role" required>
-                            <option value="org_admin" {'selected' if org_role == 'org_admin' else ''}>Admin (can manage users & settings)</option>
-                            <option value="radiologist" {'selected' if org_role == 'radiologist' else ''}>Radiologist (can vet cases)</option>
-                            <option value="org_user" {'selected' if org_role == 'org_user' else ''}>User (limited access)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="button-group">
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
-                        <a href="/mt/org/{org_id}" class="btn btn-secondary">Cancel</a>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    
-    return HTMLResponse(content=html)
-
-
-@app.post("/mt/org/{org_id}/edit-user/{user_id}")
-def mt_edit_user_submit(request: Request, org_id: int, user_id: int, 
-                        email: str = Form(""), first_name: str = Form(""),
-                        surname: str = Form(""), password: str = Form(""),
-                        org_role: str = Form(...)):
-    """Superuser: Save user changes"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", f"/mt/org/{org_id}")
-    
-    user = get_session_user(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser access required")
-    
-    # Validate org_role
-    if org_role not in ["org_admin", "radiologist", "org_user"]:
-        raise HTTPException(status_code=400, detail="Invalid role")
-    
-    conn = get_db()
-    try:
-        # Update user details
-        now = utc_now_iso()
-        conn.execute(
-            """
-            UPDATE users 
-            SET email = ?, first_name = ?, surname = ?, modified_at = ?
-            WHERE id = ?
-            """,
-            (email.strip(), first_name.strip(), surname.strip(), now, user_id)
-        )
-        
-        # Update password if provided
-        if password.strip():
-            salt = secrets.token_bytes(16)
-            pw_hash = hash_password(password, salt)
-            conn.execute(
-                "UPDATE users SET password_hash = ?, salt_hex = ? WHERE id = ?",
-                (pw_hash.hex(), salt.hex(), user_id)
-            )
-        
-        # Update role
-        conn.execute(
-            "UPDATE memberships SET org_role = ?, modified_at = ? WHERE user_id = ? AND org_id = ?",
-            (org_role, now, user_id, org_id)
-        )
-        
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update user: {str(e)}")
-    finally:
-        conn.close()
-    
-    return RedirectResponse(url=f"/mt/org/{org_id}", status_code=303)
-
-
-@app.get("/mt/org/{org_id}/remove-user/{user_id}")
-def mt_remove_user(request: Request, org_id: int, user_id: int):
-    """Superuser: Remove user from organisation"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", f"/mt/org/{org_id}")
-    
-    user = get_session_user(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser access required")
-    
-    conn = get_db()
-    # Soft delete - set is_active to 0
-    conn.execute(
-        """
-        UPDATE memberships
-        SET is_active = 0, modified_at = ?
-        WHERE org_id = ? AND user_id = ?
-        """,
-        (utc_now_iso(), org_id, user_id)
-    )
-    conn.commit()
-    conn.close()
-    
-    return RedirectResponse(url=f"/mt/org/{org_id}", status_code=303)
-
-
-@app.get("/mt/org/{org_id}", response_class=HTMLResponse)
-def mt_org_detail(request: Request, org_id: int):
-    """Superuser: View organisation details"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", f"/mt/org/{org_id}")
-    
-    user = get_session_user(request)
-    conn = get_db()
-    
-    # Check superuser
-    row = conn.execute("SELECT is_superuser FROM users WHERE username = ?", (user["username"],)).fetchone()
-    if not row or not row["is_superuser"]:
-        conn.close()
-        raise HTTPException(status_code=403, detail="Superuser access required")
-    
-    # Get org details
-    org = conn.execute("SELECT * FROM organisations WHERE id = ?", (org_id,)).fetchone()
-    if not org:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Organisation not found")
-    
-    # Get members (exclude superusers)
-    members = conn.execute("""
-        SELECT u.id, u.username, u.email, u.is_superuser, m.org_role, m.is_active
-        FROM memberships m
-        JOIN users u ON m.user_id = u.id
-        WHERE m.org_id = ? AND u.is_superuser = 0
-        ORDER BY u.username
-    """, (org_id,)).fetchall()
-    
-    # Get cases for this org
-    cases = conn.execute("""
-        SELECT id, patient_first_name, patient_surname, status, created_at, radiologist
-        FROM cases
-        WHERE org_id = ?
-        ORDER BY created_at DESC
-        LIMIT 50
-    """, (org_id,)).fetchall()
-    
-    conn.close()
-    
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>{org['name']} - Details</title>
-        <link rel="stylesheet" href="/static/css/site.css">
-        <style>
-            .page-title {{
-                font-size: 2.2em;
-                color: white;
-                margin-bottom: 8px;
-            }}
-            .page-subtitle {{
-                color: var(--muted);
-                font-size: 1.1em;
-                margin-bottom: 24px;
-            }}
-            .section-card {{
-                background: var(--card-bg);
-                border: 1px solid var(--card-border);
-                padding: 24px;
-                border-radius: 10px;
-                margin-bottom: 30px;
-            }}
-            .section-title {{
-                font-size: 1.4em;
-                color: white;
-                margin-bottom: 16px;
-            }}
-            .empty-state {{
-                color: var(--muted);
-                padding: 40px;
-                text-align: center;
-                font-size: 1.1em;
-            }}
-            .topbar {{
-                display: flex;
-                gap: 12px;
-                margin-bottom: 24px;
-            }}
-            .data-table {{
-                width: 100%;
-                margin-top: 15px;
-            }}
-            .data-table th {{
-                padding: 12px;
-                text-align: left;
-            }}
-            .data-table td {{
-                padding: 12px;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1 class="page-title">{org['name']}</h1>
-            <p class="page-subtitle">Slug: <strong>{org['slug']}</strong> | ID: {org['id']}</p>
-            
-            <div class="topbar">
-                <a href="/mt" class="btn secondary">← Back to Dashboard</a>
-                <a href="/mt/org/{org_id}/edit" class="btn">✏️ Edit Organisation</a>
-                <a href="/mt/org/{org_id}/add-user" class="btn">➕ Add User</a>
-                <a href="/logout" class="btn secondary">🚪 Logout</a>
-            </div>
-            
-            <div class="section-card">
-                <h2 class="section-title">👥 Members ({len(members)})</h2>
-    """
-    
-    if members:
-        html += """
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Username</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        """
-        
-        for member in members:
-            role = member['org_role']
-            if member['is_superuser']:
-                role = 'superuser'
-            status = '✅ Active' if member['is_active'] else '❌ Inactive'
-            edit_btn = '' if member['is_superuser'] else f'<a href="/mt/org/{org_id}/edit-user/{member["id"]}" class="btn secondary">✏️ Edit</a>'
-            remove_btn = '' if member['is_superuser'] else f'<a href="/mt/org/{org_id}/remove-user/{member["id"]}" class="btn secondary" onclick="return confirm(\'Remove {member["username"]} from this organisation?\')">🗑️ Remove</a>'
-            html += f"""
-                            <tr>
-                                <td><strong>{member['username']}</strong></td>
-                                <td>{member['email'] or 'N/A'}</td>
-                                <td><span class="pill">{role}</span></td>
-                                <td>{status}</td>
-                                <td>{edit_btn} {remove_btn}</td>
-                            </tr>
-            """
-        
-        html += """
-                    </tbody>
-                </table>
-        """
-    else:
-        html += """
-                <div class="empty-state">
-                    <p>👤 No members yet</p>
-                    <p style="font-size: 0.9em;">Users will appear here when they are added to this organisation</p>
-                </div>
-        """
-    
-    html += f"""
-            </div>
-            
-            <div class="section-card">
-                <h2 class="section-title">📋 Recent Cases ({len(cases)})</h2>
-    """
-    
-    if cases:
-        html += """
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Case ID</th>
-                            <th>Patient</th>
-                            <th>Status</th>
-                            <th>Radiologist</th>
-                            <th>Created</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        """
-        
-        for case in cases:
-            patient_name = f"{case['patient_first_name']} {case['patient_surname']}"
-            status_color = "color: #2fbf71;" if case['status'] == 'vetted' else "color: #ff9900;" if case['status'] == 'pending' else "color: #d9534f;"
-            html += f"""
-                            <tr>
-                                <td><strong>#{case['id']}</strong></td>
-                                <td>{patient_name}</td>
-                                <td><span class="pill" data-status="{case['status']}" style="{status_color}">{case['status']}</span></td>
-                                <td>{case['radiologist'] or 'Unassigned'}</td>
-                                <td>{case['created_at'][:10] if case['created_at'] else 'N/A'}</td>
-                            </tr>
-            """
-        
-        html += """
-                    </tbody>
-                </table>
-        """
-    else:
-        html += """
-                <div class="empty-state">
-                    <p>📋 No cases yet</p>
-                    <p style="font-size: 0.9em;">Cases will appear here when they are submitted to this organisation</p>
-                </div>
-        """
-    
-    html += """
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    
-    return HTMLResponse(content=html)
-
-
-@app.get("/mt/organisations", response_class=HTMLResponse)
-def mt_organisations(request: Request):
-    """Superuser: View and manage all organisations"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", "/mt/organisations")
-    
-    # Check if user is superuser
-    user = get_session_user(request)
-    conn = get_db()
-    row = conn.execute("SELECT is_superuser FROM users WHERE username = ?", (user["username"],)).fetchone()
-    conn.close()
-    
-    if not row or not row["is_superuser"]:
-        raise HTTPException(status_code=403, detail="Superuser access required")
-    
-    # Get all organisations
-    conn = get_db()
-    orgs = conn.execute("""
-        SELECT o.*, COUNT(DISTINCT m.user_id) as member_count
-        FROM organisations o
-        LEFT JOIN memberships m ON o.id = m.org_id AND m.is_active = 1
-        GROUP BY o.id
-        ORDER BY o.name
-    """).fetchall()
-    conn.close()
-    
-    return templates.TemplateResponse(
-        "mt_organisations.html",
-        {"request": request, "user": user, "organisations": [dict(o) for o in orgs]}
-    )
-
-
-@app.get("/mt/users", response_class=HTMLResponse)
-def mt_users(request: Request):
-    """Superuser: View and manage all superusers (system-level admins)"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", "/mt/users")
-    
-    user = get_session_user(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser access required")
-    
-    conn = get_db()
-    
-    # Get all superusers
-    superusers = conn.execute("""
-        SELECT id, username, email, is_active, created_at
-        FROM users
-        WHERE is_superuser = 1
-        ORDER BY username
-    """).fetchall()
-    
-    conn.close()
-    
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Superusers - Multitenant Management</title>
-        <link rel="stylesheet" href="/static/css/site.css">
-        <style>
-            .page-title {{
-                font-size: 2.2em;
-                color: white;
-                margin-bottom: 8px;
-            }}
-            .page-subtitle {{
-                color: var(--muted);
-                font-size: 1.1em;
-                margin-bottom: 24px;
-            }}
-            .section-card {{
-                background: var(--card-bg);
-                border: 1px solid var(--card-border);
-                padding: 24px;
-                border-radius: 10px;
-                margin-bottom: 30px;
-            }}
-            .section-title {{
-                font-size: 1.4em;
-                color: white;
-                margin-bottom: 16px;
-            }}
-            .topbar {{
-                display: flex;
-                gap: 12px;
-                margin-bottom: 24px;
-            }}
-            .data-table {{
-                width: 100%;
-                margin-top: 15px;
-                border-collapse: collapse;
-            }}
-            .data-table th {{
-                padding: 12px;
-                text-align: left;
-                background: rgba(255, 255, 255, 0.05);
-                border-bottom: 1px solid rgba(31, 111, 235, 0.3);
-            }}
-            .data-table td {{
-                padding: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            }}
-            .badge {{
-                display: inline-block;
-                padding: 4px 8px;
-                border-radius: 4px;
-                font-size: 0.85em;
-            }}
-            .badge-active {{
-                background: rgba(47, 191, 113, 0.2);
-                color: #2fbf71;
-            }}
-            .badge-inactive {{
-                background: rgba(217, 83, 79, 0.2);
-                color: #d9534f;
-            }}
-            .empty-state {{
-                color: var(--muted);
-                padding: 40px;
-                text-align: center;
-                font-size: 1.1em;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1 class="page-title">👑 System Superusers</h1>
-            <p class="page-subtitle">Platform-level administrators</p>
-            
-            <div class="topbar">
-                <a href="/mt" class="btn secondary">← Back to Dashboard</a>
-                <a href="/logout" class="btn secondary">Logout</a>
-            </div>
-            
-            <div class="section-card">
-                <h2 class="section-title">All Superusers ({len(superusers)})</h2>
-    """
-    
-    if superusers:
-        html += """
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Username</th>
-                            <th>Email</th>
-                            <th>Status</th>
-                            <th>Created</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        """
-        
-        for su in superusers:
-            status = '✅ Active' if su['is_active'] else '❌ Inactive'
-            status_badge = 'badge-active' if su['is_active'] else 'badge-inactive'
-            created_date = su['created_at'][:10] if su['created_at'] else 'N/A'
-            
-            html += f"""
-                        <tr>
-                            <td><strong>👤 {su['username']}</strong></td>
-                            <td>{su['email'] or 'N/A'}</td>
-                            <td><span class="badge {status_badge}">{status}</span></td>
-                            <td>{created_date}</td>
-                        </tr>
-            """
-        
-        html += """
-                    </tbody>
-                </table>
-        """
-    else:
-        html += """
-                <div class="empty-state">
-                    <p>No superusers found</p>
-                </div>
-        """
-    
-    html += """
-            </div>
-            
-            <div class="section-card" style="background: rgba(31, 111, 235, 0.1); border: 1px solid rgba(31, 111, 235, 0.3);">
-                <h3 style="color: #1f6feb; margin-top: 0;">ℹ️ About Superusers</h3>
-                <p style="color: rgba(255,255,255,0.8); margin: 0;">
-                    Superusers have platform-wide access and can manage all organisations, users, and configurations. 
-                    They are separate from organisation members and have system-level administrative privileges.
-                </p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    
-    return HTMLResponse(content=html)
-
-
-@app.get("/mt/test", response_class=HTMLResponse)
-def mt_test(request: Request):
-    """Test page to check multi-tenant database"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", "/mt/test")
-    
-    user = get_session_user(request)
-    conn = get_db()
-    
-    # Get database info
-    info = {}
-    
-    # Check if multi-tenant tables exist
-    tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
-    info["tables"] = [t["name"] for t in tables]
-    
-    # Check organisations
-    orgs = conn.execute("SELECT * FROM organisations LIMIT 5").fetchall()
-    info["organisations"] = [dict(o) for o in orgs]
-    
-    # Check users
-    users = conn.execute("SELECT username, email, is_superuser, is_active FROM users LIMIT 10").fetchall()
-    info["users"] = [dict(u) for u in users]
-    
-    # Check memberships
-    members = conn.execute("""
-        SELECT m.*, u.username, o.name as org_name
-        FROM memberships m
-        JOIN users u ON m.user_id = u.id
-        JOIN organisations o ON m.org_id = o.id
-        LIMIT 10
-    """).fetchall()
-    info["memberships"] = [dict(m) for m in members]
-    
-    conn.close()
-    
-    # Simple HTML response
-    html = f"""
-    <html>
-    <head><title>Multi-Tenant Test</title></head>
-    <body style="font-family: Arial; padding: 20px;">
-        <h1>Multi-Tenant Database Test</h1>
-        <p><a href="/admin">← Back to Admin</a></p>
-        
-        <h2>Tables ({len(info['tables'])})</h2>
-        <ul>{''.join(f'<li>{t}</li>' for t in info['tables'])}</ul>
-        
-        <h2>Organisations ({len(info['organisations'])})</h2>
-        <pre>{info['organisations']}</pre>
-        
-        <h2>Users ({len(info['users'])})</h2>
-        <pre>{info['users']}</pre>
-        
-        <h2>Memberships ({len(info['memberships'])})</h2>
-        <pre>{info['memberships']}</pre>
-        
-        <h2>Current User</h2>
-        <pre>{user}</pre>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html)
-
-
-# ─────────────────────────────────────────────
-# My Account — self-service user profile edit
-# ─────────────────────────────────────────────
-
 @app.get("/account", response_class=HTMLResponse)
 def account_page(request: Request, msg: str = "", error: str = ""):
     """Any authenticated user can view/edit their own profile (name, email, password)."""
@@ -6998,9 +5375,7 @@ def account_page(request: Request, msg: str = "", error: str = ""):
         return RedirectResponse(url="/login?expired=1", status_code=303)
 
     db_user = dict(db_user)
-    if user.get("is_superuser"):
-        back_url = "/mt"
-    elif user.get("org_role") in ("org_admin",) or user.get("role") in ("admin",):
+    if user.get("org_role") in ("org_admin",) or user.get("role") in ("admin",):
         back_url = "/admin"
     else:
         back_url = "/radiologist"
@@ -7234,362 +5609,8 @@ def account_change_password(
     conn.close()
 
     return RedirectResponse(url="/account?msg=pw_changed", status_code=303)
-
-
-@app.get("/mt/protocols", response_class=HTMLResponse)
-def mt_protocols_page(request: Request):
-    """Superuser: Manage protocol templates across all organisations"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", "/mt/protocols")
-
-    user = get_session_user(request)
-    conn = get_db()
-
-    row = conn.execute("SELECT is_superuser FROM users WHERE username = ?", (user["username"],)).fetchone()
-    if not row or not row["is_superuser"]:
-        conn.close()
-        raise HTTPException(status_code=403, detail="Superuser access required")
-
-    # Fetch all protocols joined with org name
-    protocols = conn.execute(
-        """
-        SELECT p.id, p.name, p.instructions, p.last_modified, p.is_active,
-               p.org_id, o.name as org_name
-        FROM protocols p
-        LEFT JOIN organisations o ON p.org_id = o.id
-        ORDER BY COALESCE(o.name, ''), p.name
-        """
-    ).fetchall()
-    protocols = [dict(r) for r in protocols]
-
-    # Fetch all organisations for the add-form org selector
-    orgs = conn.execute("SELECT id, name FROM organisations WHERE is_active = 1 ORDER BY name").fetchall()
-    orgs = [dict(r) for r in orgs]
-
-    conn.close()
-
-    # Format last_modified
-    for p in protocols:
-        if p.get("last_modified"):
-            p["last_modified"] = format_display_datetime(p.get("last_modified"), p.get("last_modified") or "")
-
-    def _proto_rows_html():
-        if not protocols:
-            return '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:30px;">No protocol templates found</td></tr>'
-        out = ""
-        for p in protocols:
-            org_label = p["org_name"] if p["org_name"] else '<span style="color:var(--muted);">Global</span>'
-            status_color = "#4ade80" if p["is_active"] else "rgba(255,255,255,0.4)"
-            status_label = "Active" if p["is_active"] else "Inactive"
-            instr_preview = (p["instructions"] or "")[:80]
-            if p["instructions"] and len(p["instructions"]) > 80:
-                instr_preview += "…"
-            modified = p["last_modified"] if p["last_modified"] else "—"
-            edit_js = (
-                f"editMtProtocol({p['id']}, {_js_str(p['name'])}, "
-                f"{p['org_id'] or 'null'}, {_js_str(p['instructions'] or '')}, "
-                f"{1 if p['is_active'] else 0})"
-            )
-            out += f"""
-            <tr>
-                <td><strong>{p['name']}</strong></td>
-                <td>{org_label}</td>
-                <td style="color:{status_color};font-weight:500;">{status_label}</td>
-                <td style="font-size:0.9em;color:var(--muted);">{instr_preview}</td>
-                <td>{modified}</td>
-                <td>
-                    <div style="display:flex;gap:6px;">
-                        <button class="btn btn-secondary btn-small" onclick="{edit_js}">Edit</button>
-                        <form method="POST" action="/mt/protocols/delete/{p['id']}" style="display:inline;"
-                              onsubmit="return confirm('Delete this protocol template?')">
-                            <button type="submit" class="btn btn-danger btn-small">Delete</button>
-                        </form>
-                    </div>
-                </td>
-            </tr>"""
-        return out
-
-    def _org_options(selected_id=None):
-        out = '<option value="">Global (all orgs)</option>'
-        for o in orgs:
-            sel = 'selected' if selected_id and o["id"] == selected_id else ''
-            out += f'<option value="{o["id"]}" {sel}>{o["name"]}</option>'
-        return out
-
-    rows_html = _proto_rows_html()
-    org_options = _org_options()
-
-    html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <title>Protocol Templates - MT Dashboard</title>
-    <link rel="stylesheet" href="/static/css/site.css">
-    <style>
-        .page-title {{ font-size: 2.2em; color: white; margin-bottom: 8px; }}
-        .page-subtitle {{ color: var(--muted); font-size: 1.1em; margin-bottom: 24px; }}
-        .topbar {{ display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }}
-        .section-card {{
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            padding: 24px;
-            border-radius: 10px;
-            margin-bottom: 28px;
-        }}
-        .section-card h3 {{ margin-top: 0; color: rgba(255,255,255,0.9); }}
-        .form-row {{ display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }}
-        .form-group {{ display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 200px; }}
-        .form-group label {{ font-size: 0.9em; color: rgba(255,255,255,0.7); font-weight: 500; }}
-        .form-group input, .form-group select, .form-group textarea {{
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.15);
-            border-radius: 6px;
-            color: #fff;
-            padding: 9px 12px;
-            font-size: 0.95em;
-            color-scheme: dark;
-        }}
-        .form-group select option {{
-            background: #1a1d27;
-            color: #fff;
-        }}
-        .form-group textarea {{ resize: vertical; min-height: 90px; }}
-        .proto-table {{ width:100%; border-collapse:collapse; margin-top:10px; }}
-        .proto-table th {{ padding:12px 10px; text-align:left; background:rgba(255,255,255,0.05);
-                           border-bottom:1px solid rgba(31,111,235,0.3); font-size:0.85em; text-transform:uppercase; letter-spacing:0.5px; }}
-        .proto-table td {{ padding:12px 10px; border-bottom:1px solid rgba(255,255,255,0.05); vertical-align:top; }}
-        .modal-overlay {{
-            display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7);
-            z-index:1000; align-items:center; justify-content:center;
-        }}
-        .modal-overlay.open {{ display:flex; }}
-        .modal-box {{
-            background:#1a1d27; border:1px solid var(--card-border);
-            border-radius:12px; padding:28px; width:100%; max-width:560px;
-        }}
-        .modal-box h3 {{ margin-top:0; color:white; }}
-        .modal-footer {{ display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }}
-    </style>
-</head>
-<body>
-<div class="container">
-    <div class="brand-wrap">
-        <img class="brand-logo" src="{LOGO_DARK_URL}" alt="Lumos Lab" onerror="this.style.display='none';"
-             style="width:180px;max-width:100%;height:auto;border-radius:8px;display:block;margin-bottom:10px;">
-    </div>
-    <h1 class="page-title">Protocol Templates</h1>
-    <p class="page-subtitle">Define and manage imaging protocol templates for each organisation.</p>
-
-    <div class="topbar">
-        <a href="/mt" class="btn secondary">&larr; Back to Dashboard</a>
-        <a href="/logout" class="btn secondary">Logout</a>
-    </div>
-
-    <!-- Add Protocol Form -->
-    <div class="section-card">
-        <h3>Add New Protocol Template</h3>
-        <form method="POST" action="/mt/protocols/add">
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Protocol Name</label>
-                    <input type="text" name="name" required placeholder="e.g., CT Head Standard">
-                </div>
-                <div class="form-group">
-                    <label>Organisation</label>
-                    <select name="org_id">
-                        {org_options}
-                    </select>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group" style="flex:1;">
-                    <label>Instructions <span style="color:var(--muted);font-weight:400;">(optional)</span></label>
-                    <textarea name="instructions" placeholder="Detailed instructions for radiologists using this protocol..."></textarea>
-                </div>
-            </div>
-            <div style="display:flex;gap:10px;align-items:center;">
-                <button type="submit" class="btn btn-primary">Add Protocol</button>
-                <label style="display:flex;align-items:center;gap:6px;font-size:0.9em;color:rgba(255,255,255,0.7);cursor:pointer;">
-                    <input type="checkbox" name="is_active" value="1" checked style="width:auto;"> Active
-                </label>
-            </div>
-        </form>
-    </div>
-
-    <!-- Protocol List -->
-    <div class="section-card">
-        <h3>All Protocol Templates ({len(protocols)})</h3>
-        <table class="proto-table">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Organisation</th>
-                    <th>Status</th>
-                    <th>Instructions Preview</th>
-                    <th>Last Modified</th>
-                    <th style="width:140px;">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {rows_html}
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<!-- Edit Modal -->
-<div id="editModal" class="modal-overlay">
-    <div class="modal-box">
-        <h3>Edit Protocol Template</h3>
-        <form method="POST" id="editProtoForm">
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Protocol Name</label>
-                    <input type="text" id="editProtoName" name="name" required>
-                </div>
-                <div class="form-group">
-                    <label>Organisation</label>
-                    <select id="editProtoOrg" name="org_id">
-                        {org_options}
-                    </select>
-                </div>
-            </div>
-            <div class="form-group" style="margin-bottom:14px;">
-                <label>Instructions</label>
-                <textarea id="editProtoInstr" name="instructions" rows="5"></textarea>
-            </div>
-            <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;color:rgba(255,255,255,0.7);cursor:pointer;margin-bottom:14px;">
-                <input type="checkbox" id="editProtoActive" name="is_active" value="1" style="width:auto;"> Active
-            </label>
-            <div class="modal-footer">
-                <button type="button" class="btn secondary" onclick="closeEditModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save Changes</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<script>
-function editMtProtocol(id, name, orgId, instructions, isActive) {{
-    document.getElementById('editProtoName').value = name;
-    document.getElementById('editProtoInstr').value = instructions;
-    document.getElementById('editProtoActive').checked = (isActive === 1);
-    var sel = document.getElementById('editProtoOrg');
-    for (var i = 0; i < sel.options.length; i++) {{
-        sel.options[i].selected = (orgId && sel.options[i].value == orgId);
-        if (!orgId && sel.options[i].value === '') {{ sel.options[i].selected = true; }}
-    }}
-    document.getElementById('editProtoForm').action = '/mt/protocols/edit/' + id;
-    document.getElementById('editModal').classList.add('open');
-}}
-function closeEditModal() {{
-    document.getElementById('editModal').classList.remove('open');
-}}
-document.getElementById('editModal').addEventListener('click', function(e) {{
-    if (e.target === this) closeEditModal();
-}});
-</script>
-</body>
-</html>"""
-
-    return HTMLResponse(content=html)
-
-
-def _js_str(s: str) -> str:
-    """Escape a Python string for safe inline JS string literal (single-quoted)."""
-    import json
-    return json.dumps(s)
-
-
-@app.post("/mt/protocols/add")
-def mt_protocols_add(
-    request: Request,
-    name: str = Form(...),
-    org_id: str = Form(""),
-    instructions: str = Form(""),
-    is_active: str = Form(""),
-):
-    """Superuser: Add a new protocol template"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", "/mt/protocols")
-
-    user = get_session_user(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser access required")
-
-    org_id_val = int(org_id) if org_id.strip().isdigit() else None
-    active = 1 if is_active == "1" else 0
-
-    conn = get_db()
-    if org_id_val:
-        conn.execute(
-            "INSERT INTO protocols (name, instructions, is_active, org_id, last_modified) VALUES (?, ?, ?, ?, ?)",
-            (name.strip(), instructions.strip() or None, active, org_id_val, datetime.now().isoformat()),
-        )
-    else:
-        conn.execute(
-            "INSERT INTO protocols (name, instructions, is_active, last_modified) VALUES (?, ?, ?, ?)",
-            (name.strip(), instructions.strip() or None, active, datetime.now().isoformat()),
-        )
-    conn.commit()
-    conn.close()
-    return RedirectResponse(url="/mt/protocols", status_code=303)
-
-
-@app.post("/mt/protocols/edit/{protocol_id}")
-def mt_protocols_edit(
-    request: Request,
-    protocol_id: int,
-    name: str = Form(...),
-    org_id: str = Form(""),
-    instructions: str = Form(""),
-    is_active: str = Form(""),
-):
-    """Superuser: Edit a protocol template"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", "/mt/protocols")
-
-    user = get_session_user(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser access required")
-
-    org_id_val = int(org_id) if org_id.strip().isdigit() else None
-    active = 1 if is_active == "1" else 0
-
-    conn = get_db()
-    conn.execute(
-        "UPDATE protocols SET name = ?, instructions = ?, is_active = ?, org_id = ?, last_modified = ? WHERE id = ?",
-        (name.strip(), instructions.strip() or None, active, org_id_val, datetime.now().isoformat(), protocol_id),
-    )
-    conn.commit()
-    conn.close()
-    return RedirectResponse(url="/mt/protocols", status_code=303)
-
-
-@app.post("/mt/protocols/delete/{protocol_id}")
-def mt_protocols_delete(request: Request, protocol_id: int):
-    """Superuser: Delete a protocol template"""
-    try:
-        require_admin(request)
-    except HTTPException:
-        return redirect_to_login("admin", "/mt/protocols")
-
-    user = get_session_user(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser access required")
-
-    conn = get_db()
-    conn.execute("DELETE FROM protocols WHERE id = ?", (protocol_id,))
-    conn.commit()
-    conn.close()
-    return RedirectResponse(url="/mt/protocols", status_code=303)
-
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+
+
