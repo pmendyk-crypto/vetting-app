@@ -27,6 +27,6 @@ jobs:
       - name: Deploy to Azure Web App (production)
         uses: azure/webapps-deploy@v3
         with:
-          app-name: Lumosradflow
+          app-name: lumosradflow-prod
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_PRODUCTION }}
           package: .
