@@ -2332,15 +2332,169 @@ def logout(request: Request):
 # -------------------------
 # Admin dashboard (tabs + filters + TAT)
 # -------------------------
+def build_admin_case_filters(
+    org_id,
+    is_superuser: bool,
+    institution: str | None = None,
+    radiologist: str | None = None,
+    modality: str | None = None,
+    q: str | None = None,
+    status: str | None = None,
+    created_since: str | None = None,
+):
+    clauses = ["1=1"]
+    params: list = []
+
+    if org_id and not is_superuser:
+        clauses.append("c.org_id = ?")
+        params.append(org_id)
+
+    if status:
+        clauses.append("LOWER(c.status) = ?")
+        params.append(status.strip().lower())
+
+    if institution and institution.strip():
+        clauses.append("c.institution_id = ?")
+        params.append(int(institution))
+
+    if radiologist and radiologist.strip():
+        clauses.append("c.radiologist = ?")
+        params.append(radiologist.strip())
+
+    if modality and modality.strip():
+        clauses.append("UPPER(COALESCE(c.modality, '')) = ?")
+        params.append(modality.strip().upper())
+
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        clauses.append(
+            "(c.id LIKE ? OR c.patient_first_name LIKE ? OR c.patient_surname LIKE ? "
+            "OR c.patient_referral_id LIKE ? OR c.study_description LIKE ?)"
+        )
+        params.extend([like, like, like, like, like])
+
+    if created_since:
+        clauses.append("c.created_at >= ?")
+        params.append(created_since)
+
+    return clauses, params
+
+
+def get_admin_org_name(org_id):
+    org_name = "Organisation Name"
+    if org_id:
+        conn = get_db()
+        org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
+        if org_row:
+            org_name = org_row["name"]
+        conn.close()
+    return org_name
+
+
+def list_case_modalities(org_id, is_superuser: bool):
+    sql = "SELECT DISTINCT UPPER(TRIM(modality)) AS modality FROM cases c WHERE modality IS NOT NULL AND TRIM(modality) != ''"
+    params: list = []
+    if org_id and not is_superuser:
+        sql += " AND c.org_id = ?"
+        params.append(org_id)
+    sql += " ORDER BY modality"
+    conn = get_db()
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [r["modality"] for r in rows if r["modality"]]
+
+
+def build_dashboard_series(rows: list[dict]):
+    status_counts = {"pending": 0, "vetted": 0, "rejected": 0}
+    over_time_counts: dict[str, dict] = {}
+    institution_counts: dict[str, int] = {}
+    radiologist_counts: dict[str, int] = {}
+    avg_tat_values: list[int] = []
+
+    for row in rows:
+        status_key = str(row.get("status") or "").strip().lower()
+        if status_key in status_counts:
+            status_counts[status_key] += 1
+
+        created_dt = parse_iso_dt(row.get("created_at"))
+        if created_dt:
+            bucket_key = created_dt.strftime("%Y-%m-%d")
+            label = created_dt.strftime("%d %b")
+            if bucket_key not in over_time_counts:
+                over_time_counts[bucket_key] = {"label": label, "value": 0}
+            over_time_counts[bucket_key]["value"] += 1
+
+        institution_name = row.get("institution_name") or "Unassigned"
+        institution_counts[institution_name] = institution_counts.get(institution_name, 0) + 1
+
+        radiologist_name = row.get("radiologist") or "Unassigned"
+        radiologist_counts[radiologist_name] = radiologist_counts.get(radiologist_name, 0) + 1
+
+        avg_tat_values.append(tat_seconds(row.get("created_at"), row.get("vetted_at")))
+
+    status_chart = [
+        {"label": "Pending", "value": status_counts["pending"], "tone": "pending"},
+        {"label": "Vetted", "value": status_counts["vetted"], "tone": "vetted"},
+        {"label": "Rejected", "value": status_counts["rejected"], "tone": "rejected"},
+    ]
+
+    total_cases = len(rows)
+    status_max = max([item["value"] for item in status_chart] + [1])
+
+    over_time = [over_time_counts[key] for key in sorted(over_time_counts.keys())]
+    if len(over_time) > 12:
+        over_time = over_time[-12:]
+    over_time_max = max([item["value"] for item in over_time] + [1])
+
+    top_institutions = sorted(institution_counts.items(), key=lambda item: (-item[1], item[0]))[:6]
+    institution_chart = [
+        {"label": label, "value": value}
+        for label, value in top_institutions
+    ]
+    institution_max = max([item["value"] for item in institution_chart] + [1])
+
+    top_radiologists = sorted(radiologist_counts.items(), key=lambda item: (-item[1], item[0]))[:6]
+    radiologist_chart = [
+        {"label": label, "value": value}
+        for label, value in top_radiologists
+    ]
+    radiologist_max = max([item["value"] for item in radiologist_chart] + [1])
+
+    avg_tat_seconds = int(sum(avg_tat_values) / len(avg_tat_values)) if avg_tat_values else 0
+
+    return {
+        "status_chart": status_chart,
+        "status_max": status_max,
+        "over_time_chart": over_time,
+        "over_time_max": over_time_max,
+        "institution_chart": institution_chart,
+        "institution_max": institution_max,
+        "radiologist_chart": radiologist_chart,
+        "radiologist_max": radiologist_max,
+        "kpis": {
+            "total": total_cases,
+            "pending": status_counts["pending"],
+            "vetted": status_counts["vetted"],
+            "rejected": status_counts["rejected"],
+            "avg_tat": format_tat(avg_tat_seconds),
+        },
+    }
+
+
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(
     request: Request,
+    view: str = "worklist",
     tab: str = "all",
     institution: str | None = None,
     radiologist: str | None = None,
+    modality: str | None = None,
     q: str | None = None,
     sort_by: str = "created_at",
     sort_dir: str = "desc",
+    dashboard_range: str = "30d",
+    dashboard_institution: str | None = None,
+    dashboard_radiologist: str | None = None,
 ):
     try:
         user = require_admin(request)
@@ -2348,27 +2502,31 @@ def admin_dashboard(
         return redirect_to_login("admin", "/admin")
 
     org_id = user.get("org_id")
-    org_name = "Admin Dashboard"
-    
-    # Get org name if user has org_id
-    if org_id:
-        conn = get_db()
-        org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
-        if org_row:
-            org_name = f"Admin Dashboard - {org_row['name']}"
-        conn.close()
-    
-    if not user.get("is_superuser") and not org_id:
+    is_superuser = bool(user.get("is_superuser"))
+    org_name = get_admin_org_name(org_id)
+    view = (view or "worklist").strip().lower()
+    if view not in ("worklist", "dashboard"):
+        view = "worklist"
+
+    institutions = list_institutions(org_id)
+    radiologists = [r["name"] for r in list_radiologists(org_id)]
+    modalities = list_case_modalities(org_id, is_superuser)
+
+    if not is_superuser and not org_id:
         return templates.TemplateResponse(
             "home.html",
             {
                 "request": request,
+                "view": view,
+                "view_title": "Dashboard" if view == "dashboard" else "Worklist",
                 "tab": tab,
                 "cases": [],
-                "institutions": [],
+                "institutions": institutions,
                 "selected_institution": institution or "",
-                "radiologists": [],
+                "radiologists": radiologists,
                 "selected_radiologist": radiologist or "",
+                "modalities": modalities,
+                "selected_modality": modality or "",
                 "q": q or "",
                 "sort_by": sort_by,
                 "sort_dir": sort_dir,
@@ -2376,6 +2534,10 @@ def admin_dashboard(
                 "vetted_count": 0,
                 "rejected_count": 0,
                 "total_count": 0,
+                "dashboard_range": dashboard_range,
+                "dashboard_institution": dashboard_institution or "",
+                "dashboard_radiologist": dashboard_radiologist or "",
+                "dashboard": build_dashboard_series([]),
                 "org_name": org_name,
                 "current_user": get_session_user(request),
             },
@@ -2392,37 +2554,31 @@ def admin_dashboard(
     if sort_dir not in ("asc", "desc"):
         sort_dir = "desc"
 
-    sql = "SELECT c.*, i.name as institution_name FROM cases c LEFT JOIN institutions i ON c.institution_id = i.id WHERE 1=1"
-    params: list = []
+    worklist_clauses, worklist_params = build_admin_case_filters(
+        org_id,
+        is_superuser,
+        institution=institution,
+        radiologist=radiologist,
+        modality=modality,
+        q=q,
+    )
 
-    if org_id and not user.get("is_superuser"):
-        sql += " AND c.org_id = ?"
-        params.append(org_id)
+    status_value = None if tab == "all" else tab
+    row_clauses, row_params = build_admin_case_filters(
+        org_id,
+        is_superuser,
+        institution=institution,
+        radiologist=radiologist,
+        modality=modality,
+        q=q,
+        status=status_value,
+    )
 
-    if tab == "pending":
-        sql += " AND c.status = ?"
-        params.append("pending")
-    elif tab == "vetted":
-        sql += " AND c.status = ?"
-        params.append("vetted")
-    elif tab == "rejected":
-        sql += " AND c.status = ?"
-        params.append("rejected")
-
-    if institution and institution.strip():
-        sql += " AND c.institution_id = ?"
-        params.append(int(institution))
-
-    if radiologist and radiologist.strip():
-        sql += " AND c.radiologist = ?"
-        params.append(radiologist.strip())
-
-    if q and q.strip():
-        sql += " AND (c.patient_first_name LIKE ? OR c.patient_surname LIKE ? OR c.patient_referral_id LIKE ?)"
-        like = f"%{q.strip()}%"
-        params.extend([like, like, like])
-
-    # Add sorting
+    sql = (
+        "SELECT c.*, i.name as institution_name "
+        "FROM cases c LEFT JOIN institutions i ON c.institution_id = i.id "
+        f"WHERE {' AND '.join(row_clauses)}"
+    )
     if sort_by == "tat":
         sql += " ORDER BY (JULIANDAY(c.vetted_at) - JULIANDAY(c.created_at)) " + sort_dir
     else:
@@ -2430,41 +2586,38 @@ def admin_dashboard(
         sql += f" ORDER BY {sort_col} {sort_dir.upper()}"
 
     conn = get_db()
-    rows = conn.execute(sql, params).fetchall()
-    conn.close()
+    rows = conn.execute(sql, row_params).fetchall()
 
-    case_ids = [r["id"] for r in rows]
-    events_map: dict[str, list[dict]] = {}
-    if case_ids and table_exists("case_events"):
-        placeholders = ",".join(["?"] * len(case_ids))
-        conn = get_db()
-        ev_rows = conn.execute(
-            f"SELECT * FROM case_events WHERE case_id IN ({placeholders}) ORDER BY created_at",
-            case_ids,
-        ).fetchall()
-        conn.close()
-        for e in ev_rows:
-            d = dict(e)
-            events_map.setdefault(d["case_id"], []).append(d)
+    counts_sql = (
+        "SELECT LOWER(c.status) AS status, COUNT(*) AS c "
+        "FROM cases c "
+        f"WHERE {' AND '.join(worklist_clauses)} "
+        "GROUP BY LOWER(c.status)"
+    )
+    counts_rows = conn.execute(counts_sql, worklist_params).fetchall()
 
-    org_names: dict[int, str] = {}
-    if table_exists("organisations"):
-        conn = get_db()
-        org_rows = conn.execute("SELECT id, name FROM organisations").fetchall()
-        conn.close()
-        org_names = {r["id"]: r["name"] for r in org_rows}
+    dashboard_range = (dashboard_range or "30d").strip().lower()
+    if dashboard_range not in ("7d", "30d", "90d", "365d", "all"):
+        dashboard_range = "30d"
+    created_since = None
+    if dashboard_range != "all":
+        days = int(dashboard_range.replace("d", ""))
+        created_since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
-    # Dashboard counts
-    conn = get_db()
-    if org_id and not user.get("is_superuser"):
-        counts_rows = conn.execute(
-            "SELECT LOWER(status) AS status, COUNT(*) AS c FROM cases WHERE org_id = ? GROUP BY LOWER(status)",
-            (org_id,),
-        ).fetchall()
-    else:
-        counts_rows = conn.execute(
-            "SELECT LOWER(status) AS status, COUNT(*) AS c FROM cases GROUP BY LOWER(status)"
-        ).fetchall()
+    dashboard_clauses, dashboard_params = build_admin_case_filters(
+        org_id,
+        is_superuser,
+        institution=dashboard_institution,
+        radiologist=dashboard_radiologist,
+        created_since=created_since,
+    )
+    dashboard_sql = (
+        "SELECT c.*, i.name as institution_name "
+        "FROM cases c LEFT JOIN institutions i ON c.institution_id = i.id "
+        f"WHERE {' AND '.join(dashboard_clauses)} "
+        "ORDER BY c.created_at DESC"
+    )
+    dashboard_rows = [dict(r) for r in conn.execute(dashboard_sql, dashboard_params).fetchall()]
     conn.close()
 
     counts = {r["status"]: r["c"] for r in counts_rows}
@@ -2473,49 +2626,35 @@ def admin_dashboard(
     rejected_count = counts.get("rejected", 0)
     total_count = pending_count + vetted_count + rejected_count
 
-    institutions = list_institutions(org_id)
-    radiologists = [r["name"] for r in list_radiologists(org_id)]
-
     cases: list[dict] = []
     for r in rows:
         d = dict(r)
-
-        # Format created date
-        created_dt = parse_iso_dt(d.get("created_at"))
         d["created_display"] = format_display_datetime(d.get("created_at"), "")
-
-        # Calculate TAT
         secs = tat_seconds(d.get("created_at"), d.get("vetted_at"))
         d["tat_display"] = format_tat(secs)
         d["tat_seconds"] = secs
-
-        # Get SLA from institution
         inst = get_institution(d.get("institution_id")) if d.get("institution_id") else None
         sla_hours = inst["sla_hours"] if inst else 48
         sla_seconds = sla_hours * 3600
         d["sla_breached"] = (d.get("status") == "pending") and (secs > sla_seconds)
-
         cases.append(d)
 
-    # Get org name if user has org_id
-    org_name = "Admin Dashboard"
-    if org_id:
-        conn = get_db()
-        org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
-        if org_row:
-            org_name = f"Admin Dashboard - {org_row['name']}"
-        conn.close()
+    dashboard = build_dashboard_series(dashboard_rows)
 
     return templates.TemplateResponse(
         "home.html",
         {
             "request": request,
+            "view": view,
+            "view_title": "Dashboard" if view == "dashboard" else "Worklist",
             "tab": tab,
             "cases": cases,
             "institutions": institutions,
             "selected_institution": institution or "",
             "radiologists": radiologists,
             "selected_radiologist": radiologist or "",
+            "modalities": modalities,
+            "selected_modality": modality or "",
             "q": q or "",
             "sort_by": sort_by,
             "sort_dir": sort_dir,
@@ -2523,6 +2662,10 @@ def admin_dashboard(
             "vetted_count": vetted_count,
             "rejected_count": rejected_count,
             "total_count": total_count,
+            "dashboard_range": dashboard_range,
+            "dashboard_institution": dashboard_institution or "",
+            "dashboard_radiologist": dashboard_radiologist or "",
+            "dashboard": dashboard,
             "org_name": org_name,
             "current_user": get_session_user(request),
         },
@@ -2532,49 +2675,58 @@ def admin_dashboard(
 @app.get("/admin.csv")
 def admin_dashboard_csv(
     request: Request,
+    view: str = "worklist",
     tab: str = "all",
     institution: str | None = None,
     radiologist: str | None = None,
+    modality: str | None = None,
     q: str | None = None,
+    dashboard_range: str = "30d",
+    dashboard_institution: str | None = None,
+    dashboard_radiologist: str | None = None,
 ):
     user = require_admin(request)
-
-    tab = (tab or "all").strip().lower()
-    if tab not in ("all", "pending", "vetted", "rejected"):
-        tab = "all"
-
-    sql = "SELECT c.*, i.name as institution_name FROM cases c LEFT JOIN institutions i ON c.institution_id = i.id WHERE 1=1"
-    params: list = []
-
     org_id = user.get("org_id")
-    if org_id and not user.get("is_superuser"):
-        sql += " AND c.org_id = ?"
-        params.append(org_id)
+    is_superuser = bool(user.get("is_superuser"))
+    view = (view or "worklist").strip().lower()
+    if view not in ("worklist", "dashboard"):
+        view = "worklist"
 
-    if tab == "pending":
-        sql += " AND c.status = ?"
-        params.append("pending")
-    elif tab == "vetted":
-        sql += " AND c.status = ?"
-        params.append("vetted")
-    elif tab == "rejected":
-        sql += " AND c.status = ?"
-        params.append("rejected")
+    created_since = None
+    if view == "dashboard":
+        dashboard_range = (dashboard_range or "30d").strip().lower()
+        if dashboard_range not in ("7d", "30d", "90d", "365d", "all"):
+            dashboard_range = "30d"
+        if dashboard_range != "all":
+            days = int(dashboard_range.replace("d", ""))
+            created_since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        clauses, params = build_admin_case_filters(
+            org_id,
+            is_superuser,
+            institution=dashboard_institution,
+            radiologist=dashboard_radiologist,
+            created_since=created_since,
+        )
+    else:
+        tab = (tab or "all").strip().lower()
+        if tab not in ("all", "pending", "vetted", "rejected"):
+            tab = "all"
+        clauses, params = build_admin_case_filters(
+            org_id,
+            is_superuser,
+            institution=institution,
+            radiologist=radiologist,
+            modality=modality,
+            q=q,
+            status=None if tab == "all" else tab,
+        )
 
-    if institution and institution.strip():
-        sql += " AND c.institution_id = ?"
-        params.append(int(institution))
-
-    if radiologist and radiologist.strip():
-        sql += " AND c.radiologist = ?"
-        params.append(radiologist.strip())
-
-    if q and q.strip():
-        sql += " AND (c.patient_first_name LIKE ? OR c.patient_surname LIKE ? OR c.patient_referral_id LIKE ?)"
-        like = f"%{q.strip()}%"
-        params.extend([like, like, like])
-
-    sql += " ORDER BY c.created_at DESC"
+    sql = (
+        "SELECT c.*, i.name as institution_name "
+        "FROM cases c LEFT JOIN institutions i ON c.institution_id = i.id "
+        f"WHERE {' AND '.join(clauses)} "
+        "ORDER BY c.created_at DESC"
+    )
 
     conn = get_db()
     rows = conn.execute(sql, params).fetchall()
