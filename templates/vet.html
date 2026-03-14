@@ -87,6 +87,11 @@
             color: #ff6464;
         }
 
+        .status-reopened {
+            background: rgba(56, 189, 248, 0.14);
+            color: #7dd3fc;
+        }
+
         .header-actions {
             display: flex;
             gap: 10px;
@@ -176,6 +181,70 @@
             margin: 0 0 15px 0;
             padding-bottom: 10px;
             border-bottom: 1px solid rgba(31, 111, 235, 0.2);
+        }
+
+        .case-notice {
+            background: linear-gradient(180deg, rgba(56, 189, 248, 0.18), rgba(14, 116, 144, 0.14));
+            border: 1px solid rgba(103, 232, 249, 0.42);
+            box-shadow: 0 10px 24px rgba(8, 47, 73, 0.28);
+            border-radius: 10px;
+            padding: 16px 18px;
+            margin-bottom: 18px;
+        }
+
+        .case-notice-title {
+            color: #a5f3fc;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 8px;
+        }
+
+        .case-notice-copy {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.94);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .notes-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .admin-note-card {
+            border-radius: 10px;
+            padding: 12px 14px;
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            background: rgba(15, 23, 42, 0.28);
+        }
+
+        .admin-note-card p {
+            margin: 0;
+        }
+
+        .admin-note-card.reopened-note {
+            background: rgba(8, 145, 178, 0.14);
+            border-color: rgba(103, 232, 249, 0.35);
+        }
+
+        .admin-note-label {
+            display: inline-block;
+            margin-bottom: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .admin-note-card.reopened-note .admin-note-label {
+            color: #67e8f9;
+        }
+
+        .admin-note-card.standard-note .admin-note-label {
+            color: rgba(255, 255, 255, 0.58);
         }
 
         .detail-row {
@@ -640,6 +709,13 @@
                 <div class="vet-card">
                     <h2>Case Details</h2>
 
+                    {% if case.status == 'reopened' %}
+                    <div class="case-notice">
+                        <div class="case-notice-title">Reopened case</div>
+                        <p class="case-notice-copy">This case has been reopened for review. Please review the admin notes before making a new decision.</p>
+                    </div>
+                    {% endif %}
+
                     <div class="detail-row">
                         <label>Institution</label>
                         <p>{{ case.institution_name or 'Not specified' }}</p>
@@ -673,13 +749,23 @@
 
                     <div class="detail-row">
                         <label>Admin Notes</label>
-                        <p style="{% if case.status == 'reopened' %}color: #f39c12;{% endif %}">
-                            {{ case.admin_notes or 'None' }}
-                        </p>
-                        {% if case.status == 'reopened' %}
-                        <p style="color: #f39c12; font-size: 12px; margin-top: 8px;">
-                            ⚠️ This case has been reopened for review. Please read the admin notes carefully before making a decision.
-                        </p>
+                        {% if case.admin_note_blocks or case.reopened_note_blocks %}
+                        <div class="notes-stack">
+                            {% for note in case.admin_note_blocks %}
+                            <div class="admin-note-card standard-note">
+                                <span class="admin-note-label">Admin note</span>
+                                <p>{{ note }}</p>
+                            </div>
+                            {% endfor %}
+                            {% for note in case.reopened_note_blocks %}
+                            <div class="admin-note-card reopened-note">
+                                <span class="admin-note-label">Reopened note</span>
+                                <p>{{ note }}</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p>None</p>
                         {% endif %}
                     </div>
 

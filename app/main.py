@@ -32,6 +32,7 @@ from app.security import (
 from app.referral_ingest import parse_referral_attachment
 
 from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 import urllib.request
 import urllib.parse
@@ -393,6 +394,7 @@ DECISIONS = ["Approve", "Reject", "Approve with comment"]
 
 STATUS_PENDING = "pending"
 STATUS_VETTED = "vetted"
+REOPEN_NOTE_MARKER = "[[REOPENED_NOTE]]"
 
 
 # -------------------------
@@ -400,6 +402,29 @@ STATUS_VETTED = "vetted"
 # -------------------------
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _split_note_blocks(note_text: str) -> list[str]:
+    text = str(note_text or "").strip()
+    if not text:
+        return []
+    return [block.strip() for block in re.split(r"\n\s*\n", text) if block.strip()]
+
+
+def partition_admin_notes(note_text: str | None) -> tuple[list[str], list[str]]:
+    text = str(note_text or "").strip()
+    if not text:
+        return [], []
+
+    normalized = text.replace("[REOPENED] ", REOPEN_NOTE_MARKER)
+    parts = normalized.split(REOPEN_NOTE_MARKER)
+    base_notes = _split_note_blocks(parts[0])
+    reopened_notes: list[str] = []
+
+    for chunk in parts[1:]:
+        reopened_notes.extend(_split_note_blocks(chunk))
+
+    return base_notes, reopened_notes
 
 
 def parse_iso_dt(value: str | None) -> datetime | None:
@@ -2733,6 +2758,7 @@ def admin_dashboard(
                 "pending_count": 0,
                 "vetted_count": 0,
                 "rejected_count": 0,
+                "reopened_count": 0,
                 "total_count": 0,
                 "dashboard_range": dashboard_range,
                 "dashboard_institution": dashboard_institution or "",
@@ -2744,7 +2770,7 @@ def admin_dashboard(
         )
 
     tab = (tab or "all").strip().lower()
-    if tab not in ("all", "pending", "vetted", "rejected"):
+    if tab not in ("all", "pending", "vetted", "rejected", "reopened"):
         tab = "all"
 
     # Validate sort parameters
@@ -2824,7 +2850,8 @@ def admin_dashboard(
     pending_count = counts.get("pending", 0)
     vetted_count = counts.get("vetted", 0)
     rejected_count = counts.get("rejected", 0)
-    total_count = pending_count + vetted_count + rejected_count
+    reopened_count = counts.get("reopened", 0)
+    total_count = pending_count + vetted_count + rejected_count + reopened_count
 
     cases: list[dict] = []
     for r in rows:
@@ -2862,6 +2889,7 @@ def admin_dashboard(
             "pending_count": pending_count,
             "vetted_count": vetted_count,
             "rejected_count": rejected_count,
+            "reopened_count": reopened_count,
             "total_count": total_count,
             "dashboard_range": dashboard_range,
             "dashboard_institution": dashboard_institution or "",
@@ -3819,9 +3847,11 @@ def admin_reopen_case_submit(
         conn.close()
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Append reopen notes to admin_notes
+    # Keep reopened notes distinguishable so the UI can highlight them without
+    # mixing them into ordinary admin notes.
     current_notes = row["admin_notes"] or ""
-    updated_notes = f"{current_notes}\n\n[REOPENED] {reopen_notes}".strip()
+    reopen_entry = f"{REOPEN_NOTE_MARKER}\n{reopen_notes.strip()}"
+    updated_notes = "\n\n".join(part for part in [current_notes.strip(), reopen_entry] if part).strip()
     
     # Change status to 'reopened' and clear previous decision
     conn.execute(
@@ -3830,6 +3860,14 @@ def admin_reopen_case_submit(
     )
     conn.commit()
     conn.close()
+
+    insert_case_event(
+        case_id=case_id,
+        org_id=org_id or row["org_id"],
+        event_type="REOPENED",
+        user=user,
+        comment=reopen_notes.strip() or None,
+    )
 
     return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
 
@@ -5311,8 +5349,34 @@ def vet_form(request: Request, case_id: str):
 
     case = dict(row)
     case = normalize_case_attachment(case)
+    base_admin_notes, reopened_admin_notes = partition_admin_notes(case.get("admin_notes"))
+    case["admin_note_blocks"] = base_admin_notes
+    case["reopened_note_blocks"] = reopened_admin_notes
     if case["radiologist"] != rad_name:
         raise HTTPException(status_code=403, detail="Not your case")
+
+    if table_exists("case_events"):
+        conn = get_db()
+        last_event = conn.execute(
+            "SELECT event_type, username, created_at FROM case_events WHERE case_id = ? ORDER BY created_at DESC LIMIT 1",
+            (case_id,),
+        ).fetchone()
+        conn.close()
+        should_log_open = True
+        if last_event:
+            last_type = str(last_event["event_type"] if isinstance(last_event, dict) else last_event[0] or "").upper()
+            last_user = str(last_event["username"] if isinstance(last_event, dict) else last_event[1] or "")
+            last_at = parse_iso_dt(last_event["created_at"] if isinstance(last_event, dict) else last_event[2])
+            if last_type == "OPENED" and last_user == (user.get("username") or "") and last_at:
+                should_log_open = (datetime.now(timezone.utc) - last_at) > timedelta(minutes=2)
+        if should_log_open:
+            insert_case_event(
+                case_id=case_id,
+                org_id=org_id,
+                event_type="OPENED",
+                user=user,
+                comment="Case opened by radiologist",
+            )
 
     protocols = []
     preset_id = None
