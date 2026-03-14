@@ -21,6 +21,51 @@
     .btn-primary { background: #1f6feb; color: #fff; }
     .btn-secondary { background: #3a3a3a; color: #fff; text-decoration: none; }
     pre { white-space: pre-wrap; max-height: 180px; overflow: auto; background: rgba(0,0,0,0.25); padding: 10px; border-radius: 8px; }
+    .info { font-size: 11px; opacity: 0.72; margin-top: 2px; }
+    .study-picker { position: relative; }
+    .study-picker input { width: 100%; box-sizing: border-box; }
+    .description-dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: min(520px, 100%);
+      z-index: 100;
+      box-shadow: 0 18px 30px rgba(6, 11, 24, 0.6), 0 8px 20px rgba(31, 111, 235, 0.2);
+      background: rgba(6, 12, 24, 0.98);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      overflow: hidden;
+      padding: 10px;
+    }
+    .protocol-panel-header { display:flex; justify-content:space-between; gap:12px; align-items:baseline; padding:6px 8px 8px; border-bottom:1px solid rgba(148, 163, 184, 0.16); }
+    .protocol-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(226, 232, 240, 0.88); }
+    .protocol-meta { font-size: 11px; color: rgba(148, 163, 184, 0.9); }
+    .protocol-panel-search { margin: 10px 0 8px; }
+    .protocol-search-input {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(10, 18, 34, 0.92);
+      color: #f8fbff;
+      font-size: 13px;
+      font-family: inherit;
+      box-sizing: border-box;
+    }
+    .protocol-panel-list { max-height: 240px; overflow-y: auto; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.12); background: rgba(8, 16, 30, 0.88); }
+    .protocol-item {
+      padding: 10px 12px;
+      color: #f8fbff;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      font-size: 14px;
+      transition: all 0.15s ease;
+    }
+    .protocol-item:last-child { border-bottom: none; }
+    .protocol-item:hover { background: rgba(59, 130, 246, 0.28); color: #ffffff; padding-left: 14px; }
+    .protocol-empty { padding: 14px 12px; text-align: center; color: rgba(148, 163, 184, 0.9); font-size: 12px; font-style: italic; }
   </style>
 </head>
 <body>
@@ -80,8 +125,9 @@
             <input name="patient_surname" value="{{ draft.patient_surname }}" required>
           </div>
           <div class="form-row">
-            <label>Referral ID</label>
+            <label>Patient ID / NHS Number</label>
             <input name="patient_referral_id" value="{{ draft.patient_referral_id }}" required>
+            <div class="info">Uses patient/NHS/hospital identifier. Referral reference is not used here.</div>
           </div>
           <div class="form-row">
             <label>DOB</label>
@@ -98,11 +144,41 @@
           </div>
           <div class="form-row">
             <label>Modality</label>
-            <input name="modality" value="{{ draft.modality }}" placeholder="CT/MRI/XR">
+            <select name="modality" id="modality" onchange="loadStudyDescriptions()">
+              <option value="">Select modality</option>
+              <option value="MRI" {% if draft.modality == 'MRI' %}selected{% endif %}>MRI (Magnetic Resonance)</option>
+              <option value="CT" {% if draft.modality == 'CT' %}selected{% endif %}>CT (Computed Tomography)</option>
+              <option value="XR" {% if draft.modality == 'XR' %}selected{% endif %}>XR (X-Ray)</option>
+              <option value="PET" {% if draft.modality == 'PET' %}selected{% endif %}>PET (Positron Emission Tomography)</option>
+              <option value="DEXA" {% if draft.modality == 'DEXA' %}selected{% endif %}>DEXA (Bone Densitometry)</option>
+            </select>
           </div>
           <div class="form-row full">
             <label>Study description</label>
-            <textarea name="study_description" required>{{ draft.study_description }}</textarea>
+            <div class="study-picker">
+              <input
+                name="study_description"
+                id="study_description"
+                type="text"
+                value="{{ draft.study_description }}"
+                placeholder="Select modality, then choose or search the approved study descriptions"
+                required
+                autocomplete="off"
+                oninput="filterDescriptions()"
+                onfocus="showAllDescriptions()"
+              >
+              <div id="descriptionList" class="description-dropdown">
+                <div class="protocol-panel-header">
+                  <span class="protocol-title">Available Protocols</span>
+                  <span class="protocol-meta" data-meta>Modality: --</span>
+                </div>
+                <div class="protocol-panel-search">
+                  <input class="protocol-search-input" type="text" placeholder="Search protocols" oninput="filterDescriptions()">
+                </div>
+                <div class="protocol-panel-list" data-list></div>
+              </div>
+            </div>
+            <div class="info">This uses the same study-description preset source as manual case submission.</div>
           </div>
           <div class="form-row full">
             <label>Admin notes</label>
@@ -130,5 +206,102 @@
     </div>
     {% endif %}
   </div>
+  <script>
+    let allDescriptions = [];
+    let descriptionCache = {};
+
+    function resolveOrgId() {
+      return '{{ user_org_id or 1 }}';
+    }
+
+    async function loadStudyDescriptions() {
+      const modality = document.getElementById('modality').value;
+      const dropdown = document.getElementById('descriptionList');
+      const meta = dropdown.querySelector('[data-meta]');
+      const orgId = resolveOrgId();
+
+      if (!modality) {
+        allDescriptions = [];
+        dropdown.style.display = 'none';
+        if (meta) meta.textContent = 'Modality: --';
+        return;
+      }
+
+      const cacheKey = `${orgId}_${modality}`;
+      try {
+        if (!descriptionCache[cacheKey]) {
+          const response = await fetch(`/api/study-descriptions/by-modality/${modality}?org_id=${orgId}`);
+          descriptionCache[cacheKey] = await response.json();
+        }
+        allDescriptions = descriptionCache[cacheKey] || [];
+        showAllDescriptions();
+      } catch (error) {
+        console.error('Error loading study descriptions:', error);
+        allDescriptions = [];
+        dropdown.style.display = 'none';
+      }
+    }
+
+    function filterDescriptions() {
+      const dropdown = document.getElementById('descriptionList');
+      const list = dropdown.querySelector('[data-list]');
+      const meta = dropdown.querySelector('[data-meta]');
+      const searchBox = dropdown.querySelector('.protocol-search-input');
+      const fieldValue = document.getElementById('study_description').value.toLowerCase();
+      const searchValue = (document.activeElement === searchBox ? searchBox.value : fieldValue).toLowerCase();
+
+      if (document.activeElement !== searchBox) {
+        searchBox.value = searchValue;
+      }
+
+      const modality = document.getElementById('modality').value || '--';
+      if (meta) {
+        meta.textContent = `Modality: ${modality}`;
+      }
+
+      if (!allDescriptions.length) {
+        list.innerHTML = '<div class="protocol-empty">No study descriptions found for this modality.</div>';
+        dropdown.style.display = 'block';
+        return;
+      }
+
+      const filtered = !searchValue
+        ? allDescriptions
+        : allDescriptions.filter(item => item.description.toLowerCase().includes(searchValue));
+
+      if (!filtered.length) {
+        list.innerHTML = '<div class="protocol-empty">No matching study descriptions.</div>';
+      } else {
+        list.innerHTML = filtered.map(item =>
+          `<div class="protocol-item" onclick="selectDescription('${item.description.replace(/'/g, "\\'")}')">${item.description}</div>`
+        ).join('');
+      }
+      dropdown.style.display = 'block';
+    }
+
+    function showAllDescriptions() {
+      if (!document.getElementById('modality').value) {
+        return;
+      }
+      filterDescriptions();
+    }
+
+    function selectDescription(description) {
+      document.getElementById('study_description').value = description;
+      document.getElementById('descriptionList').style.display = 'none';
+    }
+
+    document.addEventListener('click', function (event) {
+      const picker = document.querySelector('.study-picker');
+      const dropdown = document.getElementById('descriptionList');
+      if (picker && dropdown && !picker.contains(event.target)) {
+        dropdown.style.display = 'none';
+      }
+    });
+
+    if (document.getElementById('modality') && document.getElementById('modality').value) {
+      loadStudyDescriptions();
+    }
+  </script>
 </body>
 </html>

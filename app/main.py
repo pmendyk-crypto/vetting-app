@@ -84,16 +84,33 @@ print(f"[startup] BASE_DIR={BASE_DIR}, DB_PATH={DB_PATH}, UPLOAD_DIR={UPLOAD_DIR
 # -------------------------
 # Helper Functions
 # -------------------------
-def generate_case_id() -> str:
-    """Generate a unique readable case ID in format: YYYYMMDD-0001."""
-    return generate_case_ids(1)[0]
+def _institution_case_code(inst_name: str | None, fallback_id: int | None = None) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9 ]+", " ", (inst_name or "").strip()).upper()
+    words = [w for w in cleaned.split() if w and w not in {"HOSPITAL", "CLINIC", "CENTRE", "CENTER", "TRUST", "THE"}]
+    if words:
+        primary = words[0]
+        if len(primary) >= 3:
+            return primary[:3]
+        joined = "".join(words)
+        if len(joined) >= 3:
+            return joined[:3]
+    if fallback_id is not None:
+        return f"I{int(fallback_id):02d}"
+    return "GEN"
 
 
-def generate_case_ids(count: int) -> list[str]:
+def generate_case_id(institution_id: int | None = None) -> str:
+    """Generate a unique readable case ID."""
+    return generate_case_ids(1, institution_id=institution_id)[0]
+
+
+def generate_case_ids(count: int, institution_id: int | None = None) -> list[str]:
     """Generate consecutive unique case IDs for a batch submission."""
     total = max(1, int(count or 1))
     date_prefix = datetime.now(timezone.utc).strftime("%Y%m%d")
-    like_pattern = f"{date_prefix}-%"
+    inst = get_institution(int(institution_id), None) if institution_id else None
+    inst_code = _institution_case_code(inst.get("name") if inst else None, institution_id) if institution_id else None
+    like_pattern = f"{date_prefix}-{inst_code}-%" if inst_code else f"{date_prefix}-%"
 
     conn = get_db()
     try:
@@ -110,6 +127,8 @@ def generate_case_ids(count: int) -> list[str]:
         if suffix.isdigit():
             max_seq = max(max_seq, int(suffix))
 
+    if inst_code:
+        return [f"{date_prefix}-{inst_code}-{max_seq + idx + 1:04d}" for idx in range(total)]
     return [f"{date_prefix}-{max_seq + idx + 1:04d}" for idx in range(total)]
 
 
@@ -517,6 +536,11 @@ def get_db() -> sqlite3.Connection:
     # default: sqlite3
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout = 30000")
+    except Exception:
+        pass
     return conn
 
 
@@ -1218,6 +1242,37 @@ def list_radiologists(org_id: int | None = None) -> list[dict]:
             result.append(d)
         return result
 
+    if table_exists("users"):
+        conn = get_db()
+        rows = conn.execute(
+            """
+            SELECT username, first_name, surname, email, radiologist_name
+            FROM users
+            WHERE role = 'radiologist'
+            ORDER BY username
+            """
+        ).fetchall()
+        conn.close()
+        result = []
+        for r in rows:
+            d = dict(r)
+            display_name = (
+                d.get("radiologist_name")
+                or " ".join(part for part in [d.get("first_name", "").strip(), d.get("surname", "").strip()] if part)
+                or d.get("username")
+            )
+            result.append(
+                {
+                    "name": display_name,
+                    "email": d.get("email") or "",
+                    "surname": d.get("surname") or "",
+                    "gmc": "",
+                    "speciality": "",
+                }
+            )
+        if result:
+            return result
+
     conn = get_db()
     rows = conn.execute("SELECT name, email, surname, gmc, speciality FROM radiologists ORDER BY name").fetchall()
     conn.close()
@@ -1509,6 +1564,18 @@ def verify_user(username: str, password: str) -> dict | None:
         user_dict = dict(row)
         # Map new structure to old for backward compatibility
         row_keys = row.keys()
+        stored_radiologist_name = (
+            user_dict.get("radiologist_name")
+            or " ".join(
+                part
+                for part in [
+                    str(user_dict.get("first_name") or "").strip(),
+                    str(user_dict.get("surname") or "").strip(),
+                ]
+                if part
+            )
+            or str(user_dict.get("username") or "").strip()
+        )
         if "is_superuser" in row_keys:
             is_platform_superadmin = normalized_username.lower() == "superadmin"
             user_dict["is_superuser"] = True if (row["is_superuser"] and is_platform_superadmin) else False
@@ -1535,7 +1602,10 @@ def verify_user(username: str, password: str) -> dict | None:
                     # Fall back to role column for old schema
                     user_dict["role"] = row.get("role", "user")
 
-            user_dict["radiologist_name"] = None  # Will be looked up separately if needed
+            if table_exists("memberships"):
+                user_dict["radiologist_name"] = None  # Will be looked up separately if needed
+            else:
+                user_dict["radiologist_name"] = stored_radiologist_name
         return user_dict
     return None
 
@@ -1829,6 +1899,22 @@ def require_radiologist(request: Request) -> dict:
             raise HTTPException(status_code=403, detail="Radiologist only")
     elif user.get("role") != "radiologist":
         raise HTTPException(status_code=403, detail="Radiologist only")
+
+    if not user.get("radiologist_name"):
+        fallback_name = (
+            " ".join(
+                part
+                for part in [
+                    str(user.get("first_name") or "").strip(),
+                    str(user.get("surname") or "").strip(),
+                ]
+                if part
+            )
+            or str(user.get("username") or "").strip()
+        )
+        if fallback_name:
+            user["radiologist_name"] = fallback_name
+            request.session["user"] = user
     
     # Populate radiologist_name from radiologist profile if not already set
     if not user.get("radiologist_name") and user.get("id"):
@@ -2514,7 +2600,7 @@ def admin_dashboard(
     radiologists = [r["name"] for r in list_radiologists(org_id)]
     modalities = list_case_modalities(org_id, is_superuser)
 
-    if not is_superuser and not org_id:
+    if table_exists("memberships") and not is_superuser and not org_id:
         return templates.TemplateResponse(
             "home.html",
             {
@@ -2550,7 +2636,7 @@ def admin_dashboard(
         tab = "all"
 
     # Validate sort parameters
-    valid_sorts = ["created_at", "patient_first_name", "patient_surname", "patient_referral_id", "institution_id", "tat", "status", "study_description", "radiologist"]
+    valid_sorts = ["created_at", "patient_first_name", "patient_surname", "patient_referral_id", "institution_id", "tat", "status", "study_description", "radiologist", "modality"]
     if sort_by not in valid_sorts:
         sort_by = "created_at"
     if sort_dir not in ("asc", "desc"):
@@ -2639,6 +2725,7 @@ def admin_dashboard(
         sla_hours = inst["sla_hours"] if inst else 48
         sla_seconds = sla_hours * 3600
         d["sla_breached"] = (d.get("status") == "pending") and (secs > sla_seconds)
+        d["display_case_id"] = d.get("id") or "-"
         cases.append(d)
 
     dashboard = build_dashboard_series(dashboard_rows)
@@ -4478,7 +4565,7 @@ async def intake_submit(
     if not attachment or not attachment.filename:
         raise HTTPException(status_code=400, detail="Attachment is required")
 
-    case_id = generate_case_id()
+    case_id = generate_case_id(inst_id)
     original_name = attachment.filename
     
     file_bytes = await attachment.read()
@@ -4775,7 +4862,7 @@ async def submit_case(
     user = require_admin(request)
     org_id = user.get("org_id")
     form_org_id = (org_id_form or "").strip()
-    if not user.get("is_superuser") and not org_id:
+    if table_exists("memberships") and not user.get("is_superuser") and not org_id:
         raise HTTPException(status_code=403, detail="Organisation access required")
 
     # Validate institution
@@ -4825,7 +4912,7 @@ async def submit_case(
             )
             cleaned_extra_cases.append((normalized_desc, normalized_modality, normalized_rad))
 
-    generated_case_ids = generate_case_ids(1 + len(cleaned_extra_cases))
+    generated_case_ids = generate_case_ids(1 + len(cleaned_extra_cases), institution_id=inst_id)
     case_id = generated_case_ids[0]
     original_name = attachment.filename
     

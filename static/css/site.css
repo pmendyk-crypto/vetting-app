@@ -126,12 +126,36 @@ button.btn, input[type=submit].btn { color: #fff !important }
 .decision-grid .full{grid-column:1 / -1}
 label{display:block;color:var(--muted);margin-bottom:6px}
 select,input[type=text],textarea{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.2);color:var(--muted);box-sizing:border-box}
+select{
+  background-color: rgba(17, 24, 39, 0.96);
+  color: #f8fbff;
+  border: 1px solid rgba(191,214,255,0.16);
+}
+select:focus{
+  outline: none;
+  border-color: rgba(97,168,255,0.65);
+  box-shadow: 0 0 0 2px rgba(31,111,235,0.18);
+  background-color: rgba(14, 22, 36, 0.98);
+}
+select option{
+  background-color: #f3f4f6;
+  color: #101828;
+}
+select option:checked{
+  background-color: #1f6feb;
+  color: #ffffff;
+}
 textarea{min-height:120px}
 .row{display:flex;gap:12px;align-items:center;margin-top:12px}
 .case-id{font-size:14px}
 .filters{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
 .filters label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
 input,select{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.25);color:var(--muted)}
+select{
+  background-color: rgba(17, 24, 39, 0.96);
+  color: #f8fbff;
+  border: 1px solid rgba(191,214,255,0.16);
+}
 .tabs{display:flex;gap:12px;margin:12px 0}
 .tablink{color:var(--accent);text-decoration:none}
 .tablink.active{font-weight:400;color:white}
