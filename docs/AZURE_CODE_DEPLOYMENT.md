@@ -1,46 +1,64 @@
 # Azure Code Deployment
 
-This project is set up to deploy to Azure App Service using code publishing instead of containers.
+This project deploys to Azure App Service using code publishing rather than containers.
 
-## Target Flow
+## Current Environment Flow
 
 1. Work locally in VS Code.
 2. Push `develop` to deploy staging.
-3. Validate staging.
-4. Merge or push to `main` to deploy production.
+3. Validate staging on Azure.
+4. Merge `develop` into `main`.
+5. Push `main` to deploy production.
 
-## Repo Changes
+## Azure App Services
 
-- `startup.sh` runs the FastAPI app with Gunicorn/Uvicorn.
-- `requirements.txt` includes `gunicorn`.
-- `.github/workflows/deploy-staging.yml` deploys `develop` to staging.
-- `.github/workflows/deploy-production.yml` deploys `main` to production.
+- Staging app: `lumosradflow-staging`
+- Production app: `lumosradflow-prod`
+- Shared App Service plan: `ASP-RadFlow-a377`
 
-## Azure App Service Settings
+## GitHub Workflows
 
-Set these for both App Services:
+- `.github/workflows/deploy-staging.yml` deploys `develop` to `lumosradflow-staging`
+- `.github/workflows/deploy-production.yml` deploys `main` to `lumosradflow-prod`
 
-- Runtime stack: `Python 3.12`
-- Startup command: `bash startup.sh`
-- App setting: `SCM_DO_BUILD_DURING_DEPLOYMENT=true`
-- App setting: `ENABLE_ORYX_BUILD=true`
-
-Set your normal app settings separately for staging and production:
-
-- `APP_SECRET`
-- `APP_BASE_URL`
-- `DATABASE_URL`
-- `SMTP_*`
-- storage settings
-- API keys
-
-## GitHub Secrets
-
-Add these repository secrets:
+## Required GitHub Secrets
 
 - `AZUREAPPSERVICE_PUBLISHPROFILE_STAGING`
 - `AZUREAPPSERVICE_PUBLISHPROFILE_PRODUCTION`
 
-Use the publish profile downloaded from each App Service.
+These secrets must contain the full publish profile XML downloaded from the matching App Service.
 
-Test deploy from develop branch.
+## Azure App Configuration
+
+Use Python 3.12 on Linux for both apps.
+
+Recommended app settings for each environment:
+
+- `APP_BASE_URL`
+- `APP_SECRET`
+- `DATABASE_URL`
+- `AZURE_STORAGE_CONNECTION_STRING`
+- `REFERRAL_BLOB_CONTAINER=referrals`
+- `SCM_DO_BUILD_DURING_DEPLOYMENT=1`
+- `ENABLE_ORYX_BUILD=true`
+- `REFERRAL_FILE_TTL_DAYS=7`
+- `CASE_RECORD_TTL_DAYS=28`
+- `LOGO_DARK_URL=/static/images/logo-light.png`
+
+Environment-specific notes:
+
+- Staging can keep `APP_BASE_URL` on the Azure default hostname.
+- Production should keep `APP_BASE_URL` on the Azure hostname until the custom domain is moved.
+
+## Startup Commands
+
+- Staging currently uses: `bash startup.sh`
+- Production can use either `bash startup.sh` or a direct Gunicorn command if needed:
+  `gunicorn --bind=0.0.0.0:8000 --worker-class uvicorn.workers.UvicornWorker --timeout 600 app.main:app`
+
+## Demo-Ready Checklist
+
+- Confirm both GitHub Actions workflows succeed.
+- Confirm staging and production load in the browser.
+- Confirm login and key demo flows work.
+- Keep the old broken container app out of the demo path.
