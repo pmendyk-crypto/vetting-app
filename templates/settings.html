@@ -645,15 +645,33 @@
                     <form method="POST" action="/settings/protocol/add">
                         <div class="form-row">
                             <div class="form-group">
-                                <label>Protocol Name</label>
-                                <input type="text" name="name" required placeholder="e.g., CT Head Standard">
-                            </div>
-                            <div class="form-group">
                                 <label>Institution</label>
                                 <select name="institution_id" required>
                                     <option value="">Select Institution</option>
                                     {% for inst in institutions %}
                                     <option value="{{ inst.id }}">{{ inst.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Modality</label>
+                                <select id="addProtoModality" onchange="filterProtocolPresetOptions('addProtoModality', 'addProtoPreset')" required>
+                                    <option value="">Select Modality</option>
+                                    {% for modality in protocol_modalities %}
+                                    <option value="{{ modality }}">{{ modality }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row full">
+                            <div class="form-group">
+                                <label>Protocol Name</label>
+                                <select id="addProtoPreset" name="study_description_preset_id" required>
+                                    <option value="">Select Modality First</option>
+                                    {% for preset in study_description_presets %}
+                                    <option value="{{ preset.id }}" data-modality="{{ preset.modality }}" hidden>
+                                        {{ preset.description }}
+                                    </option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -692,6 +710,7 @@
                         <thead>
                             <tr>
                                 <th>Protocol Name</th>
+                                <th>Modality</th>
                                 <th>Institution</th>
                                 <th>Status</th>
                                 <th>Last Modified</th>
@@ -702,6 +721,7 @@
                             {% for proto in protocols %}
                             <tr class="protocol-row" data-institution-id="{{ proto.institution_id }}">
                                 <td>{{ proto.name }}</td>
+                                <td>{{ proto.study_modality if proto.study_modality else 'Unlinked' }}</td>
                                 <td>{{ proto.institution_name if proto.institution_name else 'Unassigned' }}</td>
                                 <td>
                                     <span style="color: {% if proto.is_active %}#4ade80{% else %}rgba(255,255,255,0.5){% endif %}; font-weight: 400;">
@@ -711,7 +731,7 @@
                                 <td>{% if proto.last_modified %}{{ proto.last_modified | display_datetime }}{% else %}N/A{% endif %}</td>
                                 <td>
                                     <div class="action-buttons">
-                                        <button class="btn btn-secondary btn-small" onclick='editProtocol({{ proto.id }}, {{ proto.name|tojson }}, {{ proto.institution_id }}, {{ proto.instructions|tojson if proto.instructions else "\"\"" }})'>Edit</button>
+                                        <button class="btn btn-secondary btn-small" onclick='editProtocol({{ proto.id }}, {{ proto.name|tojson }}, {{ proto.institution_id }}, {{ proto.study_description_preset_id or "null" }}, {{ proto.instructions|tojson if proto.instructions else "\"\"" }})'>Edit</button>
                                         <form style="display: inline;" method="POST" action="/settings/protocol/delete/{{ proto.id }}" onsubmit="return confirm('Delete protocol?');">
                                             <button type="submit" class="btn btn-danger btn-small">Delete</button>
                                         </form>
@@ -860,14 +880,32 @@
             <form id="editProtocolForm" method="POST">
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Protocol Name</label>
-                        <input type="text" id="editProtoName" name="name" required>
-                    </div>
-                    <div class="form-group">
                         <label>Institution</label>
                         <select id="editProtoInst" name="institution_id" required>
                             {% for inst in institutions %}
                             <option value="{{ inst.id }}">{{ inst.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Modality</label>
+                        <select id="editProtoModality" onchange="filterProtocolPresetOptions('editProtoModality', 'editProtoStudyDescription')" required>
+                            <option value="">Select Modality</option>
+                            {% for modality in protocol_modalities %}
+                            <option value="{{ modality }}">{{ modality }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label>Protocol Name</label>
+                        <select id="editProtoStudyDescription" name="study_description_preset_id" required>
+                            <option value="">Select Modality First</option>
+                            {% for preset in study_description_presets %}
+                            <option value="{{ preset.id }}" data-modality="{{ preset.modality }}" hidden>
+                                {{ preset.description }}
+                            </option>
                             {% endfor %}
                         </select>
                     </div>
@@ -989,9 +1027,32 @@
             document.getElementById('editUserModal').classList.add('active');
         }
 
-        function editProtocol(id, name, instId, instructions) {
-            document.getElementById('editProtoName').value = name;
+        function filterProtocolPresetOptions(modalitySelectId, presetSelectId, selectedPresetId = '') {
+            const modality = document.getElementById(modalitySelectId).value;
+            const presetSelect = document.getElementById(presetSelectId);
+            const options = Array.from(presetSelect.querySelectorAll('option[data-modality]'));
+
+            presetSelect.value = '';
+            options.forEach(option => {
+                const matches = modality && option.dataset.modality === modality;
+                option.hidden = !matches;
+            });
+
+            const placeholder = presetSelect.querySelector('option[value=""]');
+            if (placeholder) {
+                placeholder.textContent = modality ? 'Select Protocol Name' : 'Select Modality First';
+            }
+
+            if (selectedPresetId) {
+                presetSelect.value = String(selectedPresetId);
+            }
+        }
+
+        function editProtocol(id, name, instId, presetId, instructions) {
             document.getElementById('editProtoInst').value = instId;
+            const option = presetId ? document.querySelector(`#editProtoStudyDescription option[value="${presetId}"]`) : null;
+            document.getElementById('editProtoModality').value = option ? option.dataset.modality : '';
+            filterProtocolPresetOptions('editProtoModality', 'editProtoStudyDescription', presetId || '');
             document.getElementById('editProtoInstructions').value = instructions || '';
             document.getElementById('editProtocolForm').action = `/settings/protocol/edit/${id}`;
             document.getElementById('editProtocolModal').classList.add('active');
@@ -1023,7 +1084,10 @@
         }
 
         // Populate radiologist dropdown when page loads
-        document.addEventListener('DOMContentLoaded', populateRadiologistDropdown);
+        document.addEventListener('DOMContentLoaded', function() {
+            populateRadiologistDropdown();
+            filterProtocolPresetOptions('addProtoModality', 'addProtoPreset');
+        });
 
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('active');

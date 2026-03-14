@@ -736,6 +736,7 @@ def init_db() -> None:
                 id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
                 institution_id INTEGER NOT NULL,
+                study_description_preset_id INTEGER,
                 instructions TEXT,
                 last_modified TEXT,
                 is_active INTEGER NOT NULL DEFAULT 1,
@@ -880,6 +881,7 @@ def init_db() -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             institution_id INTEGER NOT NULL,
+            study_description_preset_id INTEGER,
             instructions TEXT,
             last_modified TEXT,
             is_active INTEGER NOT NULL DEFAULT 1,
@@ -1125,6 +1127,8 @@ def ensure_protocols_schema() -> None:
         cur.execute("ALTER TABLE protocols ADD COLUMN institution_id INTEGER")
     if "org_id" not in cols:
         cur.execute("ALTER TABLE protocols ADD COLUMN org_id INTEGER")
+    if "study_description_preset_id" not in cols:
+        cur.execute("ALTER TABLE protocols ADD COLUMN study_description_preset_id INTEGER")
 
     conn.commit()
     conn.close()
@@ -1453,14 +1457,20 @@ def list_protocol_rows(org_id: int | None = None) -> list[dict]:
     conn = get_db()
     if org_id and table_has_column("protocols", "org_id"):
         rows = conn.execute(
-            "SELECT p.id, p.name, p.institution_id, p.instructions, p.last_modified, p.is_active, i.name as institution_name "
+            "SELECT p.id, p.name, p.institution_id, p.study_description_preset_id, p.instructions, p.last_modified, p.is_active, "
+            "i.name as institution_name, s.modality as study_modality, s.description as study_description "
             "FROM protocols p LEFT JOIN institutions i ON p.institution_id = i.id "
+            "LEFT JOIN study_description_presets s ON p.study_description_preset_id = s.id "
             "WHERE p.org_id = ? ORDER BY p.name",
             (org_id,),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT p.id, p.name, p.institution_id, p.instructions, p.last_modified, p.is_active, i.name as institution_name FROM protocols p LEFT JOIN institutions i ON p.institution_id = i.id ORDER BY p.name"
+            "SELECT p.id, p.name, p.institution_id, p.study_description_preset_id, p.instructions, p.last_modified, p.is_active, "
+            "i.name as institution_name, s.modality as study_modality, s.description as study_description "
+            "FROM protocols p LEFT JOIN institutions i ON p.institution_id = i.id "
+            "LEFT JOIN study_description_presets s ON p.study_description_preset_id = s.id "
+            "ORDER BY p.name"
         ).fetchall()
     conn.close()
     result = []
@@ -1469,6 +1479,89 @@ def list_protocol_rows(org_id: int | None = None) -> list[dict]:
         d["last_modified"] = format_display_datetime(d.get("last_modified"), d.get("last_modified") or "")
         result.append(d)
     return result
+
+
+def list_study_description_presets(org_id: int | None = None) -> list[dict]:
+    conn = get_db()
+    target_org_id = org_id or 1
+    rows = conn.execute(
+        """
+        SELECT id, modality, description
+        FROM study_description_presets
+        WHERE organization_id = ?
+        ORDER BY modality, description
+        """,
+        (target_org_id,),
+    ).fetchall()
+    if not rows and target_org_id != 1:
+        rows = conn.execute(
+            """
+            SELECT id, modality, description
+            FROM study_description_presets
+            WHERE organization_id = 1
+            ORDER BY modality, description
+            """
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_study_description_preset(preset_id: int, org_id: int | None = None) -> dict | None:
+    conn = get_db()
+    target_org_id = org_id or 1
+    row = conn.execute(
+        """
+        SELECT id, modality, description
+        FROM study_description_presets
+        WHERE id = ? AND organization_id = ?
+        LIMIT 1
+        """,
+        (preset_id, target_org_id),
+    ).fetchone()
+    if not row and target_org_id != 1:
+        row = conn.execute(
+            """
+            SELECT id, modality, description
+            FROM study_description_presets
+            WHERE id = ? AND organization_id = 1
+            LIMIT 1
+            """,
+            (preset_id,),
+        ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def list_protocol_rows_for_study(
+    study_description_preset_id: int,
+    institution_id: int | None = None,
+    org_id: int | None = None,
+    active_only: bool = True,
+) -> list[dict]:
+    conn = get_db()
+    clauses = ["p.study_description_preset_id = ?"]
+    params: list = [study_description_preset_id]
+
+    if active_only:
+        clauses.append("p.is_active = 1")
+    if institution_id:
+        clauses.append("p.institution_id = ?")
+        params.append(institution_id)
+    if org_id and table_has_column("protocols", "org_id"):
+        clauses.append("p.org_id = ?")
+        params.append(org_id)
+
+    rows = conn.execute(
+        f"""
+        SELECT p.id, p.name, p.instructions, p.institution_id, p.study_description_preset_id
+        FROM protocols p
+        WHERE {' AND '.join(clauses)}
+        ORDER BY p.name
+        """,
+        params,
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def upsert_protocol(name: str) -> None:
@@ -3835,6 +3928,8 @@ def settings_page(request: Request, error: str = ""):
     users = list_users(org_id)
     rad_names = [r["name"] for r in rads]
     protocols = list_protocol_rows(org_id)
+    study_description_presets = list_study_description_presets(org_id)
+    protocol_modalities = sorted({str(p.get("modality") or "").strip() for p in study_description_presets if str(p.get("modality") or "").strip()})
 
     return templates.TemplateResponse(
         "settings.html",
@@ -3845,6 +3940,8 @@ def settings_page(request: Request, error: str = ""):
             "users": users,
             "rad_names": rad_names,
             "protocols": protocols,
+            "study_description_presets": study_description_presets,
+            "protocol_modalities": protocol_modalities,
             "current_user": get_session_user(request),
             "error": error,
         },
@@ -3958,12 +4055,14 @@ def update_radiologist(request: Request, name: str = Form(...), email: str = For
 
 
 @app.post("/settings/protocol/add")
-def settings_add_protocol(request: Request, name: str = Form(...), institution_id: str = Form(...), instructions: str = Form("")):
+def settings_add_protocol(
+    request: Request,
+    institution_id: str = Form(...),
+    study_description_preset_id: str = Form(...),
+    instructions: str = Form(""),
+):
     user = require_admin(request)
     org_id = user.get("org_id")
-    
-    if not name or not name.strip():
-        raise HTTPException(status_code=400, detail="Protocol name is required")
     
     if not institution_id or institution_id.strip() == "":
         raise HTTPException(status_code=400, detail="Please select an institution")
@@ -3975,6 +4074,18 @@ def settings_add_protocol(request: Request, name: str = Form(...), institution_i
             raise HTTPException(status_code=400, detail="Invalid institution or institution not found")
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid institution ID format")
+
+    try:
+        preset_id = int(study_description_preset_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Please select a protocol name")
+
+    preset = get_study_description_preset(preset_id, org_id)
+    if not preset:
+        raise HTTPException(status_code=400, detail="Invalid study description")
+    protocol_name = str(preset.get("description") or "").strip()
+    if not protocol_name:
+        raise HTTPException(status_code=400, detail="Protocol name is required")
     
     conn = get_db()
     try:
@@ -3982,38 +4093,40 @@ def settings_add_protocol(request: Request, name: str = Form(...), institution_i
             if using_postgres():
                 conn.execute(
                     """
-                    INSERT INTO protocols (name, institution_id, instructions, last_modified, is_active, org_id)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO protocols (name, institution_id, study_description_preset_id, instructions, last_modified, is_active, org_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (name, institution_id) DO UPDATE SET
+                      study_description_preset_id = EXCLUDED.study_description_preset_id,
                       instructions = EXCLUDED.instructions,
                       last_modified = EXCLUDED.last_modified,
                       is_active = EXCLUDED.is_active,
                       org_id = EXCLUDED.org_id
                     """,
-                    (name.strip(), inst_id, instructions.strip(), datetime.now().isoformat(), 1, org_id)
+                    (protocol_name, inst_id, preset_id, instructions.strip(), datetime.now().isoformat(), 1, org_id)
                 )
             else:
                 conn.execute(
-                    "INSERT OR REPLACE INTO protocols (name, institution_id, instructions, last_modified, is_active, org_id) VALUES (?, ?, ?, ?, ?, ?)",
-                    (name.strip(), inst_id, instructions.strip(), datetime.now().isoformat(), 1, org_id)
+                    "INSERT OR REPLACE INTO protocols (name, institution_id, study_description_preset_id, instructions, last_modified, is_active, org_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (protocol_name, inst_id, preset_id, instructions.strip(), datetime.now().isoformat(), 1, org_id)
                 )
         else:
             if using_postgres():
                 conn.execute(
                     """
-                    INSERT INTO protocols (name, institution_id, instructions, last_modified, is_active)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO protocols (name, institution_id, study_description_preset_id, instructions, last_modified, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     ON CONFLICT (name, institution_id) DO UPDATE SET
+                      study_description_preset_id = EXCLUDED.study_description_preset_id,
                       instructions = EXCLUDED.instructions,
                       last_modified = EXCLUDED.last_modified,
                       is_active = EXCLUDED.is_active
                     """,
-                    (name.strip(), inst_id, instructions.strip(), datetime.now().isoformat(), 1)
+                    (protocol_name, inst_id, preset_id, instructions.strip(), datetime.now().isoformat(), 1)
                 )
             else:
                 conn.execute(
-                    "INSERT OR REPLACE INTO protocols (name, institution_id, instructions, last_modified, is_active) VALUES (?, ?, ?, ?, ?)",
-                    (name.strip(), inst_id, instructions.strip(), datetime.now().isoformat(), 1)
+                    "INSERT OR REPLACE INTO protocols (name, institution_id, study_description_preset_id, instructions, last_modified, is_active) VALUES (?, ?, ?, ?, ?, ?)",
+                    (protocol_name, inst_id, preset_id, instructions.strip(), datetime.now().isoformat(), 1)
                 )
         conn.commit()
     except Exception as e:
@@ -4342,8 +4455,8 @@ def update_user_access(
 def edit_protocol(
     request: Request,
     protocol_id: int,
-    name: str = Form(...),
     institution_id: str = Form(...),
+    study_description_preset_id: str = Form(...),
     instructions: str = Form(""),
 ):
     user = require_admin(request)
@@ -4355,17 +4468,29 @@ def edit_protocol(
             raise HTTPException(status_code=400, detail="Invalid institution")
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid institution ID")
+
+    try:
+        preset_id = int(study_description_preset_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid protocol name")
+
+    preset = get_study_description_preset(preset_id, org_id)
+    if not preset:
+        raise HTTPException(status_code=400, detail="Invalid study description")
+    protocol_name = str(preset.get("description") or "").strip()
+    if not protocol_name:
+        raise HTTPException(status_code=400, detail="Protocol name is required")
     
     conn = get_db()
     if org_id and table_has_column("protocols", "org_id"):
         conn.execute(
-            "UPDATE protocols SET name = ?, institution_id = ?, instructions = ?, last_modified = ? WHERE id = ? AND org_id = ?",
-            (name.strip(), inst_id, instructions.strip(), datetime.now().isoformat(), protocol_id, org_id)
+            "UPDATE protocols SET name = ?, institution_id = ?, study_description_preset_id = ?, instructions = ?, last_modified = ? WHERE id = ? AND org_id = ?",
+            (protocol_name, inst_id, preset_id, instructions.strip(), datetime.now().isoformat(), protocol_id, org_id)
         )
     else:
         conn.execute(
-            "UPDATE protocols SET name = ?, institution_id = ?, instructions = ?, last_modified = ? WHERE id = ?",
-            (name.strip(), inst_id, instructions.strip(), datetime.now().isoformat(), protocol_id)
+            "UPDATE protocols SET name = ?, institution_id = ?, study_description_preset_id = ?, instructions = ?, last_modified = ? WHERE id = ?",
+            (protocol_name, inst_id, preset_id, instructions.strip(), datetime.now().isoformat(), protocol_id)
         )
     conn.commit()
     conn.close()
@@ -4423,6 +4548,40 @@ def get_study_descriptions(modality: str, request: Request, org_id: str = None):
         ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+@app.get("/api/protocols/by-study-description/{preset_id}")
+def get_protocols_by_study_description(
+    preset_id: int,
+    request: Request,
+    institution_id: str = "",
+    org_id: str = "",
+):
+    target_org_id = None
+    if org_id:
+        try:
+            target_org_id = int(org_id)
+        except (ValueError, TypeError):
+            target_org_id = None
+
+    if not target_org_id:
+        user = request.session.get("user") or {}
+        target_org_id = user.get("org_id") or user.get("organization_id")
+
+    target_institution_id = None
+    if institution_id:
+        try:
+            target_institution_id = int(institution_id)
+        except (ValueError, TypeError):
+            target_institution_id = None
+
+    rows = list_protocol_rows_for_study(
+        preset_id,
+        institution_id=target_institution_id,
+        org_id=target_org_id,
+        active_only=True,
+    )
+    return rows
 
 @app.get("/settings/study-descriptions", response_class=HTMLResponse)
 def study_descriptions_page(request: Request):
@@ -5118,9 +5277,42 @@ def vet_form(request: Request, case_id: str):
     if case["radiologist"] != rad_name:
         raise HTTPException(status_code=403, detail="Not your case")
 
-    # Get institution-specific protocols
     protocols = []
-    if case.get("institution_id"):
+    preset_id = None
+    if case.get("study_description") and case.get("modality"):
+        conn = get_db()
+        preset_row = conn.execute(
+            """
+            SELECT id
+            FROM study_description_presets
+            WHERE organization_id = ? AND modality = ? AND description = ?
+            LIMIT 1
+            """,
+            ((org_id or 1), str(case.get("modality") or "").strip().upper(), str(case.get("study_description") or "").strip()),
+        ).fetchone()
+        if not preset_row and (org_id or 1) != 1:
+            preset_row = conn.execute(
+                """
+                SELECT id
+                FROM study_description_presets
+                WHERE organization_id = 1 AND modality = ? AND description = ?
+                LIMIT 1
+                """,
+                (str(case.get("modality") or "").strip().upper(), str(case.get("study_description") or "").strip()),
+            ).fetchone()
+        conn.close()
+        if preset_row:
+            preset_id = preset_row["id"] if isinstance(preset_row, dict) else preset_row[0]
+
+    if preset_id:
+        protocols = list_protocol_rows_for_study(
+            preset_id,
+            institution_id=case.get("institution_id"),
+            org_id=org_id,
+            active_only=True,
+        )
+
+    if not protocols and case.get("institution_id"):
         conn = get_db()
         if org_id and table_has_column("protocols", "org_id"):
             proto_rows = conn.execute(
@@ -5134,9 +5326,8 @@ def vet_form(request: Request, case_id: str):
             ).fetchall()
         conn.close()
         protocols = [dict(p) for p in proto_rows]
-    else:
-        # Fallback to active protocols if no institution
-        protocols = list_protocols(active_only=True, org_id=org_id)
+    elif not protocols:
+        protocols = [{"name": p, "instructions": ""} for p in list_protocols(active_only=True, org_id=org_id)]
 
     if org_id:
         conn = get_db()
