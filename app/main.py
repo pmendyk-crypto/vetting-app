@@ -2246,6 +2246,7 @@ def insert_case_event(
 try:
     print("[startup] Initializing database...")
     init_db()
+    ensure_extended_identity_schema()
     ensure_cases_schema()
     ensure_institutions_schema()
     ensure_radiologists_schema()
@@ -2272,6 +2273,8 @@ except Exception as e:
 def landing(request: Request, expired: str = ""):
     user = get_session_user(request)
     if user:
+        if user.get("is_superuser"):
+            return RedirectResponse(url="/owner", status_code=303)
         if user.get("role") == "admin":
             return RedirectResponse(url="/admin", status_code=303)
         return RedirectResponse(url="/radiologist", status_code=303)
@@ -2283,6 +2286,8 @@ def login_page(request: Request, expired: str = ""):
     # Redirect to home if already logged in
     user = get_session_user(request)
     if user:
+        if user.get("is_superuser"):
+            return RedirectResponse(url="/owner", status_code=303)
         if user.get("role") == "admin":
             return RedirectResponse(url="/admin", status_code=303)
         return RedirectResponse(url="/radiologist", status_code=303)
@@ -2336,8 +2341,10 @@ def login_submit(
         "username": user["username"],
         "first_name": user.get("first_name"),
         "surname": user.get("surname"),
+        "email": user.get("email"),
         "role": user["role"],
         "radiologist_name": user["radiologist_name"],
+        "is_superuser": bool(user.get("is_superuser")),
     }
     request.session["login_time"] = time.time()  # Store login timestamp
     request.session["session_id"] = session_id  # Track session for multi-window detection
@@ -2361,6 +2368,8 @@ def login_submit(
             pass
 
     # Auto-route based on user role
+    if user.get("is_superuser"):
+        return RedirectResponse(url="/owner", status_code=303)
     if user["role"] == "admin":
         return RedirectResponse(url="/admin", status_code=303)
     else:
@@ -2371,6 +2380,8 @@ def login_submit(
 def forgot_password_page(request: Request, role: str = "admin"):
     user = get_session_user(request)
     if user:
+        if user.get("is_superuser"):
+            return RedirectResponse(url="/owner", status_code=303)
         if user.get("role") == "admin":
             return RedirectResponse(url="/admin", status_code=303)
         return RedirectResponse(url="/radiologist", status_code=303)
@@ -2552,6 +2563,247 @@ def logout(request: Request):
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
+
+
+@app.get("/owner", response_class=HTMLResponse)
+def owner_dashboard(request: Request, created: str = "", error: str = ""):
+    user = require_superuser(request)
+    organisations = list_organisations_summary()
+    return templates.TemplateResponse(
+        "owner_dashboard.html",
+        {
+            "request": request,
+            "user": user,
+            "organisations": organisations,
+            "created": created,
+            "error": error,
+            "form_data": {
+                "org_name": "",
+                "org_slug": "",
+                "admin_first_name": "",
+                "admin_surname": "",
+                "admin_email": "",
+                "admin_username": "",
+            },
+        },
+    )
+
+
+@app.post("/owner/organisations")
+def owner_create_organisation(
+    request: Request,
+    org_name: str = Form(...),
+    org_slug: str = Form(""),
+    admin_first_name: str = Form(...),
+    admin_surname: str = Form(""),
+    admin_email: str = Form(""),
+    admin_username: str = Form(...),
+    admin_password: str = Form(...),
+):
+    user = require_superuser(request)
+
+    org_name = org_name.strip()
+    requested_slug = (org_slug or "").strip()
+    admin_first_name = admin_first_name.strip()
+    admin_surname = admin_surname.strip()
+    admin_email = admin_email.strip()
+    admin_username = admin_username.strip()
+    admin_password = admin_password.strip()
+
+    form_data = {
+        "org_name": org_name,
+        "org_slug": requested_slug,
+        "admin_first_name": admin_first_name,
+        "admin_surname": admin_surname,
+        "admin_email": admin_email,
+        "admin_username": admin_username,
+    }
+
+    if not org_name or not admin_first_name or not admin_username or not admin_password:
+        return templates.TemplateResponse(
+            "owner_dashboard.html",
+            {
+                "request": request,
+                "user": user,
+                "organisations": list_organisations_summary(),
+                "created": "",
+                "error": "Organisation name, first admin first name, username, and password are required.",
+                "form_data": form_data,
+            },
+            status_code=400,
+        )
+
+    slug = slugify_org_name(requested_slug or org_name)
+    now = utc_now_iso()
+    salt = secrets.token_bytes(16)
+    pw_hash = hash_password(admin_password, salt)
+
+    conn = get_db()
+    try:
+        existing_slug = conn.execute("SELECT id FROM organisations WHERE slug = ?", (slug,)).fetchone()
+        if existing_slug:
+            return templates.TemplateResponse(
+                "owner_dashboard.html",
+                {
+                    "request": request,
+                    "user": user,
+                    "organisations": list_organisations_summary(),
+                    "created": "",
+                    "error": "That organisation code is already in use.",
+                    "form_data": form_data,
+                },
+                status_code=400,
+            )
+
+        existing_user = conn.execute("SELECT 1 FROM users WHERE username = ?", (admin_username,)).fetchone()
+        if existing_user:
+            return templates.TemplateResponse(
+                "owner_dashboard.html",
+                {
+                    "request": request,
+                    "user": user,
+                    "organisations": list_organisations_summary(),
+                    "created": "",
+                    "error": "That admin username is already in use.",
+                    "form_data": form_data,
+                },
+                status_code=400,
+            )
+
+        if admin_email:
+            existing_email = conn.execute("SELECT 1 FROM users WHERE email = ?", (admin_email,)).fetchone()
+            if existing_email:
+                return templates.TemplateResponse(
+                    "owner_dashboard.html",
+                    {
+                        "request": request,
+                        "user": user,
+                        "organisations": list_organisations_summary(),
+                        "created": "",
+                        "error": "That admin email is already in use.",
+                        "form_data": form_data,
+                    },
+                    status_code=400,
+                )
+
+        conn.execute(
+            "INSERT INTO organisations(name, slug, is_active, created_at, modified_at) VALUES (?, ?, 1, ?, ?)",
+            (org_name, slug, now, now),
+        )
+        org_row = conn.execute("SELECT id FROM organisations WHERE slug = ?", (slug,)).fetchone()
+        org_id = org_row["id"] if isinstance(org_row, dict) else org_row[0]
+
+        if table_has_column("users", "role"):
+            conn.execute(
+                """
+                INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname, role, radiologist_name)
+                VALUES (?, ?, ?, ?, 0, 1, ?, ?, ?, ?, ?, NULL)
+                """,
+                (
+                    admin_username,
+                    admin_email or None,
+                    pw_hash.hex(),
+                    salt.hex(),
+                    now,
+                    now,
+                    admin_first_name,
+                    admin_surname,
+                    "admin",
+                ),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname)
+                VALUES (?, ?, ?, ?, 0, 1, ?, ?, ?, ?)
+                """,
+                (
+                    admin_username,
+                    admin_email or None,
+                    pw_hash.hex(),
+                    salt.hex(),
+                    now,
+                    now,
+                    admin_first_name,
+                    admin_surname,
+                ),
+            )
+        user_row = conn.execute("SELECT id FROM users WHERE username = ?", (admin_username,)).fetchone()
+        user_id = user_row["id"] if isinstance(user_row, dict) else user_row[0]
+
+        conn.execute(
+            """
+            INSERT INTO memberships(org_id, user_id, org_role, is_active, created_at, modified_at)
+            VALUES (?, ?, 'org_admin', 1, ?, ?)
+            """,
+            (org_id, user_id, now, now),
+        )
+
+        if table_exists("study_description_presets"):
+            seed_rows = conn.execute(
+                """
+                SELECT modality, description
+                FROM study_description_presets
+                WHERE organization_id = 1 AND COALESCE(is_active, 1) = 1
+                ORDER BY modality, description
+                """
+            ).fetchall()
+            for seed in seed_rows:
+                if using_postgres():
+                    conn.execute(
+                        """
+                        INSERT INTO study_description_presets(
+                            organization_id, modality, description, is_active, created_at, updated_at, created_by
+                        )
+                        VALUES (?, ?, ?, 1, ?, ?, ?)
+                        ON CONFLICT (organization_id, modality, description) DO NOTHING
+                        """,
+                        (
+                            org_id,
+                            seed["modality"] if isinstance(seed, dict) else seed[0],
+                            seed["description"] if isinstance(seed, dict) else seed[1],
+                            now,
+                            now,
+                            user.get("id") or user_id,
+                        ),
+                    )
+                else:
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO study_description_presets(
+                            organization_id, modality, description, is_active, created_at, updated_at, created_by
+                        )
+                        VALUES (?, ?, ?, 1, ?, ?, ?)
+                        """,
+                        (
+                            org_id,
+                            seed["modality"] if isinstance(seed, dict) else seed[0],
+                            seed["description"] if isinstance(seed, dict) else seed[1],
+                            now,
+                            now,
+                            user.get("id") or user_id,
+                        ),
+                    )
+
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        return templates.TemplateResponse(
+            "owner_dashboard.html",
+            {
+                "request": request,
+                "user": user,
+                "organisations": list_organisations_summary(),
+                "created": "",
+                "error": f"Unable to create organisation: {exc}",
+                "form_data": form_data,
+            },
+            status_code=400,
+        )
+    finally:
+        conn.close()
+
+    return RedirectResponse(url="/owner?created=1", status_code=303)
 
 
 # -------------------------
@@ -3860,6 +4112,237 @@ def admin_reopen_case_submit(
     )
     conn.commit()
     conn.close()
+
+
+def slugify_org_name(name: str) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", str(name or "").strip().lower()).strip("-")
+    return base or "organisation"
+
+
+def ensure_extended_identity_schema() -> None:
+    if using_postgres():
+        return
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS organisations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            slug TEXT NOT NULL UNIQUE,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            modified_at TEXT
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS memberships (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            org_role TEXT NOT NULL DEFAULT 'org_user',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            modified_at TEXT,
+            UNIQUE(org_id, user_id)
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            user_id INTEGER PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS radiologist_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL UNIQUE,
+            gmc TEXT,
+            specialty TEXT,
+            display_name TEXT,
+            created_at TEXT NOT NULL,
+            modified_at TEXT
+        )
+        """
+    )
+
+    cur.execute("PRAGMA table_info(users)")
+    user_cols = {row[1] for row in cur.fetchall()}
+    needs_user_upgrade = {"id", "password_hash", "is_superuser", "is_active", "created_at", "modified_at"} - user_cols
+
+    if needs_user_upgrade:
+        now = utc_now_iso()
+        cur.execute("DROP TABLE IF EXISTS users_extended_new")
+        cur.execute(
+            """
+            CREATE TABLE users_extended_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                email TEXT UNIQUE,
+                password_hash TEXT NOT NULL,
+                salt_hex TEXT NOT NULL,
+                is_superuser INTEGER NOT NULL DEFAULT 0,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                modified_at TEXT,
+                first_name TEXT,
+                surname TEXT,
+                role TEXT,
+                radiologist_name TEXT
+            )
+            """
+        )
+        old_rows = cur.execute(
+            "SELECT username, first_name, surname, email, role, radiologist_name, salt_hex, pw_hash_hex FROM users ORDER BY username"
+        ).fetchall()
+        promote_username = None
+        for old in old_rows:
+            if str(old[4] or "").strip().lower() == "admin" and promote_username is None:
+                promote_username = old[0]
+        for old in old_rows:
+            username = old[0]
+            email = (old[3] or "").strip() or None
+            role = (old[4] or "user").strip()
+            is_superuser = 1 if username == promote_username else 0
+            cur.execute(
+                """
+                INSERT INTO users_extended_new(
+                    username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at,
+                    first_name, surname, role, radiologist_name
+                )
+                VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    username,
+                    email,
+                    old[7],
+                    old[6],
+                    is_superuser,
+                    now,
+                    now,
+                    old[1],
+                    old[2],
+                    role,
+                    old[5],
+                ),
+            )
+        cur.execute("ALTER TABLE users RENAME TO users_legacy_backup")
+        cur.execute("ALTER TABLE users_extended_new RENAME TO users")
+
+    cur.execute("PRAGMA table_info(institutions)")
+    institution_cols = {row[1] for row in cur.fetchall()}
+    if "org_id" not in institution_cols:
+        cur.execute("ALTER TABLE institutions ADD COLUMN org_id INTEGER")
+
+    cur.execute("PRAGMA table_info(cases)")
+    case_cols = {row[1] for row in cur.fetchall()}
+    if "org_id" not in case_cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN org_id INTEGER")
+
+    cur.execute("PRAGMA table_info(protocols)")
+    protocol_cols = {row[1] for row in cur.fetchall()}
+    if "org_id" not in protocol_cols:
+        cur.execute("ALTER TABLE protocols ADD COLUMN org_id INTEGER")
+
+    conn.commit()
+
+    org_row = cur.execute("SELECT id FROM organisations ORDER BY id LIMIT 1").fetchone()
+    if org_row:
+        default_org_id = org_row[0]
+    else:
+        default_org_name = "Lumos Lab"
+        default_slug = slugify_org_name(default_org_name)
+        suffix = 1
+        while cur.execute("SELECT 1 FROM organisations WHERE slug = ?", (default_slug,)).fetchone():
+            suffix += 1
+            default_slug = f"{slugify_org_name(default_org_name)}-{suffix}"
+        cur.execute(
+            "INSERT INTO organisations(name, slug, is_active, created_at, modified_at) VALUES (?, ?, 1, ?, ?)",
+            (default_org_name, default_slug, utc_now_iso(), utc_now_iso()),
+        )
+        default_org_id = cur.lastrowid
+
+    cur.execute("UPDATE institutions SET org_id = ? WHERE org_id IS NULL", (default_org_id,))
+    cur.execute("UPDATE cases SET org_id = ? WHERE org_id IS NULL", (default_org_id,))
+    cur.execute("UPDATE protocols SET org_id = ? WHERE org_id IS NULL", (default_org_id,))
+
+    if table_exists("study_description_presets"):
+        cur.execute("UPDATE study_description_presets SET organization_id = ? WHERE organization_id IS NULL OR organization_id = 0", (default_org_id,))
+
+    user_rows = cur.execute("SELECT id, username, role, first_name, surname, radiologist_name FROM users").fetchall()
+    for user_row in user_rows:
+        user_id = user_row[0]
+        username = user_row[1]
+        role = str(user_row[2] or "user").strip().lower()
+        org_role = "org_admin" if role == "admin" else "radiologist" if role == "radiologist" else "org_user"
+        if not cur.execute("SELECT 1 FROM memberships WHERE org_id = ? AND user_id = ?", (default_org_id, user_id)).fetchone():
+            cur.execute(
+                "INSERT INTO memberships(org_id, user_id, org_role, is_active, created_at, modified_at) VALUES (?, ?, ?, 1, ?, ?)",
+                (default_org_id, user_id, org_role, utc_now_iso(), utc_now_iso()),
+            )
+        if role == "radiologist":
+            display_name = (
+                str(user_row[5] or "").strip()
+                or " ".join(part for part in [str(user_row[3] or "").strip(), str(user_row[4] or "").strip()] if part)
+                or username
+            )
+            if not cur.execute("SELECT 1 FROM radiologist_profiles WHERE user_id = ?", (user_id,)).fetchone():
+                cur.execute(
+                    "INSERT INTO radiologist_profiles(user_id, gmc, specialty, display_name, created_at, modified_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (user_id, None, None, display_name, utc_now_iso(), utc_now_iso()),
+                )
+
+    conn.commit()
+    conn.close()
+
+
+def list_organisations_summary() -> list[dict]:
+    if not table_exists("organisations"):
+        return []
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT
+            o.id,
+            o.name,
+            o.slug,
+            o.is_active,
+            o.created_at,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.org_role = 'org_admin' AND m.is_active = 1
+            ) AS admin_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.org_role = 'radiologist' AND m.is_active = 1
+            ) AS radiologist_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.is_active = 1
+            ) AS user_count,
+            (
+                SELECT COUNT(*)
+                FROM institutions i
+                WHERE i.org_id = o.id
+            ) AS institution_count
+        FROM organisations o
+        ORDER BY o.name
+        """
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
     insert_case_event(
         case_id=case_id,
