@@ -2226,6 +2226,7 @@ try:
     ensure_radiologists_schema()
     ensure_users_schema()
     ensure_protocols_schema()
+    ensure_study_description_presets_schema()
     ensure_notify_events_schema()
     ensure_seed_data()
     ensure_default_protocols()
@@ -6082,5 +6083,6 @@ def account_change_password(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+
 
 

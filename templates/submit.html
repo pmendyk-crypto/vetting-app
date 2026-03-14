@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -719,7 +719,7 @@
           <img src="/static/images/logo-light.png" alt="Lumos Lab" onerror="this.style.display='none'">
           <h1>Create New Case</h1>
         </div>
-        <a href="/admin" class="btn secondary">← Back to Dashboard</a>
+        <a href="/admin" class="btn secondary">Back to Dashboard</a>
       </div>
     </div>
 
@@ -727,7 +727,7 @@
       <form method="post" action="/submit" enctype="multipart/form-data" id="caseForm">
 
         {% if error %}
-          <div class="err">⚠️ {{ error }}</div>
+          <div class="err">Warning: {{ error }}</div>
         {% endif %}
 
         <div class="main-grid">
@@ -852,14 +852,14 @@
               <div class="extra-studies-card is-empty" id="extraStudiesBox">
                 <div class="extra-studies-header">
                   <div class="extra-studies-title">
-                    <span class="icon">📚</span>
+                    <span class="icon">??</span>
                     <div class="extra-studies-title-text">
                       <h3>Additional Studies</h3>
                     </div>
                     <span class="extra-studies-subtext">Add more studies for same patient</span>
                   </div>
                   <button type="button" class="add-study-btn" onclick="openAddStudyModal()">
-                    ➕ Add
+                    ? Add
                   </button>
                 </div>
                 <div class="extra-rows" id="extraRows">
@@ -873,7 +873,7 @@
 
           <div class="actions">
             <a href="/admin" class="btn secondary">Cancel</a>
-            <button type="submit" class="btn" name="action" value="submit">✓ Submit Case(s)</button>
+            <button type="submit" class="btn" name="action" value="submit">? Submit Case(s)</button>
           </div>
         </div>
 
@@ -1008,7 +1008,7 @@
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
       removeBtn.className = 'remove-btn';
-      removeBtn.innerHTML = '×';
+      removeBtn.innerHTML = '�';
       removeBtn.title = 'Remove';
       removeBtn.onclick = () => {
         row.remove();
@@ -1391,3 +1391,4 @@
   </div>
 </body>
 </html>
+

@@ -264,6 +264,30 @@
             max-height: 90vh;
             overflow-y: auto;
         }
+
+        .confirm-modal-content {
+            max-width: 460px;
+            padding: 26px 26px 22px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+        }
+
+        .confirm-modal-copy {
+            color: rgba(255, 255, 255, 0.78);
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+
+        .confirm-modal-copy strong {
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        .confirm-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
         
         .modal-header {
             font-size: 18px;
@@ -293,9 +317,9 @@
 </head>
 <body>
     <div class="settings-container">
-        <a href="/settings" class="back-link">← Back to Settings</a>
+        <a href="/settings" class="back-link">Back to Settings</a>
         
-        <div class="section-title">📋 Study Description Presets</div>
+        <div class="section-title">Study Description Presets</div>
         <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 20px; font-size: 14px;">
             Manage standard study descriptions for UK radiology examinations. These presets will appear as searchable dropdowns when submitting cases.
         </p>
@@ -382,11 +406,11 @@
                                     Edit
                                 </button>
                                 {% if preset.is_active %}
-                                <form method="POST" action="/settings/study-descriptions/archive/{{ preset.id }}" style="display: inline;">
-                                    <button type="submit" class="action-btn delete" onclick="return confirm('Archive this preset? It will be hidden from active lists but kept for later use.')">Archive</button>
+                                <form method="POST" action="/settings/study-descriptions/archive/{{ preset.id }}" style="display: inline;" onsubmit="return openConfirmModal(event, 'Archive study description', {{ ('Archive <strong>' ~ preset.description ~ '</strong>? It will be hidden from active lists but kept for later use.')|tojson }})">
+                                    <button type="submit" class="action-btn delete">Archive</button>
                                 </form>
                                 {% else %}
-                                <form method="POST" action="/settings/study-descriptions/restore/{{ preset.id }}" style="display: inline;">
+                                <form method="POST" action="/settings/study-descriptions/restore/{{ preset.id }}" style="display: inline;" onsubmit="return openConfirmModal(event, 'Restore study description', {{ ('Restore <strong>' ~ preset.description ~ '</strong> to active lists?')|tojson }})">
                                     <button type="submit" class="action-btn edit">Restore</button>
                                 </form>
                                 {% endif %}
@@ -424,8 +448,23 @@
             </form>
         </div>
     </div>
+
+    <!-- Confirm Modal -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content confirm-modal-content" style="position: relative;">
+            <button type="button" class="modal-close" onclick="closeConfirmModal()">&times;</button>
+            <div class="modal-header" id="confirmModalTitle">Confirm action</div>
+            <div class="confirm-modal-copy" id="confirmModalMessage"></div>
+            <div class="confirm-modal-actions">
+                <button type="button" class="btn secondary" onclick="closeConfirmModal()">Cancel</button>
+                <button type="button" class="btn" id="confirmModalSubmit">Confirm</button>
+            </div>
+        </div>
+    </div>
     
     <script>
+        let pendingConfirmForm = null;
+
         function filterPresets() {
             const modality = document.getElementById('presetModalityFilter').value.trim().toUpperCase();
             const search = document.getElementById('presetSearchFilter').value.trim().toLowerCase();
@@ -461,6 +500,31 @@
         function closeModal() {
             document.getElementById('editModal').classList.remove('active');
         }
+
+        function openConfirmModal(event, title, message) {
+            event.preventDefault();
+            pendingConfirmForm = event.currentTarget;
+            document.getElementById('confirmModalTitle').textContent = title;
+            document.getElementById('confirmModalMessage').innerHTML = message;
+            document.getElementById('confirmModal').classList.add('active');
+            return false;
+        }
+
+        function closeConfirmModal() {
+            pendingConfirmForm = null;
+            document.getElementById('confirmModal').classList.remove('active');
+        }
+
+        document.getElementById('confirmModalSubmit').addEventListener('click', function() {
+            if (!pendingConfirmForm) {
+                closeConfirmModal();
+                return;
+            }
+            const form = pendingConfirmForm;
+            pendingConfirmForm = null;
+            document.getElementById('confirmModal').classList.remove('active');
+            form.submit();
+        });
         
         // Close modal when clicking outside
         document.getElementById('editModal').addEventListener('click', function(e) {
@@ -468,6 +532,13 @@
                 closeModal();
             }
         });
+
+        document.getElementById('confirmModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeConfirmModal();
+            }
+        });
     </script>
 </body>
 </html>
+
