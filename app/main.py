@@ -5650,22 +5650,6 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
 
         pdf_path = UPLOAD_DIR / f"{case_id}_vetting.pdf"
 
-        c = canvas.Canvas(str(pdf_path), pagesize=A4)
-        width, height = A4
-        y = height - 60
-
-        def line(label: str, value: str):
-            nonlocal y
-            c.setFont("Helvetica-Bold", 10)
-            c.drawString(50, y, f"{label}:")
-            c.setFont("Helvetica", 10)
-            c.drawString(170, y, str(value or ""))
-            y -= 18
-
-        # Helper function to format datetime
-        def format_datetime(iso_string: str) -> str:
-            return format_display_datetime(iso_string)
-
         # Bug 8: Convert row to dict to avoid sqlite3.Row.get() issues
         if isinstance(row, dict):
             case_data = row
@@ -5681,16 +5665,25 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
             if org_row:
                 org_name = org_row.get("name") if isinstance(org_row, dict) else org_row[0]
 
+        events: list[dict] = []
+        if table_exists("case_events"):
+            conn = get_db()
+            event_rows = conn.execute(
+                "SELECT * FROM case_events WHERE case_id = ? ORDER BY created_at ASC",
+                (case_id,),
+            ).fetchall()
+            conn.close()
+            events = [dict(e) for e in event_rows]
+
         # Radiologist details (profile + GMC)
         rad_name = case_data.get("radiologist", "")
         rad_display = rad_name
         rad_gmc = ""
-        rad_position = ""
         if rad_name and table_exists("radiologist_profiles") and table_exists("users"):
             conn = get_db()
             params = [rad_name, rad_name]
             sql = (
-                "SELECT rp.display_name, rp.gmc, rp.specialty, u.username, u.first_name, u.surname "
+                "SELECT rp.display_name, rp.gmc, u.username "
                 "FROM radiologist_profiles rp "
                 "JOIN users u ON u.id = rp.user_id "
             )
@@ -5707,170 +5700,347 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
                 prof = dict(prof)
                 rad_display = prof.get("display_name") or rad_display
                 rad_gmc = prof.get("gmc") or ""
-                rad_position = prof.get("specialty") or ""
         elif rad_name:
             rad = get_radiologist(rad_name)
             if rad:
                 rad_gmc = rad.get("gmc", "")
 
-        # Get institution details
         institution_name = ""
         if case_data.get("institution_id"):
             inst = get_institution(case_data.get("institution_id"))
             if inst:
                 institution_name = inst["name"]
 
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(50, y, "Vetting Decision Report")
-        y -= 30
+        def format_datetime(iso_string: str | None) -> str:
+            return format_display_datetime(iso_string)
 
-        # Case Details Section
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(50, y, "Case Details")
-        y -= 15
-        c.setFont("Helvetica", 10)
+        def decision_label(case_row: dict) -> str:
+            status = str(case_row.get("status") or "").lower()
+            decision = str(case_row.get("decision") or "").strip()
+            if status == "rejected" or decision == "Reject":
+                return "Rejected"
+            if decision == "Approve with comment":
+                return "Justified with comment"
+            if decision == "Approve":
+                return "Justified"
+            if decision:
+                return decision
+            if status == "vetted":
+                return "Justified"
+            return status.title() if status else "Pending"
 
-        if org_name:
-            line("Organisation", org_name)
+        def status_label(status_value: str | None) -> str:
+            status = str(status_value or "").lower()
+            if status == "vetted":
+                return "JUSTIFIED"
+            return status.upper() if status else "PENDING"
 
-        line("Case ID", case_data.get("id", ""))
-        
-        # Created timestamp in DD-MM-YYYY HH:MM format
-        created_formatted = format_datetime(case_data.get("created_at", ""))
-        line("Created", created_formatted)
+        def event_label(event: dict) -> str:
+            event_type = str(event.get("event_type") or "").upper()
+            if event_type == "SUBMITTED":
+                return "Case submitted"
+            if event_type == "ASSIGNED":
+                return "Assigned to radiologist"
+            if event_type == "OPENED":
+                return "Case opened by radiologist"
+            if event_type == "REOPENED":
+                return "Case reopened by admin"
+            if event_type == "VETTED":
+                return "Justification recorded"
+            if event_type == "EDITED":
+                return "Case edited"
+            return event_type.title()
 
-        # Patient Information
-        patient_name = f"{case_data.get('patient_first_name') or ''} {case_data.get('patient_surname') or ''}".strip() or "N/A"
-        line("Patient Name", patient_name)
-        
-        if case_data.get("patient_referral_id"):
-            line("Patient ID", case_data.get("patient_referral_id", ""))
+        def note_entries_from_events(all_events: list[dict]) -> list[dict]:
+            entries: list[dict] = []
+            for event in all_events:
+                event_type = str(event.get("event_type") or "").upper()
+                comment = str(event.get("comment") or "").strip()
+                if not comment:
+                    continue
+                if event_type == "SUBMITTED":
+                    entries.append({
+                        "kind": "Admin note",
+                        "created_at": event.get("created_at"),
+                        "text": comment,
+                    })
+                elif event_type == "REOPENED":
+                    entries.append({
+                        "kind": "Reopened note",
+                        "created_at": event.get("created_at"),
+                        "text": comment,
+                    })
+                elif event_type == "EDITED" and "Notes:" in comment:
+                    note_text = comment.split("Notes:", 1)[1].strip()
+                    if note_text:
+                        entries.append({
+                            "kind": "Admin note",
+                            "created_at": event.get("created_at"),
+                            "text": note_text,
+                        })
+            return entries
 
-        if case_data.get("patient_dob"):
-            line("Patient DOB", case_data.get("patient_dob", ""))
-
-        # Institution
-        line("Institution", institution_name or "N/A")
-
-        # Radiologist
-        line("Radiologist", rad_display or "N/A")
-        if rad_position:
-            line("Position", rad_position)
-
-        # GNC Number (if available)
-        if rad_gmc:
-            line("GMC/GNC Number", rad_gmc)
-        elif rad_name:
-            line("GMC/GNC Number", "MISSING")
-
-        # Study Description
-        if case_data.get("study_description"):
-            line("Study Description", case_data.get("study_description", ""))
-
-        # Admin Notes
-        if case_data.get("admin_notes"):
-            y -= 10
-            c.setFont("Helvetica-Bold", 11)
-            c.drawString(50, y, "Admin Notes")
-            y -= 15
-            c.setFont("Helvetica", 10)
-            
-            admin_note_lines = (case_data.get("admin_notes", "") or "").split('\n')
-            for note_line in admin_note_lines:
-                # Wrap long lines at 80 characters
-                line_text = note_line.strip()
-                while len(line_text) > 80:
-                    if y < 100:
-                        c.showPage()
-                        y = height - 60
-                    c.drawString(70, y, line_text[:80])
-                    y -= 12
-                    line_text = line_text[80:]
-                
-                if line_text:
-                    if y < 100:
-                        c.showPage()
-                        y = height - 60
-                    c.drawString(70, y, line_text)
-                    y -= 12
-
-        y -= 10
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(50, y, "Vetting Decision")
-        y -= 15
-        c.setFont("Helvetica", 10)
-
-        # Decision
-        line("Decision", case_data.get("decision", "N/A"))
-
-        # Protocol (only if not rejected)
+        protocol_notes = ""
         protocol_name = case_data.get("protocol")
         if case_data.get("decision") != "Reject" and protocol_name:
-            line("Protocol", protocol_name)
-            
-            # Get protocol instructions from protocols table
             try:
                 conn = get_db()
-                protocol_row = conn.execute(
-                    "SELECT instructions FROM protocols WHERE name = ? AND org_id = ? LIMIT 1",
-                    (protocol_name, case_data.get("org_id"))
-                ).fetchone()
+                if case_data.get("org_id"):
+                    protocol_row = conn.execute(
+                        "SELECT instructions FROM protocols WHERE name = ? AND org_id = ? LIMIT 1",
+                        (protocol_name, case_data.get("org_id")),
+                    ).fetchone()
+                else:
+                    protocol_row = conn.execute(
+                        "SELECT instructions FROM protocols WHERE name = ? LIMIT 1",
+                        (protocol_name,),
+                    ).fetchone()
                 conn.close()
-                
                 if protocol_row:
-                    # Handle both dict and Row objects
-                    protocol_instructions = protocol_row.get("instructions") if isinstance(protocol_row, dict) else protocol_row["instructions"]
-                    if protocol_instructions:
-                        c.setFont("Helvetica-Bold", 10)
-                        c.drawString(50, y, "Protocol Notes:")
-                        c.setFont("Helvetica", 10)
-                        y -= 15
-                        
-                        # Split instructions into lines and handle multi-line text
-                        instruction_lines = protocol_instructions.split('\n')
-                        for instruction_line in instruction_lines:
-                            # Wrap long lines at 80 characters
-                            line_text = instruction_line.strip()
-                            while len(line_text) > 80:
-                                if y < 100:
-                                    c.showPage()
-                                    y = height - 60
-                                c.drawString(70, y, line_text[:80])
-                                y -= 12
-                                line_text = line_text[80:]
-                            
-                            if line_text:
-                                if y < 100:
-                                    c.showPage()
-                                    y = height - 60
-                                c.drawString(70, y, line_text)
-                                y -= 12
-                        y += 2  # Small spacing adjustment
-            except Exception as e:
-                print(f"Error fetching protocol instructions: {e}")
+                    protocol_notes = protocol_row.get("instructions") if isinstance(protocol_row, dict) else protocol_row["instructions"]
+            except Exception as exc:
+                print(f"Error fetching protocol instructions: {exc}")
 
-        # Decision Comment
-        if case_data.get("decision_comment"):
-            c.setFont("Helvetica-Bold", 10)
-            c.drawString(50, y, "Comment:")
-            c.setFont("Helvetica", 10)
+        c = canvas.Canvas(str(pdf_path), pagesize=A4)
+        width, height = A4
+        left = 42
+        right = width - 42
+        y = height - 54
+
+        accent = colors.HexColor("#1f6feb")
+        accent_soft = colors.HexColor("#dbeafe")
+        ink = colors.HexColor("#0f172a")
+        muted = colors.HexColor("#475569")
+        border = colors.HexColor("#cbd5e1")
+        note_fill = colors.HexColor("#f8fafc")
+        reopened_fill = colors.HexColor("#ecfeff")
+        reopened_border = colors.HexColor("#67e8f9")
+        if str(case_data.get("status") or "").lower() == "rejected":
+            status_fill = colors.HexColor("#fee2e2")
+            status_text = colors.HexColor("#b91c1c")
+        elif str(case_data.get("status") or "").lower() == "reopened":
+            status_fill = colors.HexColor("#cffafe")
+            status_text = colors.HexColor("#0f766e")
+        elif str(case_data.get("status") or "").lower() == "vetted":
+            status_fill = colors.HexColor("#dcfce7")
+            status_text = colors.HexColor("#166534")
+        else:
+            status_fill = colors.HexColor("#fef3c7")
+            status_text = colors.HexColor("#92400e")
+
+        def new_page():
+            nonlocal y
+            c.showPage()
+            y = height - 54
+
+        def ensure_space(required: int):
+            nonlocal y
+            if y - required < 50:
+                new_page()
+
+        def draw_wrapped(text_value: str, x: int, y_top: int, max_width: int, *, font_name: str = "Helvetica", font_size: int = 10, color=ink, leading: int = 13) -> int:
+            text = str(text_value or "").strip()
+            if not text:
+                return y_top
+            c.setFillColor(color)
+            c.setFont(font_name, font_size)
+            paragraphs = text.splitlines() or [text]
+            y_cursor = y_top
+            for paragraph in paragraphs:
+                words = paragraph.split() or [""]
+                line_buf = words[0]
+                for word in words[1:]:
+                    candidate = f"{line_buf} {word}".strip()
+                    if c.stringWidth(candidate, font_name, font_size) <= max_width:
+                        line_buf = candidate
+                    else:
+                        c.drawString(x, y_cursor, line_buf)
+                        y_cursor -= leading
+                        line_buf = word
+                c.drawString(x, y_cursor, line_buf)
+                y_cursor -= leading
+            return y_cursor
+
+        def section_title(title: str):
+            nonlocal y
+            ensure_space(34)
+            c.setStrokeColor(accent)
+            c.setLineWidth(1)
+            c.line(left, y, right, y)
             y -= 15
-            comment_lines = (case_data.get("decision_comment", "") or "").split('\n')
-            for comment_line in comment_lines:
-                if y < 100:
-                    c.showPage()
-                    y = height - 60
-                c.drawString(70, y, comment_line[:80])
-                y -= 12
+            c.setFillColor(accent)
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(left, y, title)
+            y -= 18
 
-        y -= 10
-        # Vetted timestamp in DD-MM-YYYY HH:MM format
-        vetted_formatted = format_datetime(case_data.get("vetted_at", ""))
-        if vetted_formatted:
+        def draw_info_grid(rows: list[tuple[str, str]]):
+            nonlocal y
+            col_gap = 24
+            col_width = (right - left - col_gap) / 2
+            row_height = 32
+            grid_rows = [rows[i:i + 2] for i in range(0, len(rows), 2)]
+            ensure_space(int(len(grid_rows) * row_height + 24))
+            top = y
+            box_height = len(grid_rows) * row_height + 8
+            c.setFillColor(colors.white)
+            c.setStrokeColor(border)
+            c.roundRect(left, top - box_height + 6, right - left, box_height, 10, stroke=1, fill=1)
+            current_y = top - 18
+            for pair in grid_rows:
+                for idx, (label, value) in enumerate(pair):
+                    x = left + (col_width + col_gap) * idx + 14
+                    c.setFillColor(muted)
+                    c.setFont("Helvetica-Bold", 8)
+                    c.drawString(x, current_y, label.upper())
+                    c.setFillColor(ink)
+                    c.setFont("Helvetica", 10)
+                    draw_wrapped(value or "-", x, current_y - 13, int(col_width - 24), font_size=10, color=ink, leading=12)
+                current_y -= row_height
+            y = top - box_height - 8
+
+        def draw_note_card(kind: str, created_at: str | None, text_value: str):
+            nonlocal y
+            lines = str(text_value or "").strip().splitlines() or [""]
+            estimated_height = 52 + max(0, len(lines) - 1) * 12
+            ensure_space(estimated_height + 12)
+            fill_color = reopened_fill if "Reopened" in kind else note_fill
+            stroke_color = reopened_border if "Reopened" in kind else border
+            c.setFillColor(fill_color)
+            c.setStrokeColor(stroke_color)
+            c.roundRect(left, y - estimated_height, right - left, estimated_height, 10, stroke=1, fill=1)
+            c.setFillColor(accent if "Reopened" in kind else muted)
+            c.setFont("Helvetica-Bold", 9)
+            c.drawString(left + 14, y - 16, kind.upper())
+            c.setFillColor(muted)
+            c.setFont("Helvetica", 9)
+            c.drawRightString(right - 14, y - 16, format_datetime(created_at))
+            y_text = y - 34
+            y_after = draw_wrapped(text_value, left + 14, y_text, int(right - left - 28), font_size=10, color=ink, leading=13)
+            y = min(y - estimated_height - 10, y_after - 8)
+
+        def draw_timeline_row(timestamp: str, label: str, details: str = ""):
+            nonlocal y
+            detail_lines = details.splitlines() if details else []
+            row_height = 22 + len(detail_lines) * 11
+            ensure_space(row_height + 10)
+            c.setStrokeColor(border)
+            c.line(left, y, right, y)
+            y -= 14
+            c.setFillColor(muted)
+            c.setFont("Helvetica-Bold", 9)
+            c.drawString(left, y, timestamp)
+            c.setFillColor(ink)
             c.setFont("Helvetica-Bold", 10)
-            c.drawString(50, y, "Vetted:")
+            c.drawString(left + 118, y, label)
+            y -= 13
+            if details:
+                y = draw_wrapped(details, left + 118, y, int(right - left - 118), font_size=9, color=muted, leading=11)
+            y -= 6
+
+        # Header
+        c.setFillColor(accent)
+        c.roundRect(left, y, right - left, 8, 4, stroke=0, fill=1)
+        y -= 28
+        c.setFillColor(ink)
+        c.setFont("Helvetica-Bold", 20)
+        c.drawString(left, y, "Justification Decision Report")
+        c.setFillColor(muted)
+        c.setFont("Helvetica", 10)
+        c.drawRightString(right, y + 3, f"Generated: {format_datetime(utc_now_iso())}")
+        y -= 18
+        c.setFillColor(muted)
+        c.setFont("Helvetica", 10)
+        c.drawString(left, y, org_name or "Lumos Lab")
+        c.drawRightString(right, y, f"Case ID: {case_data.get('id', '')}")
+        y -= 24
+
+        badge_width = 110
+        c.setFillColor(status_fill)
+        c.setStrokeColor(status_fill)
+        c.roundRect(left, y - 6, badge_width, 24, 12, stroke=1, fill=1)
+        c.setFillColor(status_text)
+        c.setFont("Helvetica-Bold", 10)
+        c.drawCentredString(left + badge_width / 2, y + 2, status_label(case_data.get("status")))
+        y -= 28
+
+        section_title("Case Summary")
+        patient_name = f"{case_data.get('patient_first_name') or ''} {case_data.get('patient_surname') or ''}".strip() or "Not recorded"
+        draw_info_grid([
+            ("Patient Name", patient_name),
+            ("Patient ID / NHS Number", case_data.get("patient_referral_id") or "Not recorded"),
+            ("Date of Birth", case_data.get("patient_dob") or "Not recorded"),
+            ("Institution", institution_name or "Not recorded"),
+            ("Modality", case_data.get("modality") or "Not recorded"),
+            ("Study Description", case_data.get("study_description") or "Not recorded"),
+            ("Radiologist", rad_display or "Not assigned"),
+            ("Radiologist GMC", rad_gmc or "Not recorded"),
+        ])
+
+        section_title("Justification Decision")
+        ensure_space(125)
+        c.setFillColor(colors.white)
+        c.setStrokeColor(accent_soft)
+        c.roundRect(left, y - 112, right - left, 112, 12, stroke=1, fill=1)
+        top_y = y - 18
+        decision_rows = [
+            ("Decision", decision_label(case_data)),
+            ("Protocol", case_data.get("protocol") or "Not recorded"),
+            ("Justified By", rad_display or "Not assigned"),
+            ("Radiologist GMC", rad_gmc or "Not recorded"),
+            ("Justified At", format_datetime(case_data.get("vetted_at")) or "Not recorded"),
+        ]
+        row_y = top_y
+        for label, value in decision_rows:
+            c.setFillColor(muted)
+            c.setFont("Helvetica-Bold", 8)
+            c.drawString(left + 14, row_y, label.upper())
+            c.setFillColor(ink)
             c.setFont("Helvetica", 10)
-            c.drawString(170, y, vetted_formatted)
+            c.drawString(left + 145, row_y, str(value))
+            row_y -= 17
+        if case_data.get("decision_comment"):
+            row_y -= 2
+            c.setFillColor(muted)
+            c.setFont("Helvetica-Bold", 8)
+            c.drawString(left + 14, row_y, "DECISION COMMENT")
+            row_y -= 14
+            row_y = draw_wrapped(case_data.get("decision_comment") or "", left + 14, row_y, int(right - left - 28), font_size=10, color=ink, leading=12)
+        y = row_y - 12
+
+        if protocol_notes:
+            section_title("Protocol Notes")
+            ensure_space(90)
+            c.setFillColor(colors.white)
+            c.setStrokeColor(accent_soft)
+            c.roundRect(left, y - 74, right - left, 74, 12, stroke=1, fill=1)
+            y = draw_wrapped(protocol_notes, left + 14, y - 20, int(right - left - 28), font_size=10, color=ink, leading=13) - 10
+
+        section_title("Timeline")
+        if events:
+            for event in events:
+                event_details = ""
+                if str(event.get("event_type") or "").upper() == "SUBMITTED":
+                    event_details = ""
+                elif event.get("comment"):
+                    event_details = str(event.get("comment") or "").strip()
+                elif event.get("decision"):
+                    event_details = str(event.get("decision") or "").strip()
+                draw_timeline_row(
+                    format_datetime(event.get("created_at")),
+                    event_label(event),
+                    event_details,
+                )
+        else:
+            draw_timeline_row(format_datetime(case_data.get("created_at")), "Case submitted", "")
+
+        ensure_space(30)
+        c.setStrokeColor(border)
+        c.line(left, y, right, y)
+        y -= 16
+        c.setFillColor(muted)
+        c.setFont("Helvetica", 8)
+        c.drawString(left, y, "Generated by Lumos Lab Healthcare Applications")
+        c.drawRightString(right, y, "Confidential workflow document")
 
         c.showPage()
         c.save()
