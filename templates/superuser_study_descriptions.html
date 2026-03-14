@@ -131,6 +131,19 @@
             border-radius: 8px;
             overflow: hidden;
         }
+
+        .filter-bar {
+            display: grid;
+            grid-template-columns: 220px minmax(260px, 1fr);
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .results-meta {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 13px;
+            margin: 6px 0 14px;
+        }
         
         .preset-item {
             display: grid;
@@ -147,6 +160,11 @@
         
         .preset-item:hover {
             background: rgba(255, 255, 255, 0.02);
+        }
+
+        .preset-item.archived {
+            opacity: 0.62;
+            background: rgba(148, 163, 184, 0.04);
         }
         
         .preset-modality {
@@ -321,12 +339,38 @@
         <!-- Presets List -->
         <div>
             <h3 style="margin: 0 0 15px 0; color: white; font-size: 16px;">Current Presets ({{ presets|length }})</h3>
+            <div class="filter-bar">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Filter by Modality</label>
+                    <select id="presetModalityFilter" oninput="filterPresets()">
+                        <option value="">All Modalities</option>
+                        {% for modality in modalities %}
+                        <option value="{{ modality }}">{{ modality }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Search Description</label>
+                    <input type="text" id="presetSearchFilter" placeholder="Search by word or phrase..." oninput="filterPresets()">
+                </div>
+            </div>
+            <div class="filter-bar" style="grid-template-columns: 220px auto; align-items: end;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Status</label>
+                    <select id="presetStatusFilter" oninput="filterPresets()">
+                        <option value="">All</option>
+                        <option value="active">Active</option>
+                        <option value="archived">Archived</option>
+                    </select>
+                </div>
+                <div class="results-meta" id="presetResultsMeta">Showing {{ presets|length }} presets</div>
+            </div>
             {% if presets|length == 0 %}
                 <div class="empty-state">No presets found. Add one using the form above.</div>
             {% else %}
-                <div class="presets-list">
+                <div class="presets-list" id="presetList">
                     {% for preset in presets %}
-                        <div class="preset-item">
+                        <div class="preset-item {% if not preset.is_active %}archived{% endif %}" data-modality="{{ preset.modality }}" data-description="{{ preset.description|lower }}" data-status="{{ 'active' if preset.is_active else 'archived' }}">
                             <div class="preset-modality">{{ preset.modality }}</div>
                             <div class="preset-description">{{ preset.description }}</div>
                             <div class="preset-actions">
@@ -337,9 +381,15 @@
                                 >
                                     Edit
                                 </button>
-                                <form method="POST" action="/settings/study-descriptions/delete/{{ preset.id }}" style="display: inline;">
-                                    <button type="submit" class="action-btn delete" onclick="return confirm('Delete this preset?')">Delete</button>
+                                {% if preset.is_active %}
+                                <form method="POST" action="/settings/study-descriptions/archive/{{ preset.id }}" style="display: inline;">
+                                    <button type="submit" class="action-btn delete" onclick="return confirm('Archive this preset? It will be hidden from active lists but kept for later use.')">Archive</button>
                                 </form>
+                                {% else %}
+                                <form method="POST" action="/settings/study-descriptions/restore/{{ preset.id }}" style="display: inline;">
+                                    <button type="submit" class="action-btn edit">Restore</button>
+                                </form>
+                                {% endif %}
                             </div>
                         </div>
                     {% endfor %}
@@ -376,6 +426,31 @@
     </div>
     
     <script>
+        function filterPresets() {
+            const modality = document.getElementById('presetModalityFilter').value.trim().toUpperCase();
+            const search = document.getElementById('presetSearchFilter').value.trim().toLowerCase();
+            const status = document.getElementById('presetStatusFilter').value.trim().toLowerCase();
+            const rows = document.querySelectorAll('#presetList .preset-item');
+            let visibleCount = 0;
+
+            rows.forEach((row) => {
+                const rowModality = (row.dataset.modality || '').toUpperCase();
+                const rowDescription = (row.dataset.description || '').toLowerCase();
+                const rowStatus = (row.dataset.status || '').toLowerCase();
+                const matchesModality = !modality || rowModality === modality;
+                const matchesSearch = !search || rowDescription.includes(search);
+                const matchesStatus = !status || rowStatus === status;
+                const show = matchesModality && matchesSearch && matchesStatus;
+                row.style.display = show ? '' : 'none';
+                if (show) visibleCount += 1;
+            });
+
+            const resultsMeta = document.getElementById('presetResultsMeta');
+            if (resultsMeta) {
+                resultsMeta.textContent = `Showing ${visibleCount} preset${visibleCount === 1 ? '' : 's'}`;
+            }
+        }
+
         function editPreset(id, modality, description) {
             document.getElementById('editModality').value = modality;
             document.getElementById('editDescription').value = description;

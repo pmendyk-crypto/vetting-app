@@ -775,6 +775,7 @@ def init_db() -> None:
                 organization_id INTEGER NOT NULL,
                 modality TEXT NOT NULL,
                 description TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 created_by INTEGER NOT NULL,
@@ -949,6 +950,7 @@ def init_db() -> None:
             organization_id INTEGER NOT NULL,
             modality TEXT NOT NULL,
             description TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             created_by INTEGER NOT NULL,
@@ -1130,6 +1132,22 @@ def ensure_protocols_schema() -> None:
     if "study_description_preset_id" not in cols:
         cur.execute("ALTER TABLE protocols ADD COLUMN study_description_preset_id INTEGER")
 
+    conn.commit()
+    conn.close()
+
+
+def ensure_study_description_presets_schema() -> None:
+    if using_postgres():
+        return
+    if not table_exists("study_description_presets"):
+        return
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(study_description_presets)")
+    cols = {row[1] for row in cur.fetchall()}
+    if "is_active" not in cols:
+        cur.execute("ALTER TABLE study_description_presets ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+        cur.execute("UPDATE study_description_presets SET is_active = 1 WHERE is_active IS NULL")
     conn.commit()
     conn.close()
 
@@ -1486,9 +1504,9 @@ def list_study_description_presets(org_id: int | None = None) -> list[dict]:
     target_org_id = org_id or 1
     rows = conn.execute(
         """
-        SELECT id, modality, description
+        SELECT id, modality, description, is_active
         FROM study_description_presets
-        WHERE organization_id = ?
+        WHERE organization_id = ? AND COALESCE(is_active, 1) = 1
         ORDER BY modality, description
         """,
         (target_org_id,),
@@ -1496,9 +1514,9 @@ def list_study_description_presets(org_id: int | None = None) -> list[dict]:
     if not rows and target_org_id != 1:
         rows = conn.execute(
             """
-            SELECT id, modality, description
+            SELECT id, modality, description, is_active
             FROM study_description_presets
-            WHERE organization_id = 1
+            WHERE organization_id = 1 AND COALESCE(is_active, 1) = 1
             ORDER BY modality, description
             """
         ).fetchall()
@@ -1513,7 +1531,7 @@ def get_study_description_preset(preset_id: int, org_id: int | None = None) -> d
         """
         SELECT id, modality, description
         FROM study_description_presets
-        WHERE id = ? AND organization_id = ?
+        WHERE id = ? AND organization_id = ? AND COALESCE(is_active, 1) = 1
         LIMIT 1
         """,
         (preset_id, target_org_id),
@@ -1523,7 +1541,7 @@ def get_study_description_preset(preset_id: int, org_id: int | None = None) -> d
             """
             SELECT id, modality, description
             FROM study_description_presets
-            WHERE id = ? AND organization_id = 1
+            WHERE id = ? AND organization_id = 1 AND COALESCE(is_active, 1) = 1
             LIMIT 1
             """,
             (preset_id,),
@@ -4538,12 +4556,12 @@ def get_study_descriptions(modality: str, request: Request, org_id: str = None):
     conn = get_db()
     modality = modality.upper().strip()
     rows = conn.execute(
-        "SELECT id, description FROM study_description_presets WHERE organization_id = ? AND modality = ? ORDER BY description",
+        "SELECT id, description FROM study_description_presets WHERE organization_id = ? AND modality = ? AND COALESCE(is_active, 1) = 1 ORDER BY description",
         (org_id, modality)
     ).fetchall()
     if not rows and org_id != 1:
         rows = conn.execute(
-            "SELECT id, description FROM study_description_presets WHERE organization_id = 1 AND modality = ? ORDER BY description",
+            "SELECT id, description FROM study_description_presets WHERE organization_id = 1 AND modality = ? AND COALESCE(is_active, 1) = 1 ORDER BY description",
             (modality,)
         ).fetchall()
     conn.close()
@@ -4585,13 +4603,13 @@ def get_protocols_by_study_description(
 
 @app.get("/settings/study-descriptions", response_class=HTMLResponse)
 def study_descriptions_page(request: Request):
-    """Superuser page to manage study description presets for their organization"""
-    user = require_superuser(request)
-    org_id = user.get("org_id") or user.get("organization_id")
+    """Admin page to manage study description presets for the current organization."""
+    user = require_admin(request)
+    org_id = user.get("org_id") or user.get("organization_id") or 1
     
     conn = get_db()
     presets = conn.execute(
-        "SELECT id, modality, description, created_at, updated_at FROM study_description_presets WHERE organization_id = ? ORDER BY modality, description",
+        "SELECT id, modality, description, COALESCE(is_active, 1) AS is_active, created_at, updated_at FROM study_description_presets WHERE organization_id = ? ORDER BY modality, description",
         (org_id,)
     ).fetchall()
     conn.close()
@@ -4604,9 +4622,9 @@ def study_descriptions_page(request: Request):
 
 @app.post("/settings/study-descriptions/add")
 def add_study_description(request: Request, modality: str = Form(...), description: str = Form(...), org_id: str = Form("")):
-    """Add new study description preset for user's organization"""
-    user = require_superuser(request)
-    target_org_id = user.get("org_id") or user.get("organization_id")
+    """Add new study description preset for the current organization."""
+    user = require_admin(request)
+    target_org_id = user.get("org_id") or user.get("organization_id") or 1
     if org_id:
         try:
             target_org_id = int(org_id)
@@ -4627,8 +4645,8 @@ def add_study_description(request: Request, modality: str = Form(...), descripti
     conn = get_db()
     try:
         conn.execute(
-            "INSERT INTO study_description_presets (organization_id, modality, description, created_at, updated_at, created_by) VALUES (?, ?, ?, ?, ?, ?)",
-            (target_org_id, modality, description, datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat(), creator_id)
+            "INSERT INTO study_description_presets (organization_id, modality, description, is_active, created_at, updated_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (target_org_id, modality, description, 1, datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat(), creator_id)
         )
         conn.commit()
     except (sqlite3.IntegrityError, SQLAlchemyError):
@@ -4642,22 +4660,40 @@ def add_study_description(request: Request, modality: str = Form(...), descripti
     
     return RedirectResponse(url="/settings/study-descriptions", status_code=303)
 
-@app.post("/settings/study-descriptions/delete/{preset_id}")
-def delete_study_description(request: Request, preset_id: int):
-    """Delete study description preset from user's organization"""
-    user = require_superuser(request)
-    org_id = user.get("org_id") or user.get("organization_id")
+@app.post("/settings/study-descriptions/archive/{preset_id}")
+def archive_study_description(request: Request, preset_id: int):
+    """Archive study description preset from the current organization."""
+    user = require_admin(request)
+    org_id = user.get("org_id") or user.get("organization_id") or 1
     conn = get_db()
-    conn.execute("DELETE FROM study_description_presets WHERE id = ? AND organization_id = ?", (preset_id, org_id))
+    conn.execute(
+        "UPDATE study_description_presets SET is_active = 0, updated_at = ? WHERE id = ? AND organization_id = ?",
+        (datetime.now(timezone.utc).isoformat(), preset_id, org_id),
+    )
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/settings/study-descriptions", status_code=303)
+
+
+@app.post("/settings/study-descriptions/restore/{preset_id}")
+def restore_study_description(request: Request, preset_id: int):
+    """Restore archived study description preset for the current organization."""
+    user = require_admin(request)
+    org_id = user.get("org_id") or user.get("organization_id") or 1
+    conn = get_db()
+    conn.execute(
+        "UPDATE study_description_presets SET is_active = 1, updated_at = ? WHERE id = ? AND organization_id = ?",
+        (datetime.now(timezone.utc).isoformat(), preset_id, org_id),
+    )
     conn.commit()
     conn.close()
     return RedirectResponse(url="/settings/study-descriptions", status_code=303)
 
 @app.post("/settings/study-descriptions/edit/{preset_id}")
 def edit_study_description(request: Request, preset_id: int, modality: str = Form(...), description: str = Form(...)):
-    """Edit study description preset for user's organization"""
-    user = require_superuser(request)
-    org_id = user.get("org_id") or user.get("organization_id")
+    """Edit study description preset for the current organization."""
+    user = require_admin(request)
+    org_id = user.get("org_id") or user.get("organization_id") or 1
     modality = modality.upper().strip()
     description = description.strip()
     
