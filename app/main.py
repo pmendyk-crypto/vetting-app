@@ -5861,32 +5861,58 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
                 y_cursor -= leading
             return y_cursor
 
+        def wrapped_height(text_value: str, max_width: int, *, font_name: str = "Helvetica", font_size: int = 10, leading: int = 13) -> int:
+            text = str(text_value or "").strip()
+            if not text:
+                return 0
+            paragraphs = text.splitlines() or [text]
+            total_lines = 0
+            for paragraph in paragraphs:
+                words = paragraph.split() or [""]
+                line_buf = words[0]
+                line_count = 1
+                for word in words[1:]:
+                    candidate = f"{line_buf} {word}".strip()
+                    if c.stringWidth(candidate, font_name, font_size) <= max_width:
+                        line_buf = candidate
+                    else:
+                        line_count += 1
+                        line_buf = word
+                total_lines += line_count
+            return total_lines * leading
+
         def section_title(title: str):
             nonlocal y
-            ensure_space(34)
+            ensure_space(42)
             c.setStrokeColor(accent)
             c.setLineWidth(1)
             c.line(left, y, right, y)
-            y -= 15
+            y -= 17
             c.setFillColor(accent)
             c.setFont("Helvetica-Bold", 12)
             c.drawString(left, y, title)
-            y -= 18
+            y -= 22
 
         def draw_info_grid(rows: list[tuple[str, str]]):
             nonlocal y
             col_gap = 24
             col_width = (right - left - col_gap) / 2
-            row_height = 32
             grid_rows = [rows[i:i + 2] for i in range(0, len(rows), 2)]
-            ensure_space(int(len(grid_rows) * row_height + 24))
+            row_heights: list[int] = []
+            for pair in grid_rows:
+                max_height = 34
+                for _, value in pair:
+                    value_height = wrapped_height(value or "-", int(col_width - 24), font_size=10, leading=12)
+                    max_height = max(max_height, 22 + value_height)
+                row_heights.append(max_height)
+            box_height = sum(row_heights) + 18
+            ensure_space(int(box_height + 24))
             top = y
-            box_height = len(grid_rows) * row_height + 8
             c.setFillColor(colors.white)
             c.setStrokeColor(border)
-            c.roundRect(left, top - box_height + 6, right - left, box_height, 10, stroke=1, fill=1)
+            c.roundRect(left, top - box_height + 8, right - left, box_height, 10, stroke=1, fill=1)
             current_y = top - 18
-            for pair in grid_rows:
+            for pair, this_row_height in zip(grid_rows, row_heights):
                 for idx, (label, value) in enumerate(pair):
                     x = left + (col_width + col_gap) * idx + 14
                     c.setFillColor(muted)
@@ -5895,8 +5921,8 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
                     c.setFillColor(ink)
                     c.setFont("Helvetica", 10)
                     draw_wrapped(value or "-", x, current_y - 13, int(col_width - 24), font_size=10, color=ink, leading=12)
-                current_y -= row_height
-            y = top - box_height - 8
+                current_y -= this_row_height
+            y = top - box_height - 14
 
         def draw_note_card(kind: str, created_at: str | None, text_value: str):
             nonlocal y
@@ -5977,10 +6003,12 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
         ])
 
         section_title("Justification Decision")
-        ensure_space(125)
+        comment_height = wrapped_height(case_data.get("decision_comment") or "", int(right - left - 28), font_size=10, leading=12)
+        decision_box_height = 120 + comment_height
+        ensure_space(decision_box_height + 18)
         c.setFillColor(colors.white)
         c.setStrokeColor(accent_soft)
-        c.roundRect(left, y - 112, right - left, 112, 12, stroke=1, fill=1)
+        c.roundRect(left, y - decision_box_height, right - left, decision_box_height, 12, stroke=1, fill=1)
         top_y = y - 18
         decision_rows = [
             ("Decision", decision_label(case_data)),
@@ -5997,23 +6025,24 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
             c.setFillColor(ink)
             c.setFont("Helvetica", 10)
             c.drawString(left + 145, row_y, str(value))
-            row_y -= 17
+            row_y -= 18
         if case_data.get("decision_comment"):
-            row_y -= 2
+            row_y -= 4
             c.setFillColor(muted)
             c.setFont("Helvetica-Bold", 8)
             c.drawString(left + 14, row_y, "DECISION COMMENT")
-            row_y -= 14
+            row_y -= 16
             row_y = draw_wrapped(case_data.get("decision_comment") or "", left + 14, row_y, int(right - left - 28), font_size=10, color=ink, leading=12)
-        y = row_y - 12
+        y = row_y - 18
 
         if protocol_notes:
             section_title("Protocol Notes")
-            ensure_space(90)
+            protocol_box_height = max(92, 34 + wrapped_height(protocol_notes, int(right - left - 28), font_size=10, leading=13))
+            ensure_space(protocol_box_height + 16)
             c.setFillColor(colors.white)
             c.setStrokeColor(accent_soft)
-            c.roundRect(left, y - 74, right - left, 74, 12, stroke=1, fill=1)
-            y = draw_wrapped(protocol_notes, left + 14, y - 20, int(right - left - 28), font_size=10, color=ink, leading=13) - 10
+            c.roundRect(left, y - protocol_box_height, right - left, protocol_box_height, 12, stroke=1, fill=1)
+            y = draw_wrapped(protocol_notes, left + 14, y - 22, int(right - left - 28), font_size=10, color=ink, leading=13) - 16
 
         section_title("Timeline")
         if events:
