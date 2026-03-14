@@ -147,7 +147,7 @@
             <div class="filter-group"><label for="radiologist">Radiologist</label><select id="radiologist" name="radiologist"><option value="">All radiologists</option>{% for r in radiologists %}<option value="{{ r }}" {% if selected_radiologist == r %}selected{% endif %}>{{ r }}</option>{% endfor %}</select></div>
             <div class="filter-group"><label for="modality">Modality</label><select id="modality" name="modality"><option value="">All modalities</option>{% for item in modalities %}<option value="{{ item }}" {% if selected_modality == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
             <div class="filter-group"><label for="search">Search</label><input id="search" name="q" value="{{ q }}" placeholder="Search"></div>
-            <div class="filter-actions filter-button-group"><button type="submit" class="btn">Apply</button><a class="btn secondary" href="/admin?view=worklist&tab={{ tab }}">Reset</a><a class="btn secondary" href="/submit">Submit New Case</a><a class="btn secondary" href="/admin/notify-radiologist">Notify</a></div>
+            <div class="filter-actions filter-button-group"><button type="submit" class="btn">Apply</button><a class="btn secondary" href="/admin?view=worklist&tab={{ tab }}">Reset</a><a class="btn secondary" href="/submit/referral-trial">Referral Scanner</a><a class="btn secondary" href="/submit">Submit New Case</a><a class="btn secondary" href="/admin/notify-radiologist">Notify</a></div>
           </form>
         </div>
       </section>

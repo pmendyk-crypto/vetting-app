@@ -2,26 +2,290 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Submitted</title>
+  <title>Case Submitted</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --panel-bg: rgba(20, 28, 41, 0.78);
+      --panel-border: rgba(167, 199, 255, 0.18);
+      --panel-border-strong: rgba(191, 214, 255, 0.24);
+      --panel-shadow: 0 24px 54px rgba(0, 0, 0, 0.24);
+      --muted-text: rgba(255, 255, 255, 0.66);
+      --soft-text: rgba(255, 255, 255, 0.84);
+      --accent-blue: #61a8ff;
+      --success: #33d17a;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(31, 111, 235, 0.18), transparent 28%),
+        radial-gradient(circle at top right, rgba(124, 58, 237, 0.12), transparent 24%),
+        linear-gradient(180deg, #09101a 0%, #05080e 100%);
+      color: #fff;
+    }
+
+    .submitted-shell {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px 20px;
+    }
+
+    .submitted-card {
+      width: min(780px, 100%);
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 28px;
+      box-shadow: var(--panel-shadow);
+      padding: 28px 28px 24px;
+    }
+
+    .submitted-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    .submitted-badge {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(135deg, rgba(51, 209, 122, 0.92), rgba(96, 228, 152, 0.72));
+      box-shadow: 0 12px 28px rgba(51, 209, 122, 0.22);
+    }
+
+    .submitted-heading h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 36px);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      font-weight: 600;
+    }
+
+    .submitted-heading p {
+      margin: 8px 0 0;
+      color: var(--muted-text);
+      font-size: 15px;
+      line-height: 1.5;
+      max-width: 56ch;
+    }
+
+    .submitted-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+
+    .info-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      padding: 16px 18px;
+      min-height: 96px;
+    }
+
+    .info-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted-text);
+      margin-bottom: 10px;
+    }
+
+    .info-value {
+      color: #fff;
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      word-break: break-word;
+    }
+
+    .info-meta {
+      margin-top: 8px;
+      color: var(--muted-text);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .submitted-links {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .submitted-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      text-decoration: none;
+      color: #fff;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: 0.18s ease;
+    }
+
+    .submitted-link:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(97, 168, 255, 0.28);
+      transform: translateY(-1px);
+    }
+
+    .submitted-link strong {
+      display: block;
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .submitted-link span {
+      color: var(--muted-text);
+      font-size: 13px;
+    }
+
+    .submitted-link-mark {
+      color: var(--accent-blue);
+      font-size: 18px;
+      font-weight: 700;
+      flex: 0 0 auto;
+    }
+
+    .submitted-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .submitted-actions .btn,
+    .submitted-actions .btn.secondary {
+      min-height: 46px;
+      padding: 0 18px;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      font-weight: 600;
+      box-sizing: border-box;
+    }
+
+    .submitted-actions .btn.secondary {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.045);
+      border: 1px solid rgba(191, 214, 255, 0.14);
+      box-shadow: none;
+    }
+
+    @media (max-width: 720px) {
+      .submitted-card {
+        padding: 22px 18px 20px;
+        border-radius: 22px;
+      }
+
+      .submitted-header {
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .submitted-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .submitted-actions {
+        flex-direction: column;
+      }
+
+      .submitted-actions .btn,
+      .submitted-actions .btn.secondary {
+        width: 100%;
+      }
+    }
+  </style>
 </head>
 <body>
-  <h1>Submitted</h1>
+  <div class="submitted-shell">
+    <section class="submitted-card">
+      <div class="submitted-header">
+        <div class="submitted-badge">✓</div>
+        <div class="submitted-heading">
+          <h1>Case Submitted</h1>
+          <p>The referral has been added successfully and is ready for review in the Worklist.</p>
+        </div>
+      </div>
 
-  <p><strong>Case ID:</strong> {{ case["id"] }}</p>
-  <p><strong>Radiologist queue:</strong>
-    <a href="/admin?radiologist={{ case['radiologist']|urlencode }}">
-      {{ case["radiologist"] }} (view in admin)</a>
-  </p>
+      <div class="submitted-grid">
+        <div class="info-card">
+          <div class="info-label">Case ID</div>
+          <div class="info-value">{{ case["id"] }}</div>
+          <div class="info-meta">Use this reference to track, search, or share the case internally.</div>
+        </div>
+        <div class="info-card">
+          <div class="info-label">Radiologist Queue</div>
+          <div class="info-value">{{ case["radiologist"] or "Unassigned" }}</div>
+          <div class="info-meta">
+            {% if case["radiologist"] %}
+              The case is currently assigned to this queue.
+            {% else %}
+              No radiologist assigned yet. The case is still available in the admin Worklist.
+            {% endif %}
+          </div>
+        </div>
+      </div>
 
-  <p><a href="/admin/case/{{ case['id'] }}">Open case (admin view)</a></p>
-  <p><a href="/admin/case/{{ case['id'] }}/edit">Edit case details</a></p>
-  <p><a href="/case/{{ case['id'] }}/pdf">Download PDF summary</a></p>
+      <div class="submitted-links">
+        <a class="submitted-link" href="/admin/case/{{ case['id'] }}">
+          <div>
+            <strong>Open Case</strong>
+            <span>Review the case in the admin view.</span>
+          </div>
+          <div class="submitted-link-mark">→</div>
+        </a>
+        <a class="submitted-link" href="/admin/case/{{ case['id'] }}/edit">
+          <div>
+            <strong>Edit Case Details</strong>
+            <span>Update patient, study, assignment, or notes.</span>
+          </div>
+          <div class="submitted-link-mark">→</div>
+        </a>
+        <a class="submitted-link" href="/case/{{ case['id'] }}/pdf">
+          <div>
+            <strong>Download PDF Summary</strong>
+            <span>Export the current case summary as a PDF.</span>
+          </div>
+          <div class="submitted-link-mark">→</div>
+        </a>
+        {% if case["radiologist"] %}
+        <a class="submitted-link" href="/admin?radiologist={{ case['radiologist']|urlencode }}">
+          <div>
+            <strong>Open Radiologist Queue</strong>
+            <span>Jump straight to this radiologist’s filtered Worklist.</span>
+          </div>
+          <div class="submitted-link-mark">→</div>
+        </a>
+        {% endif %}
+      </div>
 
-  <p>
-    <a class="btn" href="/admin">Return to dashboard</a>
-    <a style="margin-left:12px;" href="/submit">Submit another</a>
-  </p>
+      <div class="submitted-actions">
+        <a class="btn" href="/admin">Return to Worklist</a>
+        <a class="btn secondary" href="/submit/referral-trial">Referral Scanner</a>
+        <a class="btn secondary" href="/submit">Submit New Case</a>
+      </div>
+    </section>
+  </div>
 </body>
 </html>

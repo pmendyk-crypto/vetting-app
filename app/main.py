@@ -981,6 +981,8 @@ def ensure_cases_schema() -> None:
         cur.execute("ALTER TABLE cases ADD COLUMN institution_id INTEGER")
     if "modality" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN modality TEXT")
+    if "org_id" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN org_id INTEGER")
     if "contrast_required" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN contrast_required TEXT")
     if "contrast_details" not in cols:
@@ -4538,6 +4540,7 @@ def referral_trial_form(request: Request):
             "request": request,
             "institutions": institutions,
             "radiologists": radiologists,
+            "user_org_id": org_id,
             "draft": {
                 "patient_first_name": "",
                 "patient_surname": "",
@@ -4605,6 +4608,7 @@ async def referral_trial_parse(
             "request": request,
             "institutions": institutions,
             "radiologists": radiologists,
+            "user_org_id": org_id,
             "draft": draft,
             "parse_warnings": parsed.get("warnings", []),
             "parse_confidence": parsed.get("confidence"),

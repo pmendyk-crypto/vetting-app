@@ -147,12 +147,16 @@ def parse_referral_attachment(filename: str, data: bytes) -> dict:
     if not first_name and not surname and full_name:
         first_name, surname = _split_name(full_name)
 
-    referral_id = _find_value(text, [
-        r"referral\s+(?:id|no\.?|number)\s*[:\-]\s*([^\n\r]+)",
-        r"ref(?:erence)?\s+(?:id|no\.?|number)\s*[:\-]\s*([^\n\r]+)",
+    patient_identifier = _find_value(text, [
         r"(?:nhs|hospital)\s+number\s*[:\-]\s*([^\n\r]+)",
         r"patient\s+(?:id|no\.?|number)\s*[:\-]\s*([^\n\r]+)",
-        r"(?:mrn|medical\s+record)\s*[:\-]\s*([^\n\r]+)",
+        r"(?:mrn|medical\s+record)\s*(?:id|number)?\s*[:\-]\s*([^\n\r]+)",
+        r"identifier\s*[:\-]\s*([^\n\r]+)",
+    ])
+
+    referral_reference = _find_value(text, [
+        r"referral\s+(?:id|no\.?|number)\s*[:\-]\s*([^\n\r]+)",
+        r"ref(?:erence)?\s+(?:id|no\.?|number)\s*[:\-]\s*([^\n\r]+)",
     ])
     
     dob = _find_value(text, [
@@ -160,13 +164,18 @@ def parse_referral_attachment(filename: str, data: bytes) -> dict:
         r"born\s*[:\-]\s*([^\n\r]+)",
     ])
     
-    # Study description is often a longer field spanning multiple lines
-    study_description = _find_value(text, [
-        r"study\s+description\s*[:\-]\s*([^\n\r]{5,})",
+    # Prefer the explicitly requested study/exam over the clinical indication.
+    requested_study = _find_value(text, [
         r"(?:examination|exam|investigation|procedure|test)\s+(?:requested|required|details?)\s*[:\-]\s*([^\n\r]{5,})",
         r"requested?\s+(?:study|examination|imaging|scan)\s*[:\-]\s*([^\n\r]{5,})",
-        r"(?:clinical\s+question|reason\s+for\s+(?:referral|imaging|scan|examination))\s*[:\-]\s*([^\n\r]{5,})",
-        r"indication\s*[:\-]\s*([^\n\r]{5,})",
+        r"requested\s+procedure\s*[:\-]\s*([^\n\r]{5,})",
+        r"study\s+requested\s*[:\-]\s*([^\n\r]{5,})",
+        r"scan\s+requested\s*[:\-]\s*([^\n\r]{5,})",
+    ])
+
+    study_description = requested_study or _find_value(text, [
+        r"study\s+description\s*[:\-]\s*([^\n\r]{5,})",
+        r"study\s*[:\-]\s*([^\n\r]{5,})",
     ])
     
     # Modality extraction - look for known modality keywords
@@ -176,12 +185,6 @@ def parse_referral_attachment(filename: str, data: bytes) -> dict:
         r"\b(ct|computed\s+tomography|mri|magnetic\s+resonance|ultrasound|us|x-?ray|xr|pet|dexa|dxa)\b",
     ])
     
-    notes = _find_value(text, [
-        r"(?:notes|clinical\s+(?:details?|history|information|background))\s*[:\-]\s*([^\n\r]+)",
-        r"history\s*[:\-]\s*([^\n\r]+)",
-        r"comments?\s*[:\-]\s*([^\n\r]+)",
-    ])
-
     # Normalize modality
     normalized_modality = ""
     if modality_raw:
@@ -206,12 +209,15 @@ def parse_referral_attachment(filename: str, data: bytes) -> dict:
     fields = {
         "patient_first_name": first_name,
         "patient_surname": surname,
-        "patient_referral_id": referral_id,
+        "patient_referral_id": patient_identifier,
         "patient_dob": dob,
         "study_description": study_description,
         "modality": normalized_modality,
-        "admin_notes": notes,
+        "admin_notes": "",
     }
+
+    if not patient_identifier and referral_reference:
+        warnings.append("Referral reference found, but no patient/NHS/hospital identifier was confidently extracted.")
 
     # Calculate confidence: presence of key required fields
     required_for_confidence = [
