@@ -5883,15 +5883,15 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
 
         def section_title(title: str):
             nonlocal y
-            ensure_space(42)
-            c.setStrokeColor(accent)
+            ensure_space(46)
+            c.setFillColor(accent)
+            c.setFont("Helvetica-Bold", 13)
+            c.drawString(left, y, title)
+            y -= 10
+            c.setStrokeColor(accent_soft)
             c.setLineWidth(1)
             c.line(left, y, right, y)
-            y -= 17
-            c.setFillColor(accent)
-            c.setFont("Helvetica-Bold", 12)
-            c.drawString(left, y, title)
-            y -= 22
+            y -= 18
 
         def draw_info_grid(rows: list[tuple[str, str]]):
             nonlocal y
@@ -5967,6 +5967,10 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
         c.setFillColor(accent)
         c.roundRect(left, y, right - left, 8, 4, stroke=0, fill=1)
         y -= 28
+        c.setFillColor(muted)
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(left, y, org_name or "Lumos Lab")
+        y -= 20
         c.setFillColor(ink)
         c.setFont("Helvetica-Bold", 20)
         c.drawString(left, y, "Justification Decision Report")
@@ -5976,7 +5980,7 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
         y -= 18
         c.setFillColor(muted)
         c.setFont("Helvetica", 10)
-        c.drawString(left, y, org_name or "Lumos Lab")
+        c.drawString(left, y, "Healthcare Applications")
         c.drawRightString(right, y, f"Case ID: {case_data.get('id', '')}")
         y -= 24
 
