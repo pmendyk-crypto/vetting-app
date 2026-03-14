@@ -17,3 +17,5 @@ node_modules/
 dist/
 build/
 *.egg-info/
+.env.local
+.env.*.local
