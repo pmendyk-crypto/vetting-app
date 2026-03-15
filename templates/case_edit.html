@@ -180,6 +180,11 @@
     </div>
 
     <div class="card">
+      {% if saved %}
+      <div style="margin-bottom:16px;padding:10px 12px;border-radius:8px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.28);color:#bbf7d0;font-size:13px;">
+        Case changes saved successfully.
+      </div>
+      {% endif %}
       <form method="POST" enctype="multipart/form-data">
         <input type="hidden" id="org_id_hidden" value="{{ case.get('org_id') or user_org_id or '' }}">
         <div class="form-row">
@@ -283,6 +288,31 @@
           <a class="btn secondary" href="/admin/case/{{ case['id'] }}">Cancel</a>
         </div>
       </form>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Referral Preview</h3>
+      {% if case['uploaded_filename'] %}
+        <p class="small" style="margin-top:0;">
+          Current file: <strong>{{ case['uploaded_filename'] }}</strong>
+          {% if not case['stored_filepath'] %}(expired){% endif %}
+        </p>
+        {% if case['stored_filepath'] and case.get('attachment_previewable') %}
+          <div style="min-height:420px;">
+            <iframe src="/case/{{ case['id'] }}/attachment/inline#view=FitH" style="width:100%;height:420px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#fff;"></iframe>
+          </div>
+        {% elif case['stored_filepath'] %}
+          <div style="display:flex;align-items:center;justify-content:center;min-height:140px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.65);text-align:center;padding:20px;">
+            Preview not available for this file type. Save or use download from case details to open the attachment.
+          </div>
+        {% else %}
+          <div style="display:flex;align-items:center;justify-content:center;min-height:140px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.5);text-align:center;padding:20px;">
+            Referral attachment has expired and is no longer available.
+          </div>
+        {% endif %}
+      {% else %}
+        <p class="small" style="margin:0;">No referral attachment uploaded.</p>
+      {% endif %}
     </div>
     </div>
 

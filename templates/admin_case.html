@@ -143,8 +143,13 @@
         </div>
         {% if case["uploaded_filename"] %}
           <div class="preview-body">
-            {% if case["stored_filepath"] %}
+            {% if case["stored_filepath"] and case.get("attachment_previewable") %}
               <iframe src="/case/{{ case['id'] }}/attachment/inline#view=FitH" class="preview-frame"></iframe>
+            {% elif case["stored_filepath"] %}
+              <div style="display:flex;align-items:center;justify-content:center;height:200px;color:rgba(255,255,255,0.55);font-size:0.95em;flex-direction:column;gap:8px;text-align:center;">
+                <span>Preview not available for this file type.</span>
+                <span style="font-size:0.85em;">Use the download button above to open the attachment.</span>
+              </div>
             {% else %}
               <div style="display:flex;align-items:center;justify-content:center;height:200px;color:rgba(255,255,255,0.4);font-size:0.95em;flex-direction:column;gap:8px;">
                 <span style="font-size:1.8em;">🗂️</span>

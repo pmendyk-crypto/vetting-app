@@ -31,7 +31,7 @@
     .toolbar-panel { padding:18px 22px; display:flex; align-items:center; justify-content:center; gap:18px; flex-wrap:wrap; background:var(--panel-bg-soft); }
     .toolbar-group { position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:center; width:auto; margin-left:0; }
     .view-tabs { display:flex; gap:6px; width:auto; background:none; padding:0; border:none; }
-    .view-tab { text-decoration:none; color:var(--soft-text); padding:5px 12px; min-height:44px; min-width:96px; border-radius:11px; font-size:12px; font-weight:500; transition:0.2s ease; display:inline-flex; align-items:center; justify-content:center; text-align:center; background:rgba(255,255,255,0.05); border:1px solid var(--panel-border-strong); }
+    .view-tab { text-decoration:none; color:var(--soft-text); padding:5px 12px; min-height:44px; min-width:126px; border-radius:11px; font-size:14px; font-weight:500; transition:0.2s ease; display:inline-flex; align-items:center; justify-content:center; text-align:center; background:rgba(255,255,255,0.05); border:1px solid var(--panel-border-strong); }
     .view-tab:hover { color:#fff; background:rgba(255,255,255,0.06); }
     .view-tab.active { color:#fff; background:linear-gradient(135deg, rgba(31,111,235,0.2), rgba(97,168,255,0.1)); border:1px solid rgba(97,168,255,0.4); }
     .surface-panel { padding:18px 22px 20px; }
@@ -83,7 +83,7 @@
     tbody td { padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.05); color:var(--soft-text); font-size:13px; vertical-align:middle; line-height:1.3; }
     tbody tr.case-row:hover { background:rgba(255,255,255,0.03); }
     .case-id { font-family:"Courier New", monospace; color:rgba(255,255,255,0.9); font-size:12px; white-space:nowrap; }
-    .study-stack { display:flex; flex-direction:column; gap:2px; min-width:0; } .study-title { color:#fff; font-weight:500; line-height:1.25; word-break:break-word; } .study-meta { display:flex; gap:8px; flex-wrap:wrap; color:var(--muted-text); font-size:11px; }
+    .study-stack { display:flex; flex-direction:column; gap:2px; min-width:0; } .study-title { color:#fff; font-weight:400; line-height:1.25; word-break:break-word; } .study-meta { display:flex; gap:8px; flex-wrap:wrap; color:var(--muted-text); font-size:11px; }
     .micro-pill { display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); color:var(--muted-text); font-size:10px; text-transform:uppercase; letter-spacing:0.06em; }
     .date-stack { display:flex; flex-direction:column; gap:2px; white-space:nowrap; } .date-stack small { color:var(--muted-text); font-size:11px; }
     .assign-form { display:flex; flex-direction:column; gap:4px; min-width:0; width:100%; align-items:center; justify-content:center; }
@@ -128,7 +128,6 @@
         <div class="top-box org-box">
           <div class="hero-copy">
             <h1>{{ org_name if org_name else 'Organisation Name' }}</h1>
-            <p>{{ view_title }}</p>
           </div>
         </div>
       </div>

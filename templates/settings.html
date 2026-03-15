@@ -486,6 +486,7 @@
             <button class="tab-btn" data-tab="users" onclick="switchTab('users', this)">Users</button>
             <button class="tab-btn" data-tab="protocols" onclick="switchTab('protocols', this)">Protocols</button>
             <button class="tab-btn" data-tab="study-presets" onclick="switchTab('study-presets', this)">Study Presets</button>
+            <button class="tab-btn" data-tab="report" onclick="switchTab('report', this)">Justification Report</button>
         </div>
 
         {% if error == 'email_taken' %}
@@ -861,6 +862,33 @@
                     {% else %}
                     <div class="empty-message">No study presets configured yet</div>
                     {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div id="report" class="tab-content">
+            <div class="settings-section">
+                <div class="section-title">Justification Report</div>
+
+                <div class="form-card">
+                    <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Report Header and Footer</h3>
+                    <form method="POST" action="/settings/report">
+                        <div class="form-row full">
+                            <div class="form-group">
+                                <label>Header Text</label>
+                                <input type="text" name="report_header_text" maxlength="100" value="{{ report_header_text or org_name or '' }}" placeholder="e.g., Apollo Radiology International (UK)">
+                            </div>
+                        </div>
+                        <div class="form-row full">
+                            <div class="form-group">
+                                <label>Footer Text</label>
+                                <textarea name="report_footer_text" rows="4" maxlength="280" placeholder="e.g., Confidential clinical workflow document. For queries contact reporting@apollo.example">{{ report_footer_text or '' }}</textarea>
+                            </div>
+                        </div>
+                        <div class="button-group">
+                            <button type="submit" class="btn btn-primary">Save Report Settings</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

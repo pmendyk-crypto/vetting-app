@@ -155,6 +155,17 @@ def normalize_case_attachment(case_dict: dict) -> dict:
     return case_dict
 
 
+def is_inline_previewable(filename: str | None) -> bool:
+    name = str(filename or "").strip().lower()
+    if not name:
+        return False
+    previewable_exts = {
+        ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp",
+        ".txt", ".csv", ".json", ".xml", ".html",
+    }
+    return any(name.endswith(ext) for ext in previewable_exts)
+
+
 # -------------------------
 # Azure Blob Storage Helpers
 # -------------------------
@@ -4038,6 +4049,7 @@ def admin_case_view(request: Request, case_id: str):
 
     if case_dict:
         case_dict = normalize_case_attachment(case_dict)
+        case_dict["attachment_previewable"] = is_inline_previewable(case_dict.get("uploaded_filename"))
 
     if case_dict and case_dict.get("org_id"):
         org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (case_dict.get("org_id"),)).fetchone()
@@ -4269,6 +4281,7 @@ def admin_case_timeline_csv(request: Request, case_id: str):
 # -------------------------
 @app.get("/admin/case/{case_id}/edit", response_class=HTMLResponse)
 def admin_case_edit_view(request: Request, case_id: str):
+    saved = request.query_params.get("saved", "")
     try:
         user = require_admin(request)
     except HTTPException as e:
@@ -4289,6 +4302,8 @@ def admin_case_edit_view(request: Request, case_id: str):
         raise HTTPException(status_code=404, detail="Case not found")
     
     case_dict = dict(case)
+    case_dict = normalize_case_attachment(case_dict)
+    case_dict["attachment_previewable"] = is_inline_previewable(case_dict.get("uploaded_filename"))
     
     return templates.TemplateResponse(
         "case_edit.html",
@@ -4299,6 +4314,7 @@ def admin_case_edit_view(request: Request, case_id: str):
             "radiologists": radiologists,
             "protocols": [p["protocol"] for p in protocols] if protocols else [],
             "user_org_id": org_id,
+            "saved": saved == "1",
         }
     )
 
@@ -4559,6 +4575,7 @@ def admin_reopen_case_submit(
     )
     conn.commit()
     conn.close()
+    return RedirectResponse(url=f"/admin/case/{case_id}/edit?saved=1", status_code=303)
 
 
 def slugify_org_name(name: str) -> str:
@@ -4969,6 +4986,9 @@ def settings_page(request: Request, error: str = ""):
     protocols = list_protocol_rows(org_id)
     study_description_presets = list_study_description_presets(org_id)
     protocol_modalities = sorted({str(p.get("modality") or "").strip() for p in study_description_presets if str(p.get("modality") or "").strip()})
+    report_key_scope = org_id or 0
+    report_header_text = get_setting(f"report_header:{report_key_scope}", org_name or "")
+    report_footer_text = get_setting(f"report_footer:{report_key_scope}", "Confidential workflow document")
 
     return templates.TemplateResponse(
         "settings.html",
@@ -4982,10 +5002,25 @@ def settings_page(request: Request, error: str = ""):
             "study_description_presets": study_description_presets,
             "protocol_modalities": protocol_modalities,
             "org_name": org_name,
+            "report_header_text": report_header_text,
+            "report_footer_text": report_footer_text,
             "current_user": get_session_user(request),
             "error": error,
         },
     )
+
+
+@app.post("/settings/report")
+def update_report_settings(
+    request: Request,
+    report_header_text: str = Form(""),
+    report_footer_text: str = Form(""),
+):
+    user = require_admin(request)
+    org_id = user.get("org_id") or 0
+    set_setting(f"report_header:{org_id}", report_header_text.strip())
+    set_setting(f"report_footer:{org_id}", report_footer_text.strip())
+    return RedirectResponse(url="/settings?tab=report", status_code=303)
 
 
 @app.post("/settings/institution/add")
@@ -6647,6 +6682,9 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
             conn.close()
             if org_row:
                 org_name = org_row.get("name") if isinstance(org_row, dict) else org_row[0]
+        report_setting_scope = case_data.get("org_id") or org_id or 0
+        report_header_text = get_setting(f"report_header:{report_setting_scope}", org_name or "").strip() or (org_name or "Organisation")
+        report_footer_text = get_setting(f"report_footer:{report_setting_scope}", "Confidential workflow document").strip() or "Confidential workflow document"
 
         events: list[dict] = []
         if table_exists("case_events"):
@@ -6844,6 +6882,25 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
                 y_cursor -= leading
             return y_cursor
 
+        def wrap_lines(text_value: str, max_width: int, *, font_name: str = "Helvetica", font_size: int = 10) -> list[str]:
+            text = str(text_value or "").strip()
+            if not text:
+                return []
+            output: list[str] = []
+            paragraphs = text.splitlines() or [text]
+            for paragraph in paragraphs:
+                words = paragraph.split() or [""]
+                line_buf = words[0]
+                for word in words[1:]:
+                    candidate = f"{line_buf} {word}".strip()
+                    if c.stringWidth(candidate, font_name, font_size) <= max_width:
+                        line_buf = candidate
+                    else:
+                        output.append(line_buf)
+                        line_buf = word
+                output.append(line_buf)
+            return output
+
         def wrapped_height(text_value: str, max_width: int, *, font_name: str = "Helvetica", font_size: int = 10, leading: int = 13) -> int:
             text = str(text_value or "").strip()
             if not text:
@@ -6866,15 +6923,15 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
 
         def section_title(title: str):
             nonlocal y
-            ensure_space(46)
+            ensure_space(52)
             c.setFillColor(accent)
             c.setFont("Helvetica-Bold", 13)
             c.drawString(left, y, title)
-            y -= 10
+            y -= 12
             c.setStrokeColor(accent_soft)
             c.setLineWidth(1)
             c.line(left, y, right, y)
-            y -= 18
+            y -= 20
 
         def draw_info_grid(rows: list[tuple[str, str]]):
             nonlocal y
@@ -6906,6 +6963,19 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
                     draw_wrapped(value or "-", x, current_y - 13, int(col_width - 24), font_size=10, color=ink, leading=12)
                 current_y -= this_row_height
             y = top - box_height - 14
+
+        def draw_text_card(text_value: str, *, min_height: int = 92, font_size: int = 10, leading: int = 13):
+            nonlocal y
+            content = str(text_value or "").strip() or "Not recorded"
+            text_height = wrapped_height(content, int(right - left - 28), font_size=font_size, leading=leading)
+            box_height = max(min_height, text_height + 36)
+            ensure_space(box_height + 18)
+            top = y
+            c.setFillColor(colors.white)
+            c.setStrokeColor(accent_soft)
+            c.roundRect(left, top - box_height, right - left, box_height, 12, stroke=1, fill=1)
+            draw_wrapped(content, left + 14, top - 22, int(right - left - 28), font_size=font_size, color=ink, leading=leading)
+            y = top - box_height - 16
 
         def draw_note_card(kind: str, created_at: str | None, text_value: str):
             nonlocal y
@@ -6951,21 +7021,27 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
         c.roundRect(left, y, right - left, 8, 4, stroke=0, fill=1)
         y -= 28
         c.setFillColor(muted)
-        c.setFont("Helvetica-Bold", 13)
-        c.drawString(left, y, org_name or "Lumos Lab")
-        y -= 20
+        header_bottom_y = draw_wrapped(
+            report_header_text,
+            left,
+            y,
+            int(right - left - 180),
+            font_name="Helvetica-Bold",
+            font_size=13,
+            color=muted,
+            leading=15,
+        )
+        c.setFont("Helvetica", 10)
+        c.drawRightString(right, y + 3, f"Generated: {format_datetime(utc_now_iso())}")
+        y = header_bottom_y - 14
         c.setFillColor(ink)
         c.setFont("Helvetica-Bold", 20)
         c.drawString(left, y, "Justification Decision Report")
-        c.setFillColor(muted)
-        c.setFont("Helvetica", 10)
-        c.drawRightString(right, y + 3, f"Generated: {format_datetime(utc_now_iso())}")
         y -= 18
         c.setFillColor(muted)
         c.setFont("Helvetica", 10)
-        c.drawString(left, y, "Healthcare Applications")
         c.drawRightString(right, y, f"Case ID: {case_data.get('id', '')}")
-        y -= 24
+        y -= 28
 
         badge_width = 110
         c.setFillColor(status_fill)
@@ -6990,13 +7066,7 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
         ])
 
         section_title("Justification Decision")
-        comment_height = wrapped_height(case_data.get("decision_comment") or "", int(right - left - 28), font_size=10, leading=12)
-        decision_box_height = 120 + comment_height
-        ensure_space(decision_box_height + 18)
-        c.setFillColor(colors.white)
-        c.setStrokeColor(accent_soft)
-        c.roundRect(left, y - decision_box_height, right - left, decision_box_height, 12, stroke=1, fill=1)
-        top_y = y - 18
+        decision_value_width = int(right - left - 175)
         decision_rows = [
             ("Decision", decision_label(case_data)),
             ("Protocol", case_data.get("protocol") or "Not recorded"),
@@ -7004,32 +7074,40 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
             ("Radiologist GMC", rad_gmc or "Not recorded"),
             ("Justified At", format_datetime(case_data.get("vetted_at")) or "Not recorded"),
         ]
+        row_heights: list[int] = []
+        for _, value in decision_rows:
+            row_heights.append(max(18, wrapped_height(str(value), decision_value_width, font_size=10, leading=12)))
+        comment_height = wrapped_height(case_data.get("decision_comment") or "", int(right - left - 28), font_size=10, leading=12)
+        decision_box_height = 22 + sum(row_heights) + (len(row_heights) - 1) * 10
+        if case_data.get("decision_comment"):
+            decision_box_height += 30 + comment_height
+        decision_box_height += 20
+        ensure_space(decision_box_height + 18)
+        c.setFillColor(colors.white)
+        c.setStrokeColor(accent_soft)
+        c.roundRect(left, y - decision_box_height, right - left, decision_box_height, 12, stroke=1, fill=1)
+        top_y = y - 18
         row_y = top_y
-        for label, value in decision_rows:
+        for idx, (label, value) in enumerate(decision_rows):
             c.setFillColor(muted)
             c.setFont("Helvetica-Bold", 8)
             c.drawString(left + 14, row_y, label.upper())
             c.setFillColor(ink)
             c.setFont("Helvetica", 10)
-            c.drawString(left + 145, row_y, str(value))
-            row_y -= 18
+            value_y = draw_wrapped(str(value), left + 145, row_y, decision_value_width, font_size=10, color=ink, leading=12)
+            row_y -= row_heights[idx] + 10
         if case_data.get("decision_comment"):
-            row_y -= 4
+            row_y -= 2
             c.setFillColor(muted)
             c.setFont("Helvetica-Bold", 8)
             c.drawString(left + 14, row_y, "DECISION COMMENT")
             row_y -= 16
             row_y = draw_wrapped(case_data.get("decision_comment") or "", left + 14, row_y, int(right - left - 28), font_size=10, color=ink, leading=12)
-        y = row_y - 18
+        y = y - decision_box_height - 16
 
         if protocol_notes:
             section_title("Protocol Notes")
-            protocol_box_height = max(92, 34 + wrapped_height(protocol_notes, int(right - left - 28), font_size=10, leading=13))
-            ensure_space(protocol_box_height + 16)
-            c.setFillColor(colors.white)
-            c.setStrokeColor(accent_soft)
-            c.roundRect(left, y - protocol_box_height, right - left, protocol_box_height, 12, stroke=1, fill=1)
-            y = draw_wrapped(protocol_notes, left + 14, y - 22, int(right - left - 28), font_size=10, color=ink, leading=13) - 16
+            draw_text_card(protocol_notes, min_height=92, font_size=10, leading=13)
 
         section_title("Timeline")
         if events:
@@ -7049,14 +7127,18 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
         else:
             draw_timeline_row(format_datetime(case_data.get("created_at")), "Case submitted", "")
 
-        ensure_space(30)
+        footer_lines = wrap_lines(report_footer_text, int((right - left) * 0.52), font_name="Helvetica", font_size=8) or ["Confidential workflow document"]
+        footer_height = max(16, len(footer_lines) * 10)
+        ensure_space(22 + footer_height)
         c.setStrokeColor(border)
         c.line(left, y, right, y)
         y -= 16
         c.setFillColor(muted)
         c.setFont("Helvetica", 8)
-        c.drawString(left, y, "Generated by Lumos Lab Healthcare Applications")
-        c.drawRightString(right, y, "Confidential workflow document")
+        c.drawString(left, y, "Generated by RadFlow")
+        footer_y = y
+        for idx, line in enumerate(footer_lines):
+            c.drawRightString(right, footer_y - (idx * 10), line)
 
         c.showPage()
         c.save()
