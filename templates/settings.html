@@ -284,37 +284,40 @@
 
         .tabs {
             display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 1px solid rgba(31, 111, 235, 0.2);
+            gap: 12px;
+            margin-bottom: 16px;
             overflow-x: auto;
+            padding-bottom: 2px;
         }
 
         .tab-btn {
             padding: 12px 20px;
-            border: none;
-            background: transparent;
-            color: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.03);
+            color: rgba(255, 255, 255, 0.72);
             cursor: pointer;
             font-size: 14px;
             font-weight: 400;
-            border-bottom: 2px solid transparent;
+            border-radius: 14px;
             transition: all 0.2s ease;
             white-space: nowrap;
         }
 
         .tab-btn.active {
-            color: #1f6feb;
-            border-bottom-color: #1f6feb;
+            color: #ffffff;
+            border-color: rgba(31,111,235,0.55);
+            background: rgba(31,111,235,0.18);
+            box-shadow: inset 0 0 0 1px rgba(31,111,235,0.22);
         }
 
         .tab-btn:hover {
-            color: rgba(255, 255, 255, 0.85);
+            color: rgba(255, 255, 255, 0.9);
+            border-color: rgba(255,255,255,0.18);
         }
 
         .tab-content {
             display: none;
-            min-height: 600px;
+            min-height: 0;
         }
 
         .tab-content.active {
@@ -326,6 +329,17 @@
         }
 
         @media (max-width: 768px) {
+            .settings-container {
+                width: 100%;
+                padding: 12px;
+            }
+            .settings-hero {
+                grid-template-columns: 1fr;
+                align-items: start;
+            }
+            .settings-hero-actions {
+                justify-content: flex-start;
+            }
             .form-row,
             .form-row.three-col {
                 grid-template-columns: 1fr;
@@ -349,39 +363,69 @@
             }
         }
 
-        /* Logo and Footer Styles */
         .page-wrapper {
             display: flex;
             flex-direction: column;
             min-height: 100vh;
         }
-
-        .header-with-logo {
+        .settings-container {
+            max-width: 1400px;
+            width: 95%;
+            margin: 0 auto;
+            padding: 14px 20px 20px;
+        }
+        .settings-header {
+            margin-bottom: 16px;
+        }
+        .settings-hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) auto;
+            gap: 18px;
+            align-items: center;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 18px;
+            padding: 16px 18px;
+        }
+        .settings-hero-left {
             display: flex;
             align-items: center;
             gap: 16px;
-            margin-bottom: 20px;
-            padding-top: 10px;
+            min-width: 0;
         }
-
-        .logo-image {
-            width: 50px;
-            height: 50px;
-            border-radius: 8px;
-            object-fit: cover;
+        .settings-hero-logo {
+            width: 66px;
+            height: 66px;
+            border-radius: 16px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.09);
+            display: flex;
+            align-items: center;
+            justify-content: center;
             flex: 0 0 auto;
         }
-
-        .logo-text h2 {
-            margin: 0;
-            color: rgba(255, 255, 255, 0.98);
-            font-size: 20px;
+        .settings-hero-logo img {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            object-fit: cover;
         }
-
-        .logo-text p {
-            margin: 2px 0 0 0;
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 12px;
+        .settings-hero-copy h1 {
+            font-size: 18px;
+            margin: 0;
+            color: rgba(255,255,255,0.98);
+        }
+        .settings-hero-copy p {
+            margin: 4px 0 0;
+            color: rgba(255,255,255,0.62);
+            font-size: 13px;
+        }
+        .settings-hero-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
         }
 
         .main-content {
@@ -418,21 +462,18 @@
     <div class="page-wrapper">
         <div class="settings-container">
         <div class="main-content">
-        <div class="header-with-logo">
-              <img class="logo-image" src="/static/images/logo-light.png" alt="Lumos Lab"
-                  onerror="this.style.display='none';">
-            <div class="logo-text">
-                <h2>Lumos Lab</h2>
-                <p>Healthcare Applications</p>
-            </div>
-        </div>
         <div class="settings-header">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h1>Settings</h1>
-                    <p style="color: rgba(255,255,255,0.6); margin: 0;">Manage institutions, practitioners, users, and protocols</p>
+            <div class="settings-hero">
+                <div class="settings-hero-left">
+                    <div class="settings-hero-logo">
+                        <img src="/static/images/logo-light.png" alt="Lumos Lab" onerror="this.parentElement.style.display='none';">
+                    </div>
+                    <div class="settings-hero-copy">
+                        <h1>Settings</h1>
+                        <p>{{ org_name or 'Organisation settings' }}</p>
+                    </div>
                 </div>
-                <div style="display:flex;gap:8px;align-items:center;">
+                <div class="settings-hero-actions">
                     <a href="/account" class="btn btn-secondary" style="margin-top: 0;">My Account</a>
                     <a href="/admin" class="btn btn-secondary" style="margin-top: 0;">Back to Dashboard</a>
                 </div>
@@ -441,10 +482,10 @@
 
         <!-- Tabs Navigation -->
         <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('institutions', this)">Institutions</button>
-            <button class="tab-btn" onclick="switchTab('users', this)">Users</button>
-            <button class="tab-btn" onclick="switchTab('protocols', this)">Protocols</button>
-            <a href="/settings/study-descriptions" class="tab-btn" style="text-decoration: none; display: inline-block; padding: 8px 16px;">Study Presets</a>
+            <button class="tab-btn active" data-tab="institutions" onclick="switchTab('institutions', this)">Institutions</button>
+            <button class="tab-btn" data-tab="users" onclick="switchTab('users', this)">Users</button>
+            <button class="tab-btn" data-tab="protocols" onclick="switchTab('protocols', this)">Protocols</button>
+            <button class="tab-btn" data-tab="study-presets" onclick="switchTab('study-presets', this)">Study Presets</button>
         </div>
 
         {% if error == 'email_taken' %}
@@ -521,10 +562,6 @@
         <div id="users" class="tab-content">
             <div class="settings-section">
                 <div class="section-title">Manage Users</div>
-                <p style="color: rgba(255,255,255,0.7); margin: 0 0 16px 0; font-size: 14px;">
-                    Access levels control what each user can do: <strong>Admin</strong> manages cases and settings,
-                    <strong>Practitioner</strong> can only complete assigned justifications, and <strong>User</strong> has limited access.
-                </p>
                 
                 <div class="form-card">
                     <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Add New User</h3>
@@ -748,6 +785,86 @@
             </div>
         </div>
 
+        <div id="study-presets" class="tab-content">
+            <div class="settings-section">
+                <div class="section-title">Study Presets</div>
+
+                <div class="form-card">
+                    <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Add New Study Preset</h3>
+                    <form method="POST" action="/settings/study-descriptions/add">
+                        <input type="hidden" name="org_id" value="{{ current_user.org_id or 1 }}">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Modality</label>
+                                <select name="modality" required>
+                                    <option value="">Select Modality</option>
+                                    <option value="MRI">MRI</option>
+                                    <option value="CT">CT</option>
+                                    <option value="XR">XR</option>
+                                    <option value="PET">PET</option>
+                                    <option value="DEXA">DEXA</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Description</label>
+                                <input type="text" name="description" required placeholder="e.g., MRI Brain">
+                            </div>
+                        </div>
+                        <div class="button-group">
+                            <button type="submit" class="btn btn-primary">Add Study Preset</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="form-card">
+                    <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Current Study Presets</h3>
+                    {% if study_description_presets %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Modality</th>
+                                <th>Description</th>
+                                <th>Status</th>
+                                <th>Updated</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for preset in study_description_presets %}
+                            <tr>
+                                <td><span class="badge badge-institution">{{ preset.modality }}</span></td>
+                                <td>{{ preset.description }}</td>
+                                <td>
+                                    <span style="color: {% if preset.is_active %}#4ade80{% else %}rgba(255,255,255,0.5){% endif %}; font-weight: 400;">
+                                        {{ 'Active' if preset.is_active else 'Archived' }}
+                                    </span>
+                                </td>
+                                <td>{{ preset.updated_at | display_datetime if preset.updated_at else 'N/A' }}</td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-secondary btn-small" onclick='editStudyPreset({{ preset.id }}, {{ preset.modality|tojson }}, {{ preset.description|tojson }})'>Edit</button>
+                                        {% if preset.is_active %}
+                                        <form style="display:inline;" method="POST" action="/settings/study-descriptions/archive/{{ preset.id }}" onsubmit="return confirm('Archive this study preset?');">
+                                            <button type="submit" class="btn btn-danger btn-small">Archive</button>
+                                        </form>
+                                        {% else %}
+                                        <form style="display:inline;" method="POST" action="/settings/study-descriptions/restore/{{ preset.id }}">
+                                            <button type="submit" class="btn btn-secondary btn-small">Restore</button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="empty-message">No study presets configured yet</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
         <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(31,111,235,0.2);">
             <a href="/admin" class="btn btn-secondary">Back to Dashboard</a>
         </div>
@@ -924,6 +1041,34 @@
         </div>
     </div>
 
+    <div id="editStudyPresetModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Edit Study Preset</div>
+            <form id="editStudyPresetForm" method="POST">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Modality</label>
+                        <select id="editStudyPresetModality" name="modality" required>
+                            <option value="MRI">MRI</option>
+                            <option value="CT">CT</option>
+                            <option value="XR">XR</option>
+                            <option value="PET">PET</option>
+                            <option value="DEXA">DEXA</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="editStudyPresetDescription" name="description" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('editStudyPresetModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         let currentInstId = null;
 
@@ -957,13 +1102,13 @@
 
         // Restore the active tab on page load
         window.addEventListener('DOMContentLoaded', function() {
-            const savedTab = localStorage.getItem('settingsActiveTab') || 'institutions';
-            const tabs = document.querySelectorAll('.tab-btn');
-            tabs.forEach(tab => {
-                if (tab.textContent.toLowerCase().includes(savedTab.replace('s', ''))) {
-                    switchTab(savedTab, tab);
-                }
-            });
+            const params = new URLSearchParams(window.location.search);
+            const queryTab = params.get('tab');
+            const savedTab = queryTab || localStorage.getItem('settingsActiveTab') || 'institutions';
+            const targetButton = document.querySelector(`.tab-btn[data-tab="${savedTab}"]`);
+            if (targetButton) {
+                switchTab(savedTab, targetButton);
+            }
         });
 
         function editInstitution(id, name, sla) {
@@ -1056,6 +1201,14 @@
             document.getElementById('editProtoInstructions').value = instructions || '';
             document.getElementById('editProtocolForm').action = `/settings/protocol/edit/${id}`;
             document.getElementById('editProtocolModal').classList.add('active');
+        }
+
+        function editStudyPreset(id, modality, description) {
+            document.getElementById('editStudyPresetModality').value = modality || '';
+            document.getElementById('editStudyPresetDescription').value = description || '';
+            document.getElementById('editStudyPresetForm').action = `/settings/study-descriptions/edit/${id}`;
+            document.getElementById('editStudyPresetModal').classList.add('active');
+            localStorage.setItem('settingsActiveTab', 'study-presets');
         }
 
         function filterProtocols() {

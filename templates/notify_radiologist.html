@@ -95,17 +95,20 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 12px;
-      align-items: start;
+      align-items: stretch;
     }
     .workspace-card {
       min-width: 0;
+      display: flex;
     }
+    .workspace-card > .card { width: 100%; }
     .section-divider {
       margin-top: 14px;
       padding-top: 14px;
       border-top: 1px solid rgba(255,255,255,0.06);
     }
     .message-card {
+      min-height: 0;
       display: flex;
       flex-direction: column;
     }
@@ -397,7 +400,7 @@
   <form method="post" action="/admin/notify-radiologist" id="notifyForm">
     <div class="notify-workspace">
       <div class="workspace-card">
-        <div class="card">
+        <div class="card" id="notifyControlCard">
           <div class="card-heading">Select Practitioner</div>
           <label for="radSelect">Practitioner</label>
           <select name="radiologist_name" id="radSelect" required>
@@ -469,7 +472,7 @@
       </div>
 
       <div class="workspace-card">
-        <div class="card message-card">
+        <div class="card message-card" id="notifyMessageCard">
           <div class="card-heading">Message</div>
           <label for="messageBox">Notification Message</label>
           <textarea name="message" id="messageBox" required>{% if selected_name %}Hi {{ selected_name }},
@@ -550,6 +553,23 @@ RadFlow Admin{% else %}Select a practitioner above to generate a message.{% endi
   const notifySummaryMeta = document.getElementById('notifySummaryMeta');
   const selectedEmail = document.getElementById('selectedEmail');
   const selectedEmailValue = document.getElementById('selectedEmailValue');
+  const controlCard = document.getElementById('notifyControlCard');
+  const messageCard = document.getElementById('notifyMessageCard');
+
+  function syncWorkspaceHeights() {
+    if (!controlCard || !messageCard || window.innerWidth <= 960) {
+      if (controlCard) controlCard.style.minHeight = '';
+      if (messageCard) messageCard.style.minHeight = '';
+      return;
+    }
+
+    controlCard.style.minHeight = '';
+    messageCard.style.minHeight = '';
+
+    const maxHeight = Math.max(controlCard.offsetHeight, messageCard.offsetHeight);
+    controlCard.style.minHeight = `${maxHeight}px`;
+    messageCard.style.minHeight = `${maxHeight}px`;
+  }
 
   function updateRadiologist() {
     const name = radSelect ? radSelect.value : '';
@@ -558,6 +578,7 @@ RadFlow Admin{% else %}Select a practitioner above to generate a message.{% endi
       if (notifySummary) notifySummary.classList.remove('visible');
       if (selectedEmail) selectedEmail.classList.remove('visible');
       if (selectedEmailValue) selectedEmailValue.textContent = '';
+      syncWorkspaceHeights();
       return;
     }
 
@@ -612,6 +633,8 @@ RadFlow Admin{% else %}Select a practitioner above to generate a message.{% endi
           `Hi ${name},\n\nYou currently have ${count} case(s) awaiting your review in RadFlow.\n\nPlease log in at your earliest convenience to action any outstanding items.\n\nOpen RadFlow: ${APP_LOGIN_URL}\n\nThanks,\nRadFlow Admin`;
       }
     }
+
+    syncWorkspaceHeights();
   }
 
   function updateChannel() {
@@ -623,10 +646,12 @@ RadFlow Admin{% else %}Select a practitioner above to generate a message.{% endi
   if (radSelect) radSelect.addEventListener('change', updateRadiologist);
   if (chEmail)   chEmail.addEventListener('change', updateChannel);
   if (chSms)     chSms.addEventListener('change', updateChannel);
+  window.addEventListener('resize', syncWorkspaceHeights);
 
   // Run on page load
   updateRadiologist();
   updateChannel();
+  syncWorkspaceHeights();
 })();
 </script>
 </body>

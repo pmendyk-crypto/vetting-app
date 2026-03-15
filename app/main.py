@@ -2656,7 +2656,7 @@ def forgot_password_page(request: Request, role: str = "admin"):
 
     return templates.TemplateResponse(
         "forgot_password.html",
-        {"request": request, "role": role, "submitted": False},
+        {"request": request, "role": role, "submitted": False, "email_failed": False},
     )
 
 
@@ -2668,6 +2668,8 @@ def forgot_password_submit(request: Request, role: str = Form("admin"), email: s
 
     email = (email or "").strip().lower()
     user = get_user_by_email(email)
+
+    email_sent = False
 
     if user and user.get("id"):
         token = generate_token()
@@ -2690,15 +2692,24 @@ def forgot_password_submit(request: Request, role: str = Form("admin"), email: s
         conn.close()
 
         reset_link = f"{APP_BASE_URL}/reset-password?token={token}"
-        send_email(
+        email_sent = send_email(
             to_address=email,
-            subject="Password reset request",
-            body=f"Use this link to reset your password (valid for 60 minutes):\n{reset_link}",
+            subject="RadFlow password reset",
+            body=(
+                "You requested a password reset for your RadFlow account.\n\n"
+                f"Reset your password using this link (valid for 60 minutes):\n{reset_link}\n\n"
+                "If you did not request this, you can ignore this email."
+            ),
         )
 
     return templates.TemplateResponse(
         "forgot_password.html",
-        {"request": request, "role": role, "submitted": True},
+        {
+            "request": request,
+            "role": role,
+            "submitted": True,
+            "email_failed": bool(user and user.get("id") and not email_sent),
+        },
     )
 
 
@@ -2749,12 +2760,31 @@ def reset_password_page(request: Request, token: str = ""):
 
 
 @app.post("/reset-password", response_class=HTMLResponse)
-def reset_password_submit(request: Request, token: str = Form(""), password: str = Form("")):
+def reset_password_submit(
+    request: Request,
+    token: str = Form(""),
+    password: str = Form(""),
+    confirm_password: str = Form(""),
+):
     token = (token or "").strip()
-    if not token or not password:
+    if not token or not password or not confirm_password:
         return templates.TemplateResponse(
             "reset_password.html",
-            {"request": request, "token": token, "error": "Token and password are required."},
+            {"request": request, "token": token, "error": "Token, password, and confirmation are required."},
+            status_code=400,
+        )
+
+    if password != confirm_password:
+        return templates.TemplateResponse(
+            "reset_password.html",
+            {"request": request, "token": token, "error": "Passwords do not match."},
+            status_code=400,
+        )
+
+    if len(password) < 8:
+        return templates.TemplateResponse(
+            "reset_password.html",
+            {"request": request, "token": token, "error": "Password must be at least 8 characters long."},
             status_code=400,
         )
 
@@ -2815,7 +2845,7 @@ def reset_password_submit(request: Request, token: str = Form(""), password: str
     conn.commit()
     conn.close()
 
-    return RedirectResponse(url="/login", status_code=303)
+    return RedirectResponse(url="/?reset=success", status_code=303)
 
 
 @app.get("/logout")
@@ -4901,10 +4931,16 @@ def settings_page(request: Request, error: str = ""):
         return redirect_to_login("admin", "/settings")
 
     org_id = get_request_org_id(request)
+    org_name = ""
     
     # Ensure default institution exists for this org
     if org_id:
         institutions = list_institutions(org_id)
+        conn = get_db()
+        org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
+        conn.close()
+        if org_row:
+            org_name = org_row["name"] or ""
         if not institutions:
             # Create default institution with org name
             conn = get_db()
@@ -4945,6 +4981,7 @@ def settings_page(request: Request, error: str = ""):
             "protocols": protocols,
             "study_description_presets": study_description_presets,
             "protocol_modalities": protocol_modalities,
+            "org_name": org_name,
             "current_user": get_session_user(request),
             "error": error,
         },
@@ -5619,7 +5656,7 @@ def add_study_description(request: Request, modality: str = Form(...), descripti
     description = description.strip()
     
     if not modality or not description:
-        return RedirectResponse(url="/settings/study-descriptions?error=empty", status_code=303)
+        return RedirectResponse(url="/settings?tab=study-presets&error=empty", status_code=303)
     
     creator_id = user.get("id") or 1
     try:
@@ -5636,14 +5673,14 @@ def add_study_description(request: Request, modality: str = Form(...), descripti
         conn.commit()
     except (sqlite3.IntegrityError, SQLAlchemyError):
         conn.close()
-        return RedirectResponse(url="/settings/study-descriptions?error=duplicate", status_code=303)
+        return RedirectResponse(url="/settings?tab=study-presets&error=duplicate", status_code=303)
     finally:
         try:
             conn.close()
         except Exception:
             pass
     
-    return RedirectResponse(url="/settings/study-descriptions", status_code=303)
+    return RedirectResponse(url="/settings?tab=study-presets", status_code=303)
 
 @app.post("/settings/study-descriptions/archive/{preset_id}")
 def archive_study_description(request: Request, preset_id: int):
@@ -5657,7 +5694,7 @@ def archive_study_description(request: Request, preset_id: int):
     )
     conn.commit()
     conn.close()
-    return RedirectResponse(url="/settings/study-descriptions", status_code=303)
+    return RedirectResponse(url="/settings?tab=study-presets", status_code=303)
 
 
 @app.post("/settings/study-descriptions/restore/{preset_id}")
@@ -5672,7 +5709,7 @@ def restore_study_description(request: Request, preset_id: int):
     )
     conn.commit()
     conn.close()
-    return RedirectResponse(url="/settings/study-descriptions", status_code=303)
+    return RedirectResponse(url="/settings?tab=study-presets", status_code=303)
 
 @app.post("/settings/study-descriptions/edit/{preset_id}")
 def edit_study_description(request: Request, preset_id: int, modality: str = Form(...), description: str = Form(...)):
@@ -5683,7 +5720,7 @@ def edit_study_description(request: Request, preset_id: int, modality: str = For
     description = description.strip()
     
     if not modality or not description:
-        return RedirectResponse(url="/settings/study-descriptions?error=empty", status_code=303)
+        return RedirectResponse(url="/settings?tab=study-presets&error=empty", status_code=303)
     
     try:
         conn = get_db()
@@ -5694,9 +5731,9 @@ def edit_study_description(request: Request, preset_id: int, modality: str = For
         conn.commit()
         conn.close()
     except sqlite3.IntegrityError:
-        return RedirectResponse(url="/settings/study-descriptions?error=duplicate", status_code=303)
+        return RedirectResponse(url="/settings?tab=study-presets&error=duplicate", status_code=303)
     
-    return RedirectResponse(url="/settings/study-descriptions", status_code=303)
+    return RedirectResponse(url="/settings?tab=study-presets", status_code=303)
 
 # -------------------------
 # Admin submit
