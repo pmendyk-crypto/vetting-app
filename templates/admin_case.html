@@ -97,9 +97,7 @@
         <h1 style="margin:0;">Case details</h1>
       </div>
       <div class="actions">
-        {% if case['status'] != 'vetted' or case['decision'] != 'Approve' %}
-          <a class="btn" href="/admin/case/{{ case['id'] }}/edit">Edit Case</a>
-        {% endif %}
+        <a class="btn" href="/admin/case/{{ case['id'] }}/edit">Edit Case</a>
         {% if case['status'] == 'vetted' or case['status'] == 'rejected' %}
           <a class="btn" style="background: #f39c12;" href="/admin/case/{{ case['id'] }}/reopen">Reopen Case</a>
         {% endif %}
@@ -115,12 +113,12 @@
         {% if org_name %}
           <p><b>Organisation:</b> {{ org_name }}</p>
         {% endif %}
-        <p><b>Status:</b> {{ case["status"] }}</p>
+        <p><b>Status:</b> {{ "Justified" if case["status"] == "vetted" else case["status"] }}</p>
         <p><b>Created:</b> {{ case["created_at"] | display_datetime }}</p>
         <p><b>Patient ID:</b> {{ case["patient_referral_id"] or "—" }}</p>
         <p><b>Patient DOB:</b> {{ case["patient_dob"] or "—" }}</p>
         <p><b>Study:</b> {{ case["study_description"] }}</p>
-        <p><b>Radiologist:</b> {{ case["radiologist"] }}</p>
+        <p><b>Practitioner:</b> {{ case["radiologist"] }}</p>
         <p><b>Admin notes:</b><br>{{ case["admin_notes"] or "" }}</p>
         <p><b>Protocol:</b> {{ case["protocol"] or "" }}</p>
         {% if case.get("contrast_required") %}
@@ -172,7 +170,7 @@
             <iframe src="/case/{{ case['id'] }}/pdf?inline=1#view=FitH" class="preview-frame"></iframe>
           </div>
         {% else %}
-          <p class="small">Decision report will appear once the case is vetted.</p>
+          <p class="small">Decision report will appear once the case is justified.</p>
         {% endif %}
       </div>
 
@@ -219,9 +217,9 @@
                       {% if ev == "SUBMITTED" %}
                         <div class="detail-row"><span>Details: </span>Case submitted.</div>
                       {% elif ev == "ASSIGNED" %}
-                        <div class="detail-row"><span>Details: </span>Radiologist assignment updated.</div>
+                        <div class="detail-row"><span>Details: </span>Practitioner assignment updated.</div>
                       {% elif ev == "VETTED" %}
-                        <div class="detail-row"><span>Details: </span>Case vetted.</div>
+                        <div class="detail-row"><span>Details: </span>Case justified.</div>
                       {% elif ev == "REJECTED" %}
                         <div class="detail-row"><span>Details: </span>Case rejected.</div>
                       {% elif ev == "REOPENED" %}

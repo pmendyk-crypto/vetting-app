@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings - Vetting Suite</title>
+    <title>Settings - RadFlow</title>
     <link rel="stylesheet" href="/static/css/site.css">
     <style>
         .settings-container {
@@ -430,7 +430,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <h1>Settings</h1>
-                    <p style="color: rgba(255,255,255,0.6); margin: 0;">Manage institutions, radiologists, users, and protocols</p>
+                    <p style="color: rgba(255,255,255,0.6); margin: 0;">Manage institutions, practitioners, users, and protocols</p>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;">
                     <a href="/account" class="btn btn-secondary" style="margin-top: 0;">My Account</a>
@@ -523,7 +523,7 @@
                 <div class="section-title">Manage Users</div>
                 <p style="color: rgba(255,255,255,0.7); margin: 0 0 16px 0; font-size: 14px;">
                     Access levels control what each user can do: <strong>Admin</strong> manages cases and settings,
-                    <strong>Radiologist</strong> can only vet assigned cases, and <strong>User</strong> has limited access.
+                    <strong>Practitioner</strong> can only complete assigned justifications, and <strong>User</strong> has limited access.
                 </p>
                 
                 <div class="form-card">
@@ -559,7 +559,7 @@
                                 <select name="role" id="addUserRole" required onchange="toggleRadiologistFields()">
                                     <option value="">Select Role</option>
                                     <option value="admin">Admin</option>
-                                    <option value="radiologist">Radiologist</option>
+                                    <option value="radiologist">Practitioner</option>
                                     <option value="user">User</option>
                                 </select>
                             </div>
@@ -607,7 +607,7 @@
                                         <input type="hidden" name="username" value="{{ user.username }}">
                                         <select name="org_role">
                                             <option value="org_admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
-                                            <option value="radiologist" {% if user.role == 'radiologist' %}selected{% endif %}>Radiologist</option>
+                                            <option value="radiologist" {% if user.role == 'radiologist' %}selected{% endif %}>Practitioner</option>
                                             <option value="org_user" {% if user.role == 'user' %}selected{% endif %}>User</option>
                                         </select>
                                         <button type="submit" class="btn btn-secondary btn-small">Save</button>
@@ -780,7 +780,7 @@
     <!-- Edit Radiologist Modal -->
     <div id="editRadiologistModal" class="modal">
         <div class="modal-content">
-            <div class="modal-header">Edit Radiologist</div>
+            <div class="modal-header">Edit Practitioner</div>
             <form id="editRadiologistForm" method="POST" action="/settings/radiologist/add">
                 <div class="form-row">
                     <div class="form-group">
@@ -831,7 +831,7 @@
                         <label>Role</label>
                         <select id="editUserRole" name="role" required>
                             <option value="admin">Admin</option>
-                            <option value="radiologist">Radiologist</option>
+                            <option value="radiologist">Practitioner</option>
                         </select>
                     </div>
                 </div>
@@ -853,7 +853,7 @@
                 </div>
                 <div class="form-row full" id="radiologistNameField" style="display:none;">
                     <div class="form-group">
-                        <label>Link to Radiologist</label>
+                        <label>Link to Practitioner</label>
                         <select id="editUserRadiologistName" name="radiologist_name">
                             <option value="">Select a Radiologist</option>
                         </select>

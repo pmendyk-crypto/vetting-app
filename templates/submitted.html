@@ -235,7 +235,7 @@
           <div class="info-meta">Use this reference to track, search, or share the case internally.</div>
         </div>
         <div class="info-card">
-          <div class="info-label">Radiologist Queue</div>
+          <div class="info-label">Practitioner Queue</div>
           <div class="info-value">{{ case["radiologist"] or "Unassigned" }}</div>
           <div class="info-meta">
             {% if case["radiologist"] %}
@@ -272,7 +272,7 @@
         {% if case["radiologist"] %}
         <a class="submitted-link" href="/admin?radiologist={{ case['radiologist']|urlencode }}">
           <div>
-            <strong>Open Radiologist Queue</strong>
+            <strong>Open Practitioner Queue</strong>
             <span>Jump straight to this radiologist’s filtered Worklist.</span>
           </div>
           <div class="submitted-link-mark">→</div>

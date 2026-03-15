@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Organisation - RadFlow</title>
+    <link rel="stylesheet" href="/static/css/site.css">
+    <style>
+        .edit-shell {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .page-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 18px;
+            margin-bottom: 26px;
+        }
+
+        .page-title {
+            margin: 0 0 8px 0;
+            font-size: 30px;
+            color: rgba(255, 255, 255, 0.98);
+        }
+
+        .page-subtitle {
+            margin: 0;
+            max-width: 720px;
+            color: rgba(255, 255, 255, 0.68);
+            line-height: 1.5;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 24px;
+            align-items: start;
+        }
+
+        .panel {
+            background: var(--card-bg);
+            border: var(--card-border);
+            border-radius: 14px;
+            padding: 22px;
+        }
+
+        .panel h2 {
+            margin: 0 0 8px 0;
+            color: #fff;
+            font-size: 22px;
+        }
+
+        .panel-copy {
+            margin: 0 0 18px 0;
+            color: rgba(255, 255, 255, 0.68);
+            line-height: 1.5;
+            font-size: 14px;
+        }
+
+        .notice {
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            line-height: 1.45;
+        }
+
+        .notice.success {
+            background: rgba(34, 197, 94, 0.12);
+            border: 1px solid rgba(34, 197, 94, 0.28);
+            color: #bbf7d0;
+        }
+
+        .notice.error {
+            background: rgba(248, 113, 113, 0.12);
+            border: 1px solid rgba(248, 113, 113, 0.28);
+            color: #fecaca;
+        }
+
+        .form-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .field label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(255, 255, 255, 0.62);
+        }
+
+        .field input,
+        .field select {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .stat-box {
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 14px;
+            background: rgba(7, 19, 58, 0.28);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(255, 255, 255, 0.56);
+            margin-bottom: 6px;
+        }
+
+        .stat-value {
+            color: #fff;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .meta-list {
+            display: grid;
+            gap: 14px;
+            margin-top: 18px;
+        }
+
+        .meta-item {
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding-top: 14px;
+        }
+
+        .meta-k {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(255, 255, 255, 0.56);
+            margin-bottom: 5px;
+        }
+
+        .meta-v {
+            color: rgba(255, 255, 255, 0.92);
+            line-height: 1.45;
+        }
+
+        @media (max-width: 980px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .page-top {
+                flex-direction: column;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="edit-shell">
+        <div class="page-top">
+            <div>
+                <h1 class="page-title">Edit Organisation</h1>
+                <p class="page-subtitle">
+                    Update the core identity of this organisation. This first version focuses on the organisation record itself so we keep the owner workflow simple and reliable.
+                </p>
+            </div>
+            <div class="button-group">
+                <a class="btn secondary" href="/owner">Back to Owner Portal</a>
+                <a class="btn secondary" href="/logout">Logout</a>
+            </div>
+        </div>
+
+        <div class="layout">
+            <section class="panel">
+                <h2>{{ organisation.name }}</h2>
+                <p class="panel-copy">
+                    Edit the organisation display name, code, and active status. More advanced organisation settings like report branding can sit here next.
+                </p>
+
+                {% if saved %}
+                <div class="notice success">Organisation updated successfully.</div>
+                {% endif %}
+
+                {% if error %}
+                <div class="notice error">{{ error }}</div>
+                {% endif %}
+
+                <form method="post" action="/owner/organisations/{{ organisation.id }}" class="form-stack">
+                    <div class="field">
+                        <label for="name">Organisation Name</label>
+                        <input id="name" name="name" type="text" value="{{ organisation.name }}" required>
+                    </div>
+
+                    <div class="field">
+                        <label for="slug">Organisation Code / Slug</label>
+                        <input id="slug" name="slug" type="text" value="{{ organisation.slug }}" required>
+                    </div>
+
+                    <div class="field">
+                        <label for="is_active">Status</label>
+                        <select id="is_active" name="is_active">
+                            <option value="1" {% if organisation.is_active %}selected{% endif %}>Active</option>
+                            <option value="0" {% if not organisation.is_active %}selected{% endif %}>Inactive</option>
+                        </select>
+                    </div>
+
+                    <div class="button-group">
+                        <button type="submit" class="btn primary">Save Organisation</button>
+                    </div>
+                </form>
+            </section>
+
+            <aside class="panel">
+                <h2>Organisation Snapshot</h2>
+                <p class="panel-copy">
+                    A quick summary of the current organisation footprint. This helps you sanity-check what you are editing before we add deeper organisation management.
+                </p>
+
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-label">Admins</div>
+                        <div class="stat-value">{{ organisation.admin_count or 0 }}</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Radiologists</div>
+                        <div class="stat-value">{{ organisation.radiologist_count or 0 }}</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Users</div>
+                        <div class="stat-value">{{ organisation.user_count or 0 }}</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Institutions</div>
+                        <div class="stat-value">{{ organisation.institution_count or 0 }}</div>
+                    </div>
+                </div>
+
+                <div class="meta-list">
+                    <div class="meta-item">
+                        <div class="meta-k">Organisation ID</div>
+                        <div class="meta-v">{{ organisation.id }}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-k">Created</div>
+                        <div class="meta-v">{{ organisation.created_at | display_datetime }}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-k">Current Status</div>
+                        <div class="meta-v">{{ 'Active' if organisation.is_active else 'Inactive' }}</div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+</body>
+</html>

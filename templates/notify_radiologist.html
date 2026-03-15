@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Notify Radiologist — Vetting Suite</title>
+  <title>Notify Practitioner — RadFlow</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
     :root {
@@ -184,6 +184,44 @@
     .pending-label { color: var(--muted); }
     .pending-label strong { color: var(--text); }
 
+    .notify-summary {
+      display: none;
+      align-items: flex-start;
+      gap: 12px;
+      background: rgba(210,153,34,.12);
+      border: 1px solid rgba(210,153,34,.32);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-top: 14px;
+      font-size: 14px;
+      color: #fde68a;
+    }
+    .notify-summary.visible { display: flex; }
+    .notify-summary-icon {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(210,153,34,.22);
+      border: 1px solid rgba(210,153,34,.4);
+      color: #facc15;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .notify-summary-title {
+      color: #fef3c7;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .notify-summary-meta {
+      color: rgba(255,255,255,0.72);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
     /* ── Channel selector ── */
     .channel-group {
       display: grid;
@@ -291,7 +329,7 @@
   <div class="page-header">
     <div class="page-header-inner">
       <a href="/admin" class="back-btn">← Dashboard</a>
-      <h1 class="page-title">Notify Radiologist</h1>
+      <h1 class="page-title">Notify Practitioner</h1>
     </div>
   </div>
 
@@ -307,7 +345,7 @@
   {% if error == "no_email" %}
   <div class="banner banner-error">
     <span class="banner-icon">⚠️</span>
-    <span>Please enter a valid email address for this radiologist.</span>
+    <span>Please enter a valid email address for this practitioner.</span>
   </div>
   {% elif error == "smtp_not_configured" %}
   <div class="banner banner-error">
@@ -332,14 +370,15 @@
   <script>
     const PENDING = {{ pending_counts | tojson }};
     const RAD_EMAILS = {{ rad_emails | tojson }};
+    const NOTIFY_SUMMARY = {{ notify_summary | tojson }};
   </script>
 
   <form method="post" action="/admin/notify-radiologist" id="notifyForm">
 
     <!-- Radiologist picker -->
     <div class="card">
-      <div class="card-heading">Select Radiologist</div>
-      <label for="radSelect">Radiologist</label>
+      <div class="card-heading">Select Practitioner</div>
+      <label for="radSelect">Practitioner</label>
       <select name="radiologist_name" id="radSelect" required>
         <option value="">— choose —</option>
         {% for r in radiologists %}
@@ -354,7 +393,15 @@
       <div class="pending-info" id="pendingInfo" style="display:none;">
         <div class="pending-count-badge" id="pendingBadge">0</div>
         <div class="pending-label">
-          case(s) currently <strong>pending / reopened</strong> for this radiologist
+          case(s) currently <strong>pending / reopened</strong> for this practitioner
+        </div>
+      </div>
+
+      <div class="notify-summary" id="notifySummary">
+        <div class="notify-summary-icon">i</div>
+        <div>
+          <div class="notify-summary-title" id="notifySummaryTitle"></div>
+          <div class="notify-summary-meta" id="notifySummaryMeta"></div>
         </div>
       </div>
     </div>
@@ -389,7 +436,7 @@
             {% endif %}
             <label for="recipientEmail">Recipient Email</label>
             <input type="email" name="recipient" id="recipientEmail"
-                   placeholder="radiologist@hospital.com"
+                   placeholder="practitioner@hospital.com"
                    value="{{ (rad_emails.get(selected_name, '')) if selected_name else '' }}">
           </div>
 
@@ -409,12 +456,12 @@
           <label for="messageBox">Notification Message</label>
           <textarea name="message" id="messageBox" required>{% if selected_name %}Hi {{ selected_name }},
 
-You currently have {{ pending_counts.get(selected_name, 0) }} case(s) awaiting your review in the Vetting Suite.
+You currently have {{ pending_counts.get(selected_name, 0) }} case(s) awaiting your review in RadFlow.
 
 Please log in at your earliest convenience to action any outstanding items.
 
 Thanks,
-Vetting Suite Admin{% else %}Select a radiologist above to generate a message.{% endif %}</textarea>
+RadFlow Admin{% else %}Select a practitioner above to generate a message.{% endif %}</textarea>
         </div>
       </div>
     </div>
@@ -432,7 +479,7 @@ Vetting Suite Admin{% else %}Select a radiologist above to generate a message.{%
         <thead>
           <tr>
             <th>Sent</th>
-            <th>Radiologist</th>
+            <th>Practitioner</th>
             <th>Channel</th>
             <th>Recipient</th>
             <th>Sent By</th>
@@ -463,7 +510,7 @@ Vetting Suite Admin{% else %}Select a radiologist above to generate a message.{%
   <div class="card">
     <div class="empty-state">
       <div class="emoji">👥</div>
-      <p>No radiologists are registered in this organisation.</p>
+      <p>No practitioners are registered in this organisation.</p>
     </div>
   </div>
   {% endif %}
@@ -482,11 +529,15 @@ Vetting Suite Admin{% else %}Select a radiologist above to generate a message.{%
   const sendBtn     = document.getElementById('sendBtn');
   const chEmail     = document.getElementById('ch-email');
   const chSms       = document.getElementById('ch-sms');
+  const notifySummary = document.getElementById('notifySummary');
+  const notifySummaryTitle = document.getElementById('notifySummaryTitle');
+  const notifySummaryMeta = document.getElementById('notifySummaryMeta');
 
   function updateRadiologist() {
     const name = radSelect ? radSelect.value : '';
     if (!name) {
       if (pendingInfo) pendingInfo.style.display = 'none';
+      if (notifySummary) notifySummary.classList.remove('visible');
       return;
     }
 
@@ -499,6 +550,24 @@ Vetting Suite Admin{% else %}Select a radiologist above to generate a message.{%
       pendBadge.className = 'pending-count-badge' + (count === 0 ? ' zero' : '');
     }
 
+    const summary = (typeof NOTIFY_SUMMARY !== 'undefined' && NOTIFY_SUMMARY[name]) ? NOTIFY_SUMMARY[name] : null;
+    if (notifySummary && notifySummaryTitle && notifySummaryMeta) {
+      if (summary && Number(summary.count || 0) > 0) {
+        const countText = Number(summary.count) === 1 ? '1 notification already sent in the last 24 hours' : `${summary.count} notifications already sent in the last 24 hours`;
+        const parts = [];
+        if (summary.last_created_display) parts.push(`Last sent: ${summary.last_created_display}`);
+        if (summary.last_created_by) parts.push(`by ${summary.last_created_by}`);
+        if (summary.last_recipient) parts.push(`to ${summary.last_recipient}`);
+        notifySummaryTitle.textContent = countText;
+        notifySummaryMeta.textContent = parts.join(' ');
+        notifySummary.classList.add('visible');
+      } else {
+        notifySummary.classList.remove('visible');
+        notifySummaryTitle.textContent = '';
+        notifySummaryMeta.textContent = '';
+      }
+    }
+
     // Auto-fill email
     if (emailInput && typeof RAD_EMAILS !== 'undefined') {
       emailInput.value = RAD_EMAILS[name] || '';
@@ -507,10 +576,10 @@ Vetting Suite Admin{% else %}Select a radiologist above to generate a message.{%
     // Regenerate message
     if (msgBox) {
       const existing = msgBox.value;
-      const hasCustom = existing && existing.indexOf('Select a radiologist') === -1;
+      const hasCustom = existing && existing.indexOf('Select a practitioner') === -1;
       if (!hasCustom || !existing.trim()) {
         msgBox.value =
-          `Hi ${name},\n\nYou currently have ${count} case(s) awaiting your review in the Vetting Suite.\n\nPlease log in at your earliest convenience to action any outstanding items.\n\nThanks,\nVetting Suite Admin`;
+          `Hi ${name},\n\nYou currently have ${count} case(s) awaiting your review in the RadFlow.\n\nPlease log in at your earliest convenience to action any outstanding items.\n\nThanks,\nRadFlow Admin`;
       }
     }
   }
@@ -532,4 +601,5 @@ Vetting Suite Admin{% else %}Select a radiologist above to generate a message.{%
 </script>
 </body>
 </html>
+
 

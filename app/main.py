@@ -76,7 +76,8 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 IREFER_API_KEY = os.environ.get("IREFER_API_KEY", "")
 _irefer_guidelines_cache: list = []  # in-memory cache, populated on first request
 SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASS = os.environ.get("SMTP_PASS", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "") or os.environ.get("SMTP_PASS", "")
+SMTP_PASS = SMTP_PASSWORD
 SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER)
 
 # Log paths at startup for debugging persistence issues
@@ -233,7 +234,7 @@ def blob_exists(blob_name: str) -> bool:
         print(f"[BLOB] exists() check failed for {blob_name}: {e}")
         return False
 
-app = FastAPI(title="Vetting App")
+app = FastAPI(title="RadFlow")
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
@@ -245,7 +246,8 @@ APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8000")
 SMTP_HOST = os.environ.get("SMTP_HOST")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD") or os.environ.get("SMTP_PASS")
+SMTP_PASS = SMTP_PASSWORD
 SMTP_FROM = os.environ.get("SMTP_FROM") or SMTP_USER
 LOGO_DARK_URL = os.environ.get("LOGO_DARK_URL", "/static/images/logo-light.png")
 
@@ -1713,8 +1715,7 @@ def verify_user(username: str, password: str) -> dict | None:
             or str(user_dict.get("username") or "").strip()
         )
         if "is_superuser" in row_keys:
-            is_platform_superadmin = normalized_username.lower() == "superadmin"
-            user_dict["is_superuser"] = True if (row["is_superuser"] and is_platform_superadmin) else False
+            user_dict["is_superuser"] = bool(row["is_superuser"])
 
             if user_dict["is_superuser"]:
                 user_dict["role"] = "admin"
@@ -1855,6 +1856,77 @@ def ensure_seed_data() -> None:
     conn.close()
     if row and row["c"] == 0:
         create_user("admin", "admin123", "admin", None, "Admin", "User", "admin@lumoslab.com")
+
+
+def ensure_local_owner_account() -> None:
+    if using_postgres():
+        return
+    if not table_has_column("users", "is_superuser"):
+        return
+
+    owner_username = os.environ.get("OWNER_ADMIN_USERNAME", "owneradmin").strip() or "owneradmin"
+    owner_password = os.environ.get("OWNER_ADMIN_PASSWORD", "OwnerAdmin!2026").strip() or "OwnerAdmin!2026"
+    owner_email = os.environ.get("OWNER_ADMIN_EMAIL", "owner@radflow.local").strip() or "owner@radflow.local"
+    now = utc_now_iso()
+
+    conn = get_db()
+    existing = conn.execute("SELECT id FROM users WHERE username = ?", (owner_username,)).fetchone()
+    if existing:
+        conn.execute(
+            """
+            UPDATE users
+            SET is_superuser = 1,
+                is_active = 1,
+                role = COALESCE(role, 'admin'),
+                modified_at = ?
+            WHERE username = ?
+            """,
+            (now, owner_username),
+        )
+        if owner_username != "admin":
+            conn.execute(
+                """
+                UPDATE users
+                SET is_superuser = 0,
+                    modified_at = ?
+                WHERE username = 'admin'
+                """,
+                (now,),
+            )
+        conn.commit()
+        conn.close()
+        return
+
+    salt = secrets.token_bytes(16)
+    pw_hash = hash_password(owner_password, salt)
+    conn.execute(
+        """
+        INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname, role, radiologist_name)
+        VALUES (?, ?, ?, ?, 1, 1, ?, ?, ?, ?, 'admin', NULL)
+        """,
+        (
+            owner_username,
+            owner_email,
+            pw_hash.hex(),
+            salt.hex(),
+            now,
+            now,
+            "Owner",
+            "Admin",
+        ),
+    )
+    if owner_username != "admin":
+        conn.execute(
+            """
+            UPDATE users
+            SET is_superuser = 0,
+                modified_at = ?
+            WHERE username = 'admin'
+            """,
+            (now,),
+        )
+    conn.commit()
+    conn.close()
 def list_institutions(org_id: int | None = None) -> list[dict]:
     conn = get_db()
     if table_has_column("institutions", "org_id"):
@@ -2029,12 +2101,12 @@ def require_radiologist(request: Request) -> dict:
     user = require_login(request)
     _user_id, is_superuser, _org_id, org_role = get_current_org_context(request)
     if is_superuser:
-        raise HTTPException(status_code=403, detail="Radiologist only")
+        raise HTTPException(status_code=403, detail="Practitioner only")
     if table_exists("memberships"):
         if org_role != "radiologist":
-            raise HTTPException(status_code=403, detail="Radiologist only")
+            raise HTTPException(status_code=403, detail="Practitioner only")
     elif user.get("role") != "radiologist":
-        raise HTTPException(status_code=403, detail="Radiologist only")
+        raise HTTPException(status_code=403, detail="Practitioner only")
 
     if not user.get("radiologist_name"):
         fallback_name = (
@@ -2206,6 +2278,197 @@ def redirect_to_login(role: str, next_path: str):
     return RedirectResponse(url=f"/login?role={role}&next={next_path}", status_code=303)
 
 
+def slugify_org_name(name: str) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", str(name or "").strip().lower()).strip("-")
+    return base or "organisation"
+
+
+def ensure_extended_identity_schema() -> None:
+    if using_postgres():
+        return
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS organisations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            slug TEXT NOT NULL UNIQUE,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            modified_at TEXT
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS memberships (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            org_role TEXT NOT NULL DEFAULT 'org_user',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            modified_at TEXT,
+            UNIQUE(org_id, user_id)
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            user_id INTEGER PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS radiologist_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL UNIQUE,
+            gmc TEXT,
+            specialty TEXT,
+            display_name TEXT,
+            created_at TEXT NOT NULL,
+            modified_at TEXT
+        )
+        """
+    )
+
+    cur.execute("PRAGMA table_info(users)")
+    user_cols = {row[1] for row in cur.fetchall()}
+    needs_user_upgrade = {"id", "password_hash", "is_superuser", "is_active", "created_at", "modified_at"} - user_cols
+
+    if needs_user_upgrade:
+        now = utc_now_iso()
+        cur.execute("DROP TABLE IF EXISTS users_extended_new")
+        cur.execute(
+            """
+            CREATE TABLE users_extended_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                email TEXT UNIQUE,
+                password_hash TEXT NOT NULL,
+                salt_hex TEXT NOT NULL,
+                is_superuser INTEGER NOT NULL DEFAULT 0,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                modified_at TEXT,
+                first_name TEXT,
+                surname TEXT,
+                role TEXT,
+                radiologist_name TEXT
+            )
+            """
+        )
+        old_rows = cur.execute(
+            "SELECT username, first_name, surname, email, role, radiologist_name, salt_hex, pw_hash_hex FROM users ORDER BY username"
+        ).fetchall()
+        promote_username = None
+        for old in old_rows:
+            if str(old[4] or "").strip().lower() == "admin" and promote_username is None:
+                promote_username = old[0]
+        for old in old_rows:
+            username = old[0]
+            email = (old[3] or "").strip() or None
+            role = (old[4] or "user").strip()
+            is_superuser = 1 if username == promote_username else 0
+            cur.execute(
+                """
+                INSERT INTO users_extended_new(
+                    username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at,
+                    first_name, surname, role, radiologist_name
+                )
+                VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    username,
+                    email,
+                    old[7],
+                    old[6],
+                    is_superuser,
+                    now,
+                    now,
+                    old[1],
+                    old[2],
+                    role,
+                    old[5],
+                ),
+            )
+        cur.execute("ALTER TABLE users RENAME TO users_legacy_backup")
+        cur.execute("ALTER TABLE users_extended_new RENAME TO users")
+
+    cur.execute("PRAGMA table_info(institutions)")
+    institution_cols = {row[1] for row in cur.fetchall()}
+    if "org_id" not in institution_cols:
+        cur.execute("ALTER TABLE institutions ADD COLUMN org_id INTEGER")
+
+    cur.execute("PRAGMA table_info(cases)")
+    case_cols = {row[1] for row in cur.fetchall()}
+    if "org_id" not in case_cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN org_id INTEGER")
+
+    cur.execute("PRAGMA table_info(protocols)")
+    protocol_cols = {row[1] for row in cur.fetchall()}
+    if "org_id" not in protocol_cols:
+        cur.execute("ALTER TABLE protocols ADD COLUMN org_id INTEGER")
+
+    conn.commit()
+
+    org_row = cur.execute("SELECT id FROM organisations ORDER BY id LIMIT 1").fetchone()
+    if org_row:
+        default_org_id = org_row[0]
+    else:
+        default_org_name = "Lumos Lab"
+        default_slug = slugify_org_name(default_org_name)
+        suffix = 1
+        while cur.execute("SELECT 1 FROM organisations WHERE slug = ?", (default_slug,)).fetchone():
+            suffix += 1
+            default_slug = f"{slugify_org_name(default_org_name)}-{suffix}"
+        cur.execute(
+            "INSERT INTO organisations(name, slug, is_active, created_at, modified_at) VALUES (?, ?, 1, ?, ?)",
+            (default_org_name, default_slug, utc_now_iso(), utc_now_iso()),
+        )
+        default_org_id = cur.lastrowid
+
+    cur.execute("UPDATE institutions SET org_id = ? WHERE org_id IS NULL", (default_org_id,))
+    cur.execute("UPDATE cases SET org_id = ? WHERE org_id IS NULL", (default_org_id,))
+    cur.execute("UPDATE protocols SET org_id = ? WHERE org_id IS NULL", (default_org_id,))
+
+    if table_exists("study_description_presets"):
+        cur.execute("UPDATE study_description_presets SET organization_id = ? WHERE organization_id IS NULL OR organization_id = 0", (default_org_id,))
+
+    user_rows = cur.execute("SELECT id, username, role, first_name, surname, radiologist_name FROM users").fetchall()
+    for user_row in user_rows:
+        user_id = user_row[0]
+        username = user_row[1]
+        role = str(user_row[2] or "user").strip().lower()
+        org_role = "org_admin" if role == "admin" else "radiologist" if role == "radiologist" else "org_user"
+        if not cur.execute("SELECT 1 FROM memberships WHERE org_id = ? AND user_id = ?", (default_org_id, user_id)).fetchone():
+            cur.execute(
+                "INSERT INTO memberships(org_id, user_id, org_role, is_active, created_at, modified_at) VALUES (?, ?, ?, 1, ?, ?)",
+                (default_org_id, user_id, org_role, utc_now_iso(), utc_now_iso()),
+            )
+        if role == "radiologist":
+            display_name = (
+                str(user_row[5] or "").strip()
+                or " ".join(part for part in [str(user_row[3] or "").strip(), str(user_row[4] or "").strip()] if part)
+                or username
+            )
+            if not cur.execute("SELECT 1 FROM radiologist_profiles WHERE user_id = ?", (user_id,)).fetchone():
+                cur.execute(
+                    "INSERT INTO radiologist_profiles(user_id, gmc, specialty, display_name, created_at, modified_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (user_id, None, None, display_name, utc_now_iso(), utc_now_iso()),
+                )
+
+    conn.commit()
+    conn.close()
+
+
 def insert_case_event(
     case_id: str,
     org_id: int | None,
@@ -2255,6 +2518,7 @@ try:
     ensure_study_description_presets_schema()
     ensure_notify_events_schema()
     ensure_seed_data()
+    ensure_local_owner_account()
     ensure_default_protocols()
     ensure_default_study_description_presets()
     cleanup_old_files()
@@ -2806,6 +3070,98 @@ def owner_create_organisation(
     return RedirectResponse(url="/owner?created=1", status_code=303)
 
 
+@app.get("/owner/organisations/{org_id}", response_class=HTMLResponse)
+def owner_edit_organisation_page(request: Request, org_id: int, saved: str = "", error: str = ""):
+    user = require_superuser(request)
+    organisation = get_organisation_summary(org_id)
+    if not organisation:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+    return templates.TemplateResponse(
+        "owner_organisation_edit.html",
+        {
+            "request": request,
+            "user": user,
+            "organisation": organisation,
+            "saved": saved,
+            "error": error,
+        },
+    )
+
+
+@app.post("/owner/organisations/{org_id}")
+def owner_edit_organisation_submit(
+    request: Request,
+    org_id: int,
+    name: str = Form(...),
+    slug: str = Form(...),
+    is_active: str = Form("1"),
+):
+    user = require_superuser(request)
+    organisation = get_organisation_summary(org_id)
+    if not organisation:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+
+    clean_name = name.strip()
+    clean_slug = slugify_org_name(slug.strip() or clean_name)
+    active_value = 1 if str(is_active).strip() == "1" else 0
+
+    if not clean_name:
+        return templates.TemplateResponse(
+            "owner_organisation_edit.html",
+            {
+                "request": request,
+                "user": user,
+                "organisation": {
+                    **organisation,
+                    "name": clean_name,
+                    "slug": clean_slug,
+                    "is_active": active_value,
+                },
+                "saved": "",
+                "error": "Organisation name is required.",
+            },
+            status_code=400,
+        )
+
+    conn = get_db()
+    try:
+        existing = conn.execute(
+            "SELECT id FROM organisations WHERE slug = ? AND id != ?",
+            (clean_slug, org_id),
+        ).fetchone()
+        if existing:
+            return templates.TemplateResponse(
+                "owner_organisation_edit.html",
+                {
+                    "request": request,
+                    "user": user,
+                    "organisation": {
+                        **organisation,
+                        "name": clean_name,
+                        "slug": clean_slug,
+                        "is_active": active_value,
+                    },
+                    "saved": "",
+                    "error": "That organisation code is already in use.",
+                },
+                status_code=400,
+            )
+
+        conn.execute(
+            """
+            UPDATE organisations
+            SET name = ?, slug = ?, is_active = ?, modified_at = ?
+            WHERE id = ?
+            """,
+            (clean_name, clean_slug, active_value, utc_now_iso(), org_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return RedirectResponse(url=f"/owner/organisations/{org_id}?saved=1", status_code=303)
+
+
 # -------------------------
 # Admin dashboard (tabs + filters + TAT)
 # -------------------------
@@ -2818,6 +3174,7 @@ def build_admin_case_filters(
     q: str | None = None,
     status: str | None = None,
     created_since: str | None = None,
+    created_on: str | None = None,
 ):
     clauses = ["1=1"]
     params: list = []
@@ -2854,6 +3211,10 @@ def build_admin_case_filters(
         clauses.append("c.created_at >= ?")
         params.append(created_since)
 
+    if created_on:
+        clauses.append("SUBSTR(c.created_at, 1, 10) = ?")
+        params.append(created_on)
+
     return clauses, params
 
 
@@ -2882,7 +3243,7 @@ def list_case_modalities(org_id, is_superuser: bool):
 
 
 def build_dashboard_series(rows: list[dict]):
-    status_counts = {"pending": 0, "vetted": 0, "rejected": 0}
+    status_counts = {"pending": 0, "vetted": 0, "rejected": 0, "reopened": 0}
     over_time_counts: dict[str, dict] = {}
     institution_counts: dict[str, int] = {}
     radiologist_counts: dict[str, int] = {}
@@ -2913,6 +3274,7 @@ def build_dashboard_series(rows: list[dict]):
         {"label": "Pending", "value": status_counts["pending"], "tone": "pending"},
         {"label": "Vetted", "value": status_counts["vetted"], "tone": "vetted"},
         {"label": "Rejected", "value": status_counts["rejected"], "tone": "rejected"},
+        {"label": "Reopened", "value": status_counts["reopened"], "tone": "reopened"},
     ]
 
     total_cases = len(rows)
@@ -2953,6 +3315,7 @@ def build_dashboard_series(rows: list[dict]):
             "pending": status_counts["pending"],
             "vetted": status_counts["vetted"],
             "rejected": status_counts["rejected"],
+            "reopened": status_counts["reopened"],
             "avg_tat": format_tat(avg_tat_seconds),
         },
     }
@@ -2972,6 +3335,7 @@ def admin_dashboard(
     dashboard_range: str = "30d",
     dashboard_institution: str | None = None,
     dashboard_radiologist: str | None = None,
+    dashboard_date: str | None = None,
 ):
     try:
         user = require_admin(request)
@@ -3015,6 +3379,7 @@ def admin_dashboard(
                 "dashboard_range": dashboard_range,
                 "dashboard_institution": dashboard_institution or "",
                 "dashboard_radiologist": dashboard_radiologist or "",
+                "dashboard_date": dashboard_date or "",
                 "dashboard": build_dashboard_series([]),
                 "org_name": org_name,
                 "current_user": get_session_user(request),
@@ -3077,8 +3442,9 @@ def admin_dashboard(
     dashboard_range = (dashboard_range or "30d").strip().lower()
     if dashboard_range not in ("7d", "30d", "90d", "365d", "all"):
         dashboard_range = "30d"
+    dashboard_date = (dashboard_date or "").strip()
     created_since = None
-    if dashboard_range != "all":
+    if dashboard_range != "all" and not dashboard_date:
         days = int(dashboard_range.replace("d", ""))
         created_since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
@@ -3088,6 +3454,7 @@ def admin_dashboard(
         institution=dashboard_institution,
         radiologist=dashboard_radiologist,
         created_since=created_since,
+        created_on=dashboard_date or None,
     )
     dashboard_sql = (
         "SELECT c.*, i.name as institution_name "
@@ -3146,6 +3513,7 @@ def admin_dashboard(
             "dashboard_range": dashboard_range,
             "dashboard_institution": dashboard_institution or "",
             "dashboard_radiologist": dashboard_radiologist or "",
+            "dashboard_date": dashboard_date or "",
             "dashboard": dashboard,
             "org_name": org_name,
             "current_user": get_session_user(request),
@@ -3165,6 +3533,7 @@ def admin_dashboard_csv(
     dashboard_range: str = "30d",
     dashboard_institution: str | None = None,
     dashboard_radiologist: str | None = None,
+    dashboard_date: str | None = None,
 ):
     user = require_admin(request)
     org_id = user.get("org_id")
@@ -3178,7 +3547,8 @@ def admin_dashboard_csv(
         dashboard_range = (dashboard_range or "30d").strip().lower()
         if dashboard_range not in ("7d", "30d", "90d", "365d", "all"):
             dashboard_range = "30d"
-        if dashboard_range != "all":
+        dashboard_date = (dashboard_date or "").strip()
+        if dashboard_range != "all" and not dashboard_date:
             days = int(dashboard_range.replace("d", ""))
             created_since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         clauses, params = build_admin_case_filters(
@@ -3187,6 +3557,7 @@ def admin_dashboard_csv(
             institution=dashboard_institution,
             radiologist=dashboard_radiologist,
             created_since=created_since,
+            created_on=dashboard_date or None,
         )
     else:
         tab = (tab or "all").strip().lower()
@@ -3412,9 +3783,55 @@ def notify_radiologist_page(request: Request, name: str = "", sent: str = "", er
         rad_emails[rname] = r.get("email") or ""
 
     notify_history: list[dict[str, str]] = []
+    notify_summary: dict[str, dict[str, str | int]] = {}
+    summary_since_dt = datetime.now(timezone.utc) - timedelta(hours=24)
+    summary_since_iso = summary_since_dt.isoformat()
     since_dt = datetime.now(timezone.utc) - timedelta(days=7)
     since_iso = since_dt.isoformat()
     try:
+        if org_id:
+            summary_rows = conn.execute(
+                """
+                SELECT radiologist_name, recipient, created_at, created_by
+                FROM notify_events
+                WHERE org_id = ? AND created_at >= ?
+                ORDER BY created_at DESC
+                """,
+                (org_id, summary_since_iso),
+            ).fetchall()
+        else:
+            summary_rows = conn.execute(
+                """
+                SELECT radiologist_name, recipient, created_at, created_by
+                FROM notify_events
+                WHERE created_at >= ?
+                ORDER BY created_at DESC
+                """,
+                (summary_since_iso,),
+            ).fetchall()
+        for row in summary_rows or []:
+            data = row if isinstance(row, dict) else dict(row)
+            rname = data.get("radiologist_name", "") or ""
+            if not rname:
+                continue
+            summary = notify_summary.setdefault(
+                rname,
+                {
+                    "count": 0,
+                    "last_created_at": "",
+                    "last_created_display": "",
+                    "last_created_by": "",
+                    "last_recipient": "",
+                },
+            )
+            summary["count"] = int(summary["count"]) + 1
+            if not summary["last_created_at"]:
+                created_at = data.get("created_at", "") or ""
+                summary["last_created_at"] = created_at
+                summary["last_created_display"] = format_display_datetime(created_at, created_at)
+                summary["last_created_by"] = data.get("created_by", "") or ""
+                summary["last_recipient"] = data.get("recipient", "") or ""
+
         if org_id:
             rows = conn.execute(
                 """
@@ -3471,6 +3888,7 @@ def notify_radiologist_page(request: Request, name: str = "", sent: str = "", er
             "smtp_configured": bool(SMTP_HOST),
             "current_user": get_session_user(request),
             "notify_history": notify_history,
+            "notify_summary": notify_summary,
         },
     )
 
@@ -3502,7 +3920,7 @@ def notify_radiologist_send(
         from email.mime.multipart import MIMEMultipart
 
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Cases Awaiting Your Review — Vetting Suite"
+        msg["Subject"] = "Cases Awaiting Your Review - RadFlow"
         msg["From"] = SMTP_FROM or SMTP_USER
         msg["To"] = recipient.strip()
 
@@ -3510,7 +3928,7 @@ def notify_radiologist_send(
         <div style="font-family:Arial,sans-serif;max-width:500px;padding:24px;background:#f9f9f9;border-radius:8px;">
           <h2 style="color:#1a1a2e;margin-top:0;">Cases Awaiting Your Review</h2>
           <p style="color:#333;white-space:pre-wrap;">{message}</p>
-          <p style="font-size:12px;color:#888;margin-top:24px;">Sent via Vetting Suite &middot; Healthcare Applications</p>
+          <p style="font-size:12px;color:#888;margin-top:24px;">Sent via RadFlow &middot; Healthcare Applications</p>
         </div>
         """
         msg.attach(MIMEText(message, "plain"))
@@ -3836,10 +4254,7 @@ def admin_case_edit_view(request: Request, case_id: str):
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
     
-    # Bug 9: Check if case is approved and prevent editing
     case_dict = dict(case)
-    if case_dict.get("status") == "vetted" and case_dict.get("decision") == "Approve":
-        raise HTTPException(status_code=403, detail="Cannot edit approved cases")
     
     return templates.TemplateResponse(
         "case_edit.html",
@@ -3884,11 +4299,7 @@ async def admin_case_edit_save(
         conn.close()
         raise HTTPException(status_code=404, detail="Case not found")
 
-    # Bug 9: Prevent editing approved cases
     case_dict = dict(case)
-    if case_dict.get("status") == "vetted" and case_dict.get("decision") == "Approve":
-        conn.close()
-        raise HTTPException(status_code=403, detail="Cannot edit approved cases")
 
     cleaned_first_name = patient_first_name.strip()
     cleaned_surname = patient_surname.strip()
@@ -4105,9 +4516,11 @@ def admin_reopen_case_submit(
     reopen_entry = f"{REOPEN_NOTE_MARKER}\n{reopen_notes.strip()}"
     updated_notes = "\n\n".join(part for part in [current_notes.strip(), reopen_entry] if part).strip()
     
-    # Change status to 'reopened' and clear previous decision
+    # Keep the prior decision context visible when a case is reopened.
+    # This helps the radiologist see what was decided previously while still
+    # making it clear that the case needs a fresh review.
     conn.execute(
-        "UPDATE cases SET status = ?, admin_notes = ?, decision = NULL, decision_comment = NULL, vetted_at = NULL WHERE id = ?",
+        "UPDATE cases SET status = ?, admin_notes = ? WHERE id = ?",
         ("reopened", updated_notes, case_id)
     )
     conn.commit()
@@ -4344,6 +4757,48 @@ def list_organisations_summary() -> list[dict]:
     conn.close()
     return [dict(row) for row in rows]
 
+
+def get_organisation_summary(org_id: int) -> dict | None:
+    if not table_exists("organisations"):
+        return None
+    conn = get_db()
+    row = conn.execute(
+        """
+        SELECT
+            o.id,
+            o.name,
+            o.slug,
+            o.is_active,
+            o.created_at,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.org_role = 'org_admin' AND m.is_active = 1
+            ) AS admin_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.org_role = 'radiologist' AND m.is_active = 1
+            ) AS radiologist_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.is_active = 1
+            ) AS user_count,
+            (
+                SELECT COUNT(*)
+                FROM institutions i
+                WHERE i.org_id = o.id
+            ) AS institution_count
+        FROM organisations o
+        WHERE o.id = ?
+        LIMIT 1
+        """,
+        (org_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
     insert_case_event(
         case_id=case_id,
         org_id=org_id or row["org_id"],
@@ -4352,7 +4807,11 @@ def list_organisations_summary() -> list[dict]:
         comment=reopen_notes.strip() or None,
     )
 
-    return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
+    redirect_target = f"/admin/case/{case_id}"
+    referer = request.headers.get("referer", "")
+    if referer.endswith(f"/admin/case/{case_id}/edit"):
+        redirect_target = f"/admin/case/{case_id}/edit?saved=1"
+    return RedirectResponse(url=redirect_target, status_code=303)
 
 
 # -------------------------
@@ -4368,7 +4827,7 @@ def radiologist_dashboard(request: Request, tab: str = "all"):
     org_id = user.get("org_id")
     rad_name = user.get("radiologist_name")
     if not rad_name:
-        raise HTTPException(status_code=400, detail="Radiologist account not linked to a radiologist name")
+        raise HTTPException(status_code=400, detail="Practitioner account not linked to a practitioner name")
 
     tab = (tab or "all").strip().lower()
     if tab not in ("all", "pending", "vetted", "rejected", "reopened"):
@@ -5858,7 +6317,7 @@ def vet_form(request: Request, case_id: str):
                 org_id=org_id,
                 event_type="OPENED",
                 user=user,
-                comment="Case opened by radiologist",
+                comment="Case opened by practitioner",
             )
 
     protocols = []
@@ -6223,9 +6682,9 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
             if event_type == "SUBMITTED":
                 return "Case submitted"
             if event_type == "ASSIGNED":
-                return "Assigned to radiologist"
+                return "Assigned to practitioner"
             if event_type == "OPENED":
-                return "Case opened by radiologist"
+                return "Case opened by practitioner"
             if event_type == "REOPENED":
                 return "Case reopened by admin"
             if event_type == "VETTED":
@@ -6833,6 +7292,7 @@ def account_change_password(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+
 
 
 

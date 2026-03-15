@@ -157,10 +157,37 @@
       border-radius: 8px; 
       border: 1px solid rgba(255,255,255,0.06);
       background: rgba(0,0,0,0.2); 
-      color: var(--muted); 
+      color: #f8fbff; 
       font-size: 14px; 
       font-family: inherit;
       transition: all 0.2s ease;
+    }
+    .form-row select,
+    .extra-row select,
+    [data-add-modality],
+    [data-add-description],
+    [data-add-radiologist] {
+      appearance: auto;
+      -webkit-appearance: menulist;
+      -moz-appearance: auto;
+      padding-right: 10px;
+      background-image: none;
+    }
+    .form-row select option,
+    .extra-row select option,
+    [data-add-modality] option,
+    [data-add-description] option,
+    [data-add-radiologist] option {
+      background: #f3f7ff;
+      color: #0f172a;
+    }
+    .form-row select option:checked,
+    .extra-row select option:checked,
+    [data-add-modality] option:checked,
+    [data-add-description] option:checked,
+    [data-add-radiologist] option:checked {
+      background: #2f74e7;
+      color: #ffffff;
     }
     .form-row input[type="file"] {
       padding: 6px 8px;
@@ -186,6 +213,14 @@
       border-color: var(--accent); 
       background: rgba(0,0,0,0.25);
       box-shadow: 0 0 0 2px rgba(31,111,235,0.15);
+    }
+    .form-row select:focus,
+    .extra-row select:focus,
+    [data-add-modality]:focus,
+    [data-add-description]:focus,
+    [data-add-radiologist]:focus {
+      border-color: rgba(97,168,255,0.65);
+      box-shadow: 0 0 0 2px rgba(31,111,235,0.18);
     }
     .form-row textarea { 
       resize: none; 
@@ -310,7 +345,7 @@
       border-radius: 8px; 
       border: 1px solid rgba(255,255,255,0.06);
       background: rgba(0,0,0,0.2); 
-      color: var(--muted); 
+      color: #f8fbff; 
       font-size: 12px; 
       transition: all 0.2s ease;
     }
@@ -776,7 +811,7 @@
 
               <div class="form-grid">
                 <div class="form-row">
-                  <label>Assign Radiologist</label>
+                  <label>Assign Practitioner</label>
                   <select name="radiologist">
                     <option value="">-- Later --</option>
                     {% for rad in radiologists %}
@@ -786,13 +821,13 @@
                 </div>
                 <div class="form-row">
                   <label class="required">Modality</label>
-                  <select name="modality" id="modality" onchange="loadStudyDescriptions()" style="background: rgba(31, 111, 235, 0.15); border: 2px solid rgba(31, 111, 235, 0.4); color: white;">
-                    <option value="" style="background: rgba(0,0,0,0.8);">Select Modality</option>
-                    <option value="MRI" style="background: rgba(0,0,0,0.8);">MRI (Magnetic Resonance)</option>
-                    <option value="CT" style="background: rgba(0,0,0,0.8);">CT (Computed Tomography)</option>
-                    <option value="XR" style="background: rgba(0,0,0,0.8);">XR (X-Ray)</option>
-                    <option value="PET" style="background: rgba(0,0,0,0.8);">PET (Positron Emission Tomography)</option>
-                    <option value="DEXA" style="background: rgba(0,0,0,0.8);">DEXA (Bone Densitometry)</option>
+                  <select name="modality" id="modality" onchange="loadStudyDescriptions()">
+                    <option value="">Select Modality</option>
+                    <option value="MRI">MRI (Magnetic Resonance)</option>
+                    <option value="CT">CT (Computed Tomography)</option>
+                    <option value="XR">XR (X-Ray)</option>
+                    <option value="PET">PET (Positron Emission Tomography)</option>
+                    <option value="DEXA">DEXA (Bone Densitometry)</option>
                   </select>
                 </div>
               </div>
@@ -851,15 +886,13 @@
 
               <div class="extra-studies-card is-empty" id="extraStudiesBox">
                 <div class="extra-studies-header">
-                  <div class="extra-studies-title">
-                    <span class="icon">??</span>
-                    <div class="extra-studies-title-text">
+                  <div class="extra-studies-title"><div class="extra-studies-title-text">
                       <h3>Additional Studies</h3>
                     </div>
                     <span class="extra-studies-subtext">Add more studies for same patient</span>
                   </div>
                   <button type="button" class="add-study-btn" onclick="openAddStudyModal()">
-                    ? Add
+                    Add
                   </button>
                 </div>
                 <div class="extra-rows" id="extraRows">
@@ -873,7 +906,7 @@
 
           <div class="actions">
             <a href="/admin" class="btn secondary">Cancel</a>
-            <button type="submit" class="btn" name="action" value="submit">? Submit Case(s)</button>
+            <button type="submit" class="btn" name="action" value="submit">Submit Case(s)</button>
           </div>
         </div>
 
@@ -1008,7 +1041,7 @@
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
       removeBtn.className = 'remove-btn';
-      removeBtn.innerHTML = '×';
+      removeBtn.innerHTML = 'Ã—';
       removeBtn.title = 'Remove';
       removeBtn.onclick = () => {
         row.remove();
@@ -1365,7 +1398,7 @@
           </select>
         </div>
         <div class="form-row" style="grid-column: 1 / -1;">
-          <label>Assign Radiologist</label>
+          <label>Assign Practitioner</label>
           <select data-add-radiologist></select>
         </div>
       </div>
@@ -1391,4 +1424,7 @@
   </div>
 </body>
 </html>
+
+
+
 

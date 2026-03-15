@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Cases - Vetting Suite</title>
+    <title>My Cases - RadFlow</title>
     <link rel="stylesheet" href="/static/css/site.css">
     <style>
         body {
@@ -529,7 +529,7 @@
                      onerror="this.style.display='none';">
                 <div>
                     <h1>My Cases</h1>
-                    <p class="header-info">Cases assigned for vetting</p>
+                    <p class="header-info">Cases assigned for justification</p>
                 </div>
             </div>
             <div class="header-actions">
@@ -540,7 +540,7 @@
                     </div>
                     <div class="user-details">
                         <div class="user-name">{{ current_user.first_name }} {{ current_user.surname if current_user.surname else '' }}</div>
-                        <div class="user-role">Radiologist</div>
+                        <div class="user-role">Practitioner</div>
                     </div>
                 </div>
                 <div class="action-buttons">
@@ -562,7 +562,7 @@
                 Reopened <span class="tab-count">{{ cases|selectattr('status', 'equalto', 'reopened')|list|length }}</span>
             </button>
             <button class="tab-btn tab-btn-vetted {% if tab == 'vetted' %}active{% endif %}" onclick="switchTab('vetted')">
-                Vetted <span class="tab-count">{{ cases|selectattr('status', 'equalto', 'vetted')|list|length }}</span>
+                Justified <span class="tab-count">{{ cases|selectattr('status', 'equalto', 'vetted')|list|length }}</span>
             </button>
             <button class="tab-btn tab-btn-rejected {% if tab == 'rejected' %}active{% endif %}" onclick="switchTab('rejected')">
                 Rejected <span class="tab-count">{{ cases|selectattr('status', 'equalto', 'rejected')|list|length }}</span>
@@ -601,7 +601,7 @@
                 <tr class="case-row" data-open-url="/vet/{{ c.id }}">
                     <td data-label="Status">
                         <span class="status-badge status-{{ c.status|lower }}">
-                            {{ c.status }}
+                            {{ 'Justified' if c.status == 'vetted' else c.status }}
                         </span>
                     </td>
                     <td data-label="Created">{{ c.created_display }}</td>
