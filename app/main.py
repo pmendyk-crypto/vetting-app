@@ -3882,6 +3882,7 @@ def notify_radiologist_page(request: Request, name: str = "", sent: str = "", er
             "radiologists": rads,
             "pending_counts": pending_counts,
             "rad_emails": rad_emails,
+            "app_login_url": APP_BASE_URL,
             "selected_name": name,
             "sent": sent,
             "error": error,
@@ -3928,6 +3929,9 @@ def notify_radiologist_send(
         <div style="font-family:Arial,sans-serif;max-width:500px;padding:24px;background:#f9f9f9;border-radius:8px;">
           <h2 style="color:#1a1a2e;margin-top:0;">Cases Awaiting Your Review</h2>
           <p style="color:#333;white-space:pre-wrap;">{message}</p>
+          <p style="margin:20px 0 0;">
+            <a href="{APP_BASE_URL}" style="display:inline-block;padding:10px 16px;background:#1f6feb;color:#ffffff;text-decoration:none;border-radius:8px;">Open RadFlow</a>
+          </p>
           <p style="font-size:12px;color:#888;margin-top:24px;">Sent via RadFlow &middot; Healthcare Applications</p>
         </div>
         """

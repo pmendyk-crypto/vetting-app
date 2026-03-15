@@ -1,0 +1,102 @@
+  <form method="post" action="/admin/notify-radiologist" id="notifyForm">
+
+    <!-- Radiologist picker -->
+    <div class="card">
+      <div class="card-heading">Select Practitioner</div>
+      <label for="radSelect">Practitioner</label>
+      <select name="radiologist_name" id="radSelect" required>
+        <option value="">— choose —</option>
+        {% for r in radiologists %}
+        <option value="{{ r.name }}"
+          {% if r.name == selected_name %}selected{% endif %}>
+          {{ r.name }}
+        </option>
+        {% endfor %}
+      </select>
+
+      <!-- Pending info -->
+      <div class="pending-info" id="pendingInfo" style="display:none;">
+        <div class="pending-count-badge" id="pendingBadge">0</div>
+        <div class="pending-label">
+          case(s) currently <strong>pending / reopened</strong> for this practitioner
+        </div>
+      </div>
+
+      <div class="selected-email" id="selectedEmail">
+        Notification email: <strong id="selectedEmailValue"></strong>
+      </div>
+
+      <div class="notify-summary" id="notifySummary">
+        <div class="notify-summary-icon">i</div>
+        <div>
+          <div class="notify-summary-title" id="notifySummaryTitle"></div>
+          <div class="notify-summary-meta" id="notifySummaryMeta"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="form-col">
+        <!-- Channel selector -->
+        <div class="card">
+          <div class="card-heading">Notification Channel</div>
+          <div class="channel-group">
+            <div>
+              <input type="radio" name="channel" id="ch-email" value="email" class="channel-opt" checked>
+              <label for="ch-email" class="channel-label">
+                <span class="icon">📧</span>Email
+              </label>
+            </div>
+            <div>
+              <input type="radio" name="channel" id="ch-sms" value="sms" class="channel-opt">
+              <label for="ch-sms" class="channel-label">
+                <span class="icon">💬</span>Text / SMS
+              </label>
+            </div>
+          </div>
+
+          <!-- Email recipient -->
+          <div class="recipient-section visible" id="emailSection">
+            {% if not smtp_configured %}
+            <div class="banner banner-error" style="margin-bottom:14px;">
+              <span class="banner-icon">⚠️</span>
+              <span>SMTP not configured — emails cannot be sent until <strong>SMTP_HOST</strong> env var is set.</span>
+            </div>
+            {% endif %}
+            <label for="recipientEmail">Recipient Email</label>
+            <input type="email" name="recipient" id="recipientEmail"
+                   placeholder="practitioner@hospital.com"
+                   value="{{ (rad_emails.get(selected_name, '')) if selected_name else '' }}">
+          </div>
+
+          <!-- SMS placeholder -->
+          <div class="recipient-section" id="smsSection">
+            <div class="sms-note">
+              SMS notifications are not yet active. Twilio integration can be added — contact your system administrator.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-col">
+        <!-- Message -->
+        <div class="card">
+          <div class="card-heading">Message</div>
+          <label for="messageBox">Notification Message</label>
+          <textarea name="message" id="messageBox" required>{% if selected_name %}Hi {{ selected_name }},
+
+You currently have {{ pending_counts.get(selected_name, 0) }} case(s) awaiting your review in RadFlow.
+
+Please log in at your earliest convenience to action any outstanding items.
+
+Thanks,
+RadFlow Admin{% else %}Select a practitioner above to generate a message.{% endif %}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card send-card">
+      <div class="card-heading">Send Notification</div>
+      <button type="submit" class="send-btn" id="sendBtn">Send Notification</button>
+    </div>
+  </form>
