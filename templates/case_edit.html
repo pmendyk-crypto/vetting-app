@@ -297,13 +297,14 @@
           Current file: <strong>{{ case['uploaded_filename'] }}</strong>
           {% if not case['stored_filepath'] %}(expired){% endif %}
         </p>
-        {% if case['stored_filepath'] and case.get('attachment_previewable') %}
+        {% if case['stored_filepath'] %}
+        <div style="margin-bottom:12px;">
+          <a class="btn secondary" href="/case/{{ case['id'] }}/attachment" style="display:inline-block;">Download Current Referral</a>
+        </div>
+        {% endif %}
+        {% if case['stored_filepath'] %}
           <div style="min-height:420px;">
-            <iframe src="/case/{{ case['id'] }}/attachment/inline#view=FitH" style="width:100%;height:420px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#fff;"></iframe>
-          </div>
-        {% elif case['stored_filepath'] %}
-          <div style="display:flex;align-items:center;justify-content:center;min-height:140px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.65);text-align:center;padding:20px;">
-            Preview not available for this file type. Save or use download from case details to open the attachment.
+            <iframe src="/case/{{ case['id'] }}/attachment/preview" style="width:100%;height:420px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#fff;"></iframe>
           </div>
         {% else %}
           <div style="display:flex;align-items:center;justify-content:center;min-height:140px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.5);text-align:center;padding:20px;">

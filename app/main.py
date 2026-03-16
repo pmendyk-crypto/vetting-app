@@ -18,6 +18,7 @@ import secrets
 import mimetypes
 import csv
 import io
+import html
 import random
 import string
 import shutil
@@ -164,6 +165,17 @@ def is_inline_previewable(filename: str | None) -> bool:
         ".txt", ".csv", ".json", ".xml", ".html",
     }
     return any(name.endswith(ext) for ext in previewable_exts)
+
+
+def load_case_attachment_bytes(stored_path: str | None) -> bytes | None:
+    if not stored_path:
+        return None
+    if BLOB_STORAGE_ENABLED and stored_path and not str(stored_path).startswith("/"):
+        return download_from_blob(stored_path)
+    if os.path.exists(stored_path):
+        with open(stored_path, "rb") as f:
+            return f.read()
+    return None
 
 
 # -------------------------
@@ -6645,6 +6657,119 @@ def view_attachment_inline(request: Request, case_id: str):
     # File not found
     clear_case_stored_filepath(case_id)
     raise HTTPException(status_code=410, detail="Referral file missing or expired")
+
+
+@app.get("/case/{case_id}/attachment/preview", response_class=HTMLResponse)
+def view_attachment_preview(request: Request, case_id: str):
+    user = require_login(request)
+
+    conn = get_db()
+    row = conn.execute(
+        "SELECT stored_filepath, uploaded_filename, radiologist, org_id FROM cases WHERE id = ?",
+        (case_id,),
+    ).fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="No attachment found")
+
+    case_data = row if isinstance(row, dict) else dict(row)
+
+    if not case_data.get("stored_filepath"):
+        raise HTTPException(status_code=410, detail="Referral file has expired and is no longer available (7-day retention policy).")
+
+    if user.get("role") == "radiologist" and case_data.get("radiologist") != user.get("radiologist_name"):
+        raise HTTPException(status_code=403, detail="Not your case")
+
+    org_id = user.get("org_id")
+    if org_id and not user.get("is_superuser") and case_data.get("org_id") and case_data.get("org_id") != org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    stored_path = case_data.get("stored_filepath")
+    filename = case_data.get("uploaded_filename") or Path(stored_path).name
+    lower_name = str(filename).lower()
+    media_type, _ = mimetypes.guess_type(filename)
+
+    if lower_name.endswith(".pdf"):
+        return HTMLResponse(
+            f"""<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}iframe{{width:100%;height:100%;border:0;background:#fff}}</style></head>
+<body><iframe src="/case/{case_id}/attachment/inline#view=FitH"></iframe></body></html>"""
+        )
+
+    if lower_name.endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")):
+        return HTMLResponse(
+            f"""<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}body{{display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}}img{{max-width:100%;max-height:100%;object-fit:contain;background:#fff;border-radius:8px}}</style></head>
+<body><img src="/case/{case_id}/attachment/inline" alt="{html.escape(filename)}"></body></html>"""
+        )
+
+    file_bytes = load_case_attachment_bytes(stored_path)
+    if file_bytes is None:
+        clear_case_stored_filepath(case_id)
+        raise HTTPException(status_code=410, detail="Referral file missing or expired")
+
+    if lower_name.endswith((".txt", ".csv", ".json", ".xml", ".html", ".htm")):
+        try:
+            text_content = file_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            text_content = file_bytes.decode("latin-1", errors="replace")
+        safe_text = html.escape(text_content)
+        return HTMLResponse(
+            f"""<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{{margin:0;background:#fff;color:#0f172a;font-family:Segoe UI,Arial,sans-serif}}pre{{margin:0;padding:18px;white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.5}}</style></head>
+<body><pre>{safe_text}</pre></body></html>"""
+        )
+
+    if lower_name.endswith(".docx"):
+        try:
+            from docx import Document
+            doc = Document(io.BytesIO(file_bytes))
+            blocks: list[str] = []
+            for para in doc.paragraphs:
+                text_value = (para.text or "").strip()
+                if text_value:
+                    blocks.append(f"<p>{html.escape(text_value)}</p>")
+            for table in doc.tables:
+                rows_html: list[str] = []
+                for row in table.rows:
+                    cells = "".join(f"<td>{html.escape((cell.text or '').strip())}</td>" for cell in row.cells)
+                    rows_html.append(f"<tr>{cells}</tr>")
+                if rows_html:
+                    blocks.append(f"<table>{''.join(rows_html)}</table>")
+            if not blocks:
+                blocks.append("<p>No previewable text found in this document.</p>")
+            return HTMLResponse(
+                """<!doctype html>
+<html><head><meta charset="utf-8"><style>
+html,body{margin:0;background:#fff;color:#0f172a;font-family:Segoe UI,Arial,sans-serif}
+.docx-wrap{padding:20px 22px;font-size:14px;line-height:1.6}
+p{margin:0 0 12px}
+table{border-collapse:collapse;width:100%;margin:10px 0 16px}
+td{border:1px solid #cbd5e1;padding:8px 10px;vertical-align:top}
+</style></head><body><div class="docx-wrap">"""
+                + "".join(blocks) +
+                "</div></body></html>"
+            )
+        except Exception as exc:
+            print(f"[attachment-preview] docx preview failed for {case_id}: {exc}")
+
+    fallback_message = (
+        "Preview is not available for this file type in the current environment. "
+        "Use the download link below to open the original attachment."
+    )
+    return HTMLResponse(
+        f"""<!doctype html>
+<html><head><meta charset="utf-8"><style>
+html,body{{height:100%;margin:0;background:#0b1220;color:#e2e8f0;font-family:Segoe UI,Arial,sans-serif}}
+body{{display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}}
+.card{{max-width:520px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.2);border-radius:14px;padding:24px;text-align:center}}
+.name{{font-weight:600;color:#fff;margin-bottom:10px}}
+.msg{{color:#cbd5e1;line-height:1.6;margin-bottom:16px}}
+.btn{{display:inline-block;padding:10px 14px;border-radius:8px;background:#1f6feb;color:#fff;text-decoration:none}}
+</style></head>
+<body><div class="card"><div class="name">{html.escape(filename)}</div><div class="msg">{html.escape(fallback_message)}</div><a class="btn" href="/case/{case_id}/attachment">Download attachment</a></div></body></html>"""
+    )
 
 
 @app.get("/case/{case_id}/pdf")
