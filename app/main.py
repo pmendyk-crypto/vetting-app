@@ -3231,6 +3231,7 @@ def build_admin_case_filters(
 ):
     clauses = ["1=1"]
     params: list = []
+    has_modality_column = table_has_column("cases", "modality")
 
     if org_id and not is_superuser:
         clauses.append("c.org_id = ?")
@@ -3248,7 +3249,7 @@ def build_admin_case_filters(
         clauses.append("c.radiologist = ?")
         params.append(radiologist.strip())
 
-    if modality and modality.strip():
+    if has_modality_column and modality and modality.strip():
         clauses.append("UPPER(COALESCE(c.modality, '')) = ?")
         params.append(modality.strip().upper())
 
@@ -3283,6 +3284,9 @@ def get_admin_org_name(org_id):
 
 
 def list_case_modalities(org_id, is_superuser: bool):
+    if not table_has_column("cases", "modality"):
+        return []
+
     sql = "SELECT DISTINCT UPPER(TRIM(modality)) AS modality FROM cases c WHERE modality IS NOT NULL AND TRIM(modality) != ''"
     params: list = []
     if org_id and not is_superuser:
@@ -3444,7 +3448,10 @@ def admin_dashboard(
         tab = "all"
 
     # Validate sort parameters
-    valid_sorts = ["created_at", "patient_first_name", "patient_surname", "patient_referral_id", "institution_id", "tat", "status", "study_description", "radiologist", "modality"]
+    has_modality_column = table_has_column("cases", "modality")
+    valid_sorts = ["created_at", "patient_first_name", "patient_surname", "patient_referral_id", "institution_id", "tat", "status", "study_description", "radiologist"]
+    if has_modality_column:
+        valid_sorts.append("modality")
     if sort_by not in valid_sorts:
         sort_by = "created_at"
     if sort_dir not in ("asc", "desc"):
@@ -3614,7 +3621,7 @@ def admin_dashboard_csv(
         )
     else:
         tab = (tab or "all").strip().lower()
-        if tab not in ("all", "pending", "vetted", "rejected"):
+        if tab not in ("all", "pending", "vetted", "rejected", "reopened"):
             tab = "all"
         clauses, params = build_admin_case_filters(
             org_id,
