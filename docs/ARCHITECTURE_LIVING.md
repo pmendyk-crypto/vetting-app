@@ -1,6 +1,6 @@
 # Architecture Reference (Living Document)
 
-Last updated: 2026-03-08
+Last updated: 2026-04-02
 Owner: Product/Engineering
 Status: Active
 
@@ -86,6 +86,11 @@ Multi-tenant model:
 State-driven workflow model:
 - Submit -> Pending -> Vetted/Rejected -> Optional Reopened.
 
+Target intake extension:
+- Manual/admin submission remains the phase 1 primary path.
+- Phase 2 introduces intake adapters that normalize inbound referrals into a shared draft-case review flow.
+- Draft cases are reviewed, amended, and approved by admin before entering the active clinical workflow.
+
 Actors:
 - Admin: intake, edit, assign, reopen, report.
 - Radiologist: review and decision.
@@ -102,6 +107,11 @@ Parser trial:
 - Dedicated referral trial route parses uploaded docs for field prefill.
 - Designed as controlled/test capability, not fully promoted production default.
 
+Planned intake and attachment model:
+- Intake sources may include secure email, portal referral submission, and external system messages such as RIS/PACS or HL7-based feeds.
+- All inbound documents should be stored against the draft or active case record with source metadata preserved.
+- Original source payload, extracted fields, and approval history should remain traceable for audit and operational review.
+
 Retention:
 - TTL constants exist for referral files and case records.
 - Verify actual purge scheduling and enforcement behavior operationally.
@@ -117,14 +127,28 @@ Current observability maturity:
 - Basic startup/log print diagnostics.
 - No standardized telemetry architecture documented.
 
-## 9. Architecture Weak Areas
+## 9. Target Intake Architecture (Phase 2 Direction)
+Logical target flow:
+- Intake channels: secure email inbox, portal referral form, and direct external system integration.
+- Intake adapters: channel-specific handlers for email, form, HL7, RIS, or PACS-originated payloads.
+- Normalization and validation: map inbound payloads to a common draft-case schema and flag uncertainty.
+- Draft review queue: admin checks extracted details, edits as needed, and approves or rejects.
+- Active workflow: approved drafts become standard cases and continue through assignment and vetting lifecycle.
+
+Design principles:
+- Different intake channels should converge on one internal draft-case model.
+- Automation should create draft cases, not directly create fully live cases.
+- Source type, original payload, attachments, and approval actions should be auditable.
+- The common workflow should allow phase-by-phase rollout of adapters without redesigning the core case model.
+
+## 10. Architecture Weak Areas
 1. Monolithic application file (`app/main.py`) is too broad in responsibility.
 2. Runtime schema mutation and migration scripts are mixed.
 3. Partial multi-tenant activation creates architecture ambiguity.
 4. Incomplete production hardening around config defaults and diagnostics.
 5. Integration behavior (SMTP/blob) depends heavily on environment correctness.
 
-## 10. Architecture Improvement Plan
+## 11. Architecture Improvement Plan
 Phase 1: Hardening
 - Enforce secure prod configuration and endpoint restrictions.
 - Add readiness checks and startup validation for required dependencies.
@@ -132,25 +156,33 @@ Phase 1: Hardening
 Phase 2: Modularization
 - Split routes by domain (`auth`, `cases`, `settings`, `admin`, `radiologist`).
 - Introduce service layer for business logic and storage abstraction.
+- Introduce a draft-case intake service and normalization boundary so new channels plug into a shared workflow.
 
 Phase 3: Data discipline
 - Standardize migrations and remove runtime schema drift patterns.
 - Add explicit DB compatibility policy and migration validation in CI.
+- Add explicit source metadata, draft review, and intake audit structures where required.
 
 Phase 4: Tenant maturity
 - Enable complete tenant router flow behind controlled flag.
 - Add tenant isolation test suite and policy assertions.
 
-## 11. Non-Functional Targets (Suggested)
+Phase 5: External intake expansion
+- Add secure email-to-draft intake for approved client workflows.
+- Add portal-based referral intake for structured submission.
+- Add direct system adapters for RIS/PACS or HL7-style message ingestion where client environments support it.
+
+## 12. Non-Functional Targets (Suggested)
 - Availability: >= 99.9% app uptime target.
 - RPO: <= 24h, RTO: <= 4h (define backup/restore runbook).
 - Security: periodic authz tests and secret rotation schedule.
 - Performance: define p95 endpoint latency targets per major route.
 
-## 12. Update Log
+## 13. Update Log
+- 2026-04-02: Added target intake architecture and phased draft-case expansion model.
 - 2026-03-08: Initial living architecture reference created.
 
-## 13. Update Template (append on each revision)
+## 14. Update Template (append on each revision)
 Date:
 Author:
 Architecture area changed:

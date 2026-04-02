@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from pathlib import Path
 from uuid import uuid4
@@ -19,6 +20,10 @@ import mimetypes
 import csv
 import io
 import html
+import base64
+import hmac
+import struct
+import time
 import random
 import string
 import shutil
@@ -45,6 +50,11 @@ try:
 except ImportError:
     BlobServiceClient = None
     print("[WARNING] azure-storage-blob not installed, blob storage disabled")
+
+try:
+    import qrcode
+except ImportError:
+    qrcode = None
 
 
 # -------------------------
@@ -150,7 +160,16 @@ def clear_case_stored_filepath(case_id: str) -> None:
 
 def normalize_case_attachment(case_dict: dict) -> dict:
     path = case_dict.get("stored_filepath")
-    if path and not Path(path).exists():
+    if not path:
+        return case_dict
+
+    if BLOB_STORAGE_ENABLED and not str(path).startswith("/"):
+        if not blob_exists(str(path)):
+            clear_case_stored_filepath(case_dict.get("id"))
+            case_dict["stored_filepath"] = None
+        return case_dict
+
+    if not Path(path).exists():
         clear_case_stored_filepath(case_dict.get("id"))
         case_dict["stored_filepath"] = None
     return case_dict
@@ -262,10 +281,14 @@ app = FastAPI(title="RadFlow")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
-APP_SECRET = os.environ.get("APP_SECRET", "dev-secret-change-me")
+APP_ENV = (os.environ.get("APP_ENV") or os.environ.get("ENVIRONMENT") or "development").strip().lower()
+IS_PRODUCTION = APP_ENV in {"production", "prod", "staging"}
+DEFAULT_APP_SECRET = "dev-secret-change-me"
+APP_SECRET = os.environ.get("APP_SECRET", DEFAULT_APP_SECRET)
 SESSION_TIMEOUT_MINUTES = 20  # Session expires after 20 minutes of inactivity
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8000")
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 SMTP_HOST = os.environ.get("SMTP_HOST")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER")
@@ -273,12 +296,57 @@ SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD") or os.environ.get("SMTP_PASS")
 SMTP_PASS = SMTP_PASSWORD
 SMTP_FROM = os.environ.get("SMTP_FROM") or SMTP_USER
 LOGO_DARK_URL = os.environ.get("LOGO_DARK_URL", "/static/images/logo-light.png")
+ALLOW_DIAGNOSTIC_ENDPOINT = (os.environ.get("ALLOW_DIAGNOSTIC_ENDPOINT") or "").strip().lower() in {"1", "true", "yes"}
+COOKIE_HTTPS_ONLY = IS_PRODUCTION or APP_BASE_URL.startswith("https://")
+TRUSTED_HOSTS = [host.strip() for host in (os.environ.get("TRUSTED_HOSTS") or "").split(",") if host.strip()]
 
-# Warn if using default secret in production
-if APP_SECRET == "dev-secret-change-me":
-    print("[WARNING] Using default APP_SECRET! Set APP_SECRET environment variable in production!")
 
-app.add_middleware(SessionMiddleware, secret_key=APP_SECRET, same_site="lax", max_age=SESSION_TIMEOUT_MINUTES * 60)
+def validate_security_configuration() -> None:
+    issues: list[str] = []
+
+    if IS_PRODUCTION and APP_SECRET == DEFAULT_APP_SECRET:
+        issues.append("APP_SECRET must be set to a strong unique value in production.")
+
+    if IS_PRODUCTION and not APP_BASE_URL.startswith("https://"):
+        issues.append("APP_BASE_URL must use https:// in production.")
+
+    if IS_PRODUCTION and not DATABASE_URL:
+        issues.append("Production must use PostgreSQL instead of local SQLite.")
+
+    if IS_PRODUCTION and not BLOB_STORAGE_ENABLED:
+        issues.append("Production must use Azure Blob Storage for referral attachments.")
+
+    if issues:
+        raise RuntimeError("Security configuration error(s): " + " ".join(issues))
+
+if APP_SECRET == DEFAULT_APP_SECRET:
+    print("[WARNING] Using default APP_SECRET! Set APP_SECRET environment variable before any shared deployment.")
+
+validate_security_configuration()
+
+if TRUSTED_HOSTS:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=TRUSTED_HOSTS)
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=APP_SECRET,
+    same_site="lax",
+    https_only=COOKIE_HTTPS_ONLY,
+    max_age=SESSION_TIMEOUT_MINUTES * 60,
+)
+
+
+class HTTPSRedirectMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if IS_PRODUCTION:
+            forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+            if request.url.scheme != "https" and forwarded_proto != "https":
+                https_url = request.url.replace(scheme="https")
+                return RedirectResponse(url=str(https_url), status_code=307)
+        return await call_next(request)
+
+
+app.add_middleware(HTTPSRedirectMiddleware)
 
 # Middleware to add no-cache headers to authenticated pages
 class NoCacheMiddleware(BaseHTTPMiddleware):
@@ -309,6 +377,20 @@ class NoIndexMiddleware(BaseHTTPMiddleware):
 app.add_middleware(NoIndexMiddleware)
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if IS_PRODUCTION:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+
 # Global 401/403 handler — redirect to login instead of showing a raw error
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -317,6 +399,8 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         accept = request.headers.get("accept", "")
         if "application/json" in accept:
             return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+        if exc.detail == "MFA enrollment required" and get_session_user(request):
+            return RedirectResponse(url="/account?msg=mfa_required", status_code=303)
         return RedirectResponse(url=f"/login?expired=1&next={request.url.path}", status_code=303)
     # For other HTTP errors return a simple styled error page
     return HTMLResponse(
@@ -344,11 +428,14 @@ async def health_check():
 
 
 @app.get("/diag/schema")
-async def diagnostic_schema():
+async def diagnostic_schema(request: Request):
     """
     Diagnostic endpoint to check database schema state.
     Shows which tables and key columns exist.
     """
+    user = get_session_user(request)
+    if not ALLOW_DIAGNOSTIC_ENDPOINT and not (user and user.get("is_superuser")):
+        raise HTTPException(status_code=404, detail="Not found")
     try:
         conn = get_db()
         
@@ -1025,6 +1112,27 @@ def ensure_cases_schema() -> None:
     Safe schema upgrades for older hub.db files.
     """
     if using_postgres():
+        conn = get_db()
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS vetted_at TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS protocol TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS decision TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS decision_comment TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS patient_first_name TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS patient_surname TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS patient_referral_id TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS patient_dob TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS institution_id INTEGER")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS modality TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS org_id INTEGER")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS contrast_required TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS contrast_details TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS uploaded_filename TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS stored_filepath TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS admin_notes TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS radiologist TEXT")
+        conn.commit()
+        conn.close()
         return
     conn = get_db()
     cur = conn.cursor()
@@ -1075,6 +1183,11 @@ def ensure_institutions_schema() -> None:
     Safe schema upgrades for the institutions table (Bug 2: Add modified_at column).
     """
     if using_postgres():
+        conn = get_db()
+        conn.execute("ALTER TABLE institutions ADD COLUMN IF NOT EXISTS modified_at TEXT")
+        conn.execute("ALTER TABLE institutions ADD COLUMN IF NOT EXISTS org_id INTEGER")
+        conn.commit()
+        conn.close()
         return
     conn = get_db()
     cur = conn.cursor()
@@ -1099,6 +1212,14 @@ def ensure_radiologists_schema() -> None:
     Safe schema upgrades for the radiologists table.
     """
     if using_postgres():
+        conn = get_db()
+        conn.execute("ALTER TABLE radiologists ADD COLUMN IF NOT EXISTS first_name TEXT")
+        conn.execute("ALTER TABLE radiologists ADD COLUMN IF NOT EXISTS email TEXT")
+        conn.execute("ALTER TABLE radiologists ADD COLUMN IF NOT EXISTS surname TEXT")
+        conn.execute("ALTER TABLE radiologists ADD COLUMN IF NOT EXISTS gmc TEXT")
+        conn.execute("ALTER TABLE radiologists ADD COLUMN IF NOT EXISTS speciality TEXT")
+        conn.commit()
+        conn.close()
         return
     conn = get_db()
     cur = conn.cursor()
@@ -1133,6 +1254,10 @@ def ensure_users_schema() -> None:
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT")
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS surname TEXT")
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT")
+        conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_required INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret TEXT")
+        conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_pending_secret TEXT")
         conn.commit()
         conn.close()
         return
@@ -1153,6 +1278,14 @@ def ensure_users_schema() -> None:
         cur.execute("ALTER TABLE users ADD COLUMN surname TEXT")
     if "email" not in cols:
         cur.execute("ALTER TABLE users ADD COLUMN email TEXT")
+    if "mfa_enabled" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN mfa_enabled INTEGER NOT NULL DEFAULT 0")
+    if "mfa_required" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN mfa_required INTEGER NOT NULL DEFAULT 0")
+    if "mfa_secret" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN mfa_secret TEXT")
+    if "mfa_pending_secret" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN mfa_pending_secret TEXT")
 
     conn.commit()
     conn.close()
@@ -1163,6 +1296,15 @@ def ensure_protocols_schema() -> None:
     Safe schema upgrades for the protocols table.
     """
     if using_postgres():
+        conn = get_db()
+        conn.execute("ALTER TABLE protocols ADD COLUMN IF NOT EXISTS institution_id INTEGER")
+        conn.execute("ALTER TABLE protocols ADD COLUMN IF NOT EXISTS study_description_preset_id INTEGER")
+        conn.execute("ALTER TABLE protocols ADD COLUMN IF NOT EXISTS instructions TEXT")
+        conn.execute("ALTER TABLE protocols ADD COLUMN IF NOT EXISTS last_modified TEXT")
+        conn.execute("ALTER TABLE protocols ADD COLUMN IF NOT EXISTS is_active INTEGER NOT NULL DEFAULT 1")
+        conn.execute("ALTER TABLE protocols ADD COLUMN IF NOT EXISTS org_id INTEGER")
+        conn.commit()
+        conn.close()
         return
     conn = get_db()
     cur = conn.cursor()
@@ -1188,6 +1330,10 @@ def ensure_protocols_schema() -> None:
 
 def ensure_study_description_presets_schema() -> None:
     if using_postgres():
+        conn = get_db()
+        conn.execute("ALTER TABLE study_description_presets ADD COLUMN IF NOT EXISTS is_active INTEGER NOT NULL DEFAULT 1")
+        conn.commit()
+        conn.close()
         return
     if not table_exists("study_description_presets"):
         return
@@ -1204,6 +1350,14 @@ def ensure_study_description_presets_schema() -> None:
 
 def ensure_notify_events_schema() -> None:
     if using_postgres():
+        conn = get_db()
+        conn.execute("ALTER TABLE notify_events ADD COLUMN IF NOT EXISTS org_id INTEGER")
+        conn.execute("ALTER TABLE notify_events ADD COLUMN IF NOT EXISTS recipient TEXT")
+        conn.execute("ALTER TABLE notify_events ADD COLUMN IF NOT EXISTS message TEXT")
+        conn.execute("ALTER TABLE notify_events ADD COLUMN IF NOT EXISTS created_by TEXT")
+        conn.execute("ALTER TABLE notify_events ADD COLUMN IF NOT EXISTS created_by_id INTEGER")
+        conn.commit()
+        conn.close()
         return
     conn = get_db()
     conn.execute(
@@ -1221,6 +1375,45 @@ def ensure_notify_events_schema() -> None:
         )
         """
     )
+    conn.commit()
+    conn.close()
+
+
+def ensure_case_events_schema() -> None:
+    conn = get_db()
+    if using_postgres():
+        conn.execute("ALTER TABLE case_events ADD COLUMN IF NOT EXISTS org_id INTEGER")
+        conn.execute("ALTER TABLE case_events ADD COLUMN IF NOT EXISTS user_id INTEGER")
+        conn.execute("ALTER TABLE case_events ADD COLUMN IF NOT EXISTS username TEXT")
+        conn.execute("ALTER TABLE case_events ADD COLUMN IF NOT EXISTS org_role TEXT")
+        conn.execute("ALTER TABLE case_events ADD COLUMN IF NOT EXISTS decision TEXT")
+        conn.execute("ALTER TABLE case_events ADD COLUMN IF NOT EXISTS protocol TEXT")
+        conn.execute("ALTER TABLE case_events ADD COLUMN IF NOT EXISTS comment TEXT")
+        conn.commit()
+        conn.close()
+        return
+
+    if not table_exists("case_events"):
+        conn.close()
+        return
+
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(case_events)")
+    cols = {row[1] for row in cur.fetchall()}
+    if "org_id" not in cols:
+        cur.execute("ALTER TABLE case_events ADD COLUMN org_id INTEGER")
+    if "user_id" not in cols:
+        cur.execute("ALTER TABLE case_events ADD COLUMN user_id INTEGER")
+    if "username" not in cols:
+        cur.execute("ALTER TABLE case_events ADD COLUMN username TEXT")
+    if "org_role" not in cols:
+        cur.execute("ALTER TABLE case_events ADD COLUMN org_role TEXT")
+    if "decision" not in cols:
+        cur.execute("ALTER TABLE case_events ADD COLUMN decision TEXT")
+    if "protocol" not in cols:
+        cur.execute("ALTER TABLE case_events ADD COLUMN protocol TEXT")
+    if "comment" not in cols:
+        cur.execute("ALTER TABLE case_events ADD COLUMN comment TEXT")
     conn.commit()
     conn.close()
 
@@ -1663,6 +1856,136 @@ def hash_password(password: str, salt: bytes) -> bytes:
     return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 200_000)
 
 
+def generate_totp_secret(length: int = 20) -> str:
+    return base64.b32encode(secrets.token_bytes(length)).decode("ascii").rstrip("=")
+
+
+def _decode_totp_secret(secret: str) -> bytes:
+    normalized = (secret or "").strip().replace(" ", "").upper()
+    padding = "=" * ((8 - len(normalized) % 8) % 8)
+    return base64.b32decode(normalized + padding, casefold=True)
+
+
+def _totp_at(secret: str, timestamp: int | None = None, interval: int = 30, digits: int = 6) -> str:
+    if timestamp is None:
+        timestamp = int(time.time())
+    counter = int(timestamp // interval)
+    key = _decode_totp_secret(secret)
+    counter_bytes = struct.pack(">Q", counter)
+    digest = hmac.new(key, counter_bytes, hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    code_int = struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF
+    return str(code_int % (10 ** digits)).zfill(digits)
+
+
+def normalize_totp_code(code: str) -> str:
+    return "".join(ch for ch in str(code or "") if ch.isdigit())
+
+
+def verify_totp_code(secret: str | None, code: str, window: int = 1) -> bool:
+    normalized_code = normalize_totp_code(code)
+    if not secret or len(normalized_code) != 6:
+        return False
+    now = int(time.time())
+    for offset in range(-window, window + 1):
+        if _totp_at(secret, now + (offset * 30)) == normalized_code:
+            return True
+    return False
+
+
+def build_totp_uri(secret: str, username: str) -> str:
+    issuer = "RadFlow"
+    label = urllib.parse.quote(f"{issuer}:{username}")
+    issuer_param = urllib.parse.quote(issuer)
+    secret_param = urllib.parse.quote(secret)
+    return f"otpauth://totp/{label}?secret={secret_param}&issuer={issuer_param}&algorithm=SHA1&digits=6&period=30"
+
+
+def build_totp_qr_data_uri(uri: str) -> str:
+    if not uri or not qrcode:
+        return ""
+
+    qr = qrcode.QRCode(box_size=6, border=2)
+    qr.add_data(uri)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def verify_current_password(username: str, password: str) -> bool:
+    if not username or not password:
+        return False
+
+    conn = get_db()
+    db_user = conn.execute(
+        "SELECT salt_hex, password_hash FROM users WHERE username = ?",
+        (username,),
+    ).fetchone()
+    conn.close()
+
+    if not db_user or not db_user["salt_hex"]:
+        return False
+
+    try:
+        salt = bytes.fromhex(db_user["salt_hex"])
+        expected_hash = db_user["password_hash"]
+        actual_hash = hash_password(password, salt).hex()
+        return secrets.compare_digest(actual_hash, expected_hash)
+    except Exception:
+        return False
+
+
+def get_post_login_redirect_path(user: dict) -> str:
+    if user.get("is_superuser"):
+        return "/owner"
+    if int(user.get("mfa_required") or 0) and not int(user.get("mfa_enabled") or 0):
+        return "/account?msg=mfa_required"
+    if user.get("role") == "admin":
+        return "/admin"
+    return "/radiologist"
+
+
+def complete_login(request: Request, user: dict) -> RedirectResponse:
+    import uuid
+
+    session_id = str(uuid.uuid4())
+    request.session.pop("pending_mfa_username", None)
+    request.session["user"] = {
+        "id": user.get("id"),
+        "username": user["username"],
+        "first_name": user.get("first_name"),
+        "surname": user.get("surname"),
+        "email": user.get("email"),
+        "role": user["role"],
+        "radiologist_name": user["radiologist_name"],
+        "is_superuser": bool(user.get("is_superuser")),
+        "mfa_enabled": int(user.get("mfa_enabled") or 0),
+        "mfa_required": int(user.get("mfa_required") or 0),
+    }
+    request.session["login_time"] = time.time()
+    request.session["session_id"] = session_id
+
+    if user.get("id"):
+        try:
+            conn = get_db()
+            try:
+                conn.execute(
+                    "INSERT INTO user_sessions(user_id, session_id, created_at) VALUES(?, ?, datetime('now')) ON CONFLICT(user_id) DO UPDATE SET session_id=excluded.session_id, created_at=excluded.created_at",
+                    (user.get("id"), session_id)
+                )
+                conn.commit()
+            except Exception:
+                pass
+            conn.close()
+        except Exception:
+            pass
+
+    return RedirectResponse(url=get_post_login_redirect_path(user), status_code=303)
+
+
 def create_user(username: str, password: str, role: str, radiologist_name: str | None = None, first_name: str = "", surname: str = "", email: str = "") -> None:
     username = username.strip()
     role = role.strip()
@@ -1780,7 +2103,8 @@ def list_users(org_id: int | None = None) -> list[dict]:
                 """
                 SELECT 
                     u.id as user_id, u.username, u.email, u.is_superuser,
-                    u.is_active, u.first_name, u.surname,
+                    u.is_active, u.first_name, u.surname, COALESCE(u.mfa_enabled, 0) AS mfa_enabled,
+                    COALESCE(u.mfa_required, 0) AS mfa_required,
                     m.org_role as org_role,
                     NULL as radiologist_name
                 FROM users u
@@ -1795,7 +2119,8 @@ def list_users(org_id: int | None = None) -> list[dict]:
                 """
                 SELECT 
                     u.id as user_id, u.username, u.email, u.is_superuser,
-                    u.is_active, u.first_name, u.surname,
+                    u.is_active, u.first_name, u.surname, COALESCE(u.mfa_enabled, 0) AS mfa_enabled,
+                    COALESCE(u.mfa_required, 0) AS mfa_required,
                     NULL as org_role,
                     NULL as radiologist_name
                 FROM users u
@@ -1805,7 +2130,9 @@ def list_users(org_id: int | None = None) -> list[dict]:
     else:
         # Old structure
         rows = conn.execute("""
-            SELECT username, first_name, surname, email, role, radiologist_name 
+            SELECT username, first_name, surname, email, role, radiologist_name,
+                   COALESCE(mfa_enabled, 0) AS mfa_enabled,
+                   COALESCE(mfa_required, 0) AS mfa_required
             FROM users 
             ORDER BY username
         """).fetchall()
@@ -1835,50 +2162,11 @@ def delete_user(username: str) -> None:
 # -------------------------
 # Seed data
 # -------------------------
-RADIOLOGISTS_SEED = ["Dr Smith", "Dr Patel", "Dr Jones"]
-DEFAULT_INSTITUTIONS = [
-    ("UHCL", 48),
-    ("Nuffield Hospital", 24),
-    ("Local Medical Centre", 72),
-]
-
-
 def ensure_seed_data() -> None:
     if using_postgres():
         return
     if not get_setting("system_initialized", ""):
         set_setting("system_initialized", "true")
-
-    # Add default institutions
-    conn = get_db()
-    row = conn.execute("SELECT COUNT(*) AS c FROM institutions").fetchone()
-    if row and row["c"] == 0:
-        for inst_name, sla in DEFAULT_INSTITUTIONS:
-            conn.execute(
-                "INSERT INTO institutions(name, sla_hours, created_at) VALUES(?, ?, ?)",
-                (inst_name, sla, utc_now_iso()),
-            )
-        conn.commit()
-    conn.close()
-
-    # Add radiologists
-    conn = get_db()
-    row = conn.execute("SELECT COUNT(*) AS c FROM radiologists").fetchone()
-    if row and row["c"] == 0:
-        for n in RADIOLOGISTS_SEED:
-            conn.execute(
-                "INSERT OR IGNORE INTO radiologists(name, first_name, email, surname, gmc, speciality) VALUES(?, ?, ?, ?, ?, ?)",
-                (n, "", "", "", "", ""),
-            )
-        conn.commit()
-    conn.close()
-
-    # Add admin user
-    conn = get_db()
-    row = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()
-    conn.close()
-    if row and row["c"] == 0:
-        create_user("admin", "admin123", "admin", None, "Admin", "User", "admin@lumoslab.com")
 
 
 def ensure_local_owner_account() -> None:
@@ -1887,12 +2175,26 @@ def ensure_local_owner_account() -> None:
     if not table_has_column("users", "is_superuser"):
         return
 
-    owner_username = os.environ.get("OWNER_ADMIN_USERNAME", "owneradmin").strip() or "owneradmin"
-    owner_password = os.environ.get("OWNER_ADMIN_PASSWORD", "OwnerAdmin!2026").strip() or "OwnerAdmin!2026"
-    owner_email = os.environ.get("OWNER_ADMIN_EMAIL", "owner@radflow.local").strip() or "owner@radflow.local"
+    owner_username = os.environ.get("OWNER_ADMIN_USERNAME", "P.Mendyk").strip() or "P.Mendyk"
+    owner_password = (os.environ.get("OWNER_ADMIN_PASSWORD") or "").strip()
+    owner_email = os.environ.get("OWNER_ADMIN_EMAIL", "").strip() or None
+    if not owner_password:
+        print("[WARNING] OWNER_ADMIN_PASSWORD is not set. Skipping local owner password bootstrap.")
+        return
     now = utc_now_iso()
+    salt = secrets.token_bytes(16)
+    pw_hash = hash_password(owner_password, salt)
 
     conn = get_db()
+    conn.execute(
+        """
+        UPDATE users
+        SET is_superuser = 0,
+            modified_at = ?
+        WHERE COALESCE(username, '') != ?
+        """,
+        (now, owner_username),
+    )
     existing = conn.execute("SELECT id FROM users WHERE username = ?", (owner_username,)).fetchone()
     if existing:
         conn.execute(
@@ -1900,28 +2202,21 @@ def ensure_local_owner_account() -> None:
             UPDATE users
             SET is_superuser = 1,
                 is_active = 1,
+                password_hash = ?,
+                salt_hex = ?,
+                email = ?,
+                first_name = ?,
+                surname = ?,
                 role = COALESCE(role, 'admin'),
                 modified_at = ?
             WHERE username = ?
             """,
-            (now, owner_username),
+            (pw_hash.hex(), salt.hex(), owner_email, "P", "Mendyk", now, owner_username),
         )
-        if owner_username != "admin":
-            conn.execute(
-                """
-                UPDATE users
-                SET is_superuser = 0,
-                    modified_at = ?
-                WHERE username = 'admin'
-                """,
-                (now,),
-            )
         conn.commit()
         conn.close()
         return
 
-    salt = secrets.token_bytes(16)
-    pw_hash = hash_password(owner_password, salt)
     conn.execute(
         """
         INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname, role, radiologist_name)
@@ -1934,20 +2229,10 @@ def ensure_local_owner_account() -> None:
             salt.hex(),
             now,
             now,
-            "Owner",
-            "Admin",
+            "P",
+            "Mendyk",
         ),
     )
-    if owner_username != "admin":
-        conn.execute(
-            """
-            UPDATE users
-            SET is_superuser = 0,
-                modified_at = ?
-            WHERE username = 'admin'
-            """,
-            (now,),
-        )
     conn.commit()
     conn.close()
 def list_institutions(org_id: int | None = None) -> list[dict]:
@@ -2107,9 +2392,13 @@ def require_admin(request: Request) -> dict:
         return user
     if table_exists("memberships"):
         if org_role in ("org_admin", "radiology_admin"):
+            if int(user.get("mfa_required") or 0) and not int(user.get("mfa_enabled") or 0):
+                raise HTTPException(status_code=403, detail="MFA enrollment required")
             return user
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
+    if int(user.get("mfa_required") or 0) and not int(user.get("mfa_enabled") or 0):
+        raise HTTPException(status_code=403, detail="MFA enrollment required")
     return user
 
 
@@ -2200,11 +2489,11 @@ def hash_token(token: str) -> str:
 
 def send_email(to_address: str, subject: str, body: str) -> bool:
     if not SMTP_HOST or not SMTP_FROM:
-        print("[email] SMTP not configured. Email content below:")
-        print(f"To: {to_address}\nSubject: {subject}\n\n{body}")
+        print("[email] SMTP not configured. Message suppressed to avoid leaking email content into logs.")
         return False
 
     import smtplib
+    import ssl
     from email.message import EmailMessage
 
     msg = EmailMessage()
@@ -2213,9 +2502,9 @@ def send_email(to_address: str, subject: str, body: str) -> bool:
     msg["Subject"] = subject
     msg.set_content(body)
 
-    server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+    server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
     try:
-        server.starttls()
+        server.starttls(context=ssl.create_default_context())
         if SMTP_USER and SMTP_PASSWORD:
             server.login(SMTP_USER, SMTP_PASSWORD)
         server.send_message(msg)
@@ -2446,7 +2735,7 @@ def ensure_extended_identity_schema() -> None:
     if org_row:
         default_org_id = org_row[0]
     else:
-        default_org_name = "Lumos Lab"
+        default_org_name = "Default Organisation"
         default_slug = slugify_org_name(default_org_name)
         suffix = 1
         while cur.execute("SELECT 1 FROM organisations WHERE slug = ?", (default_slug,)).fetchone():
@@ -2464,6 +2753,24 @@ def ensure_extended_identity_schema() -> None:
 
     if table_exists("study_description_presets"):
         cur.execute("UPDATE study_description_presets SET organization_id = ? WHERE organization_id IS NULL OR organization_id = 0", (default_org_id,))
+
+    cur.execute("PRAGMA table_info(users)")
+    user_cols_after_upgrade = {row[1] for row in cur.fetchall()}
+    if "role" not in user_cols_after_upgrade:
+        cur.execute("ALTER TABLE users ADD COLUMN role TEXT")
+        user_cols_after_upgrade.add("role")
+    if "radiologist_name" not in user_cols_after_upgrade:
+        cur.execute("ALTER TABLE users ADD COLUMN radiologist_name TEXT")
+        user_cols_after_upgrade.add("radiologist_name")
+
+    cur.execute("PRAGMA table_info(users)")
+    user_cols_after_upgrade = {row[1] for row in cur.fetchall()}
+    if "role" not in user_cols_after_upgrade:
+        cur.execute("ALTER TABLE users ADD COLUMN role TEXT")
+        user_cols_after_upgrade.add("role")
+    if "radiologist_name" not in user_cols_after_upgrade:
+        cur.execute("ALTER TABLE users ADD COLUMN radiologist_name TEXT")
+        user_cols_after_upgrade.add("radiologist_name")
 
     user_rows = cur.execute("SELECT id, username, role, first_name, surname, radiologist_name FROM users").fetchall()
     for user_row in user_rows:
@@ -2540,6 +2847,7 @@ try:
     ensure_protocols_schema()
     ensure_study_description_presets_schema()
     ensure_notify_events_schema()
+    ensure_case_events_schema()
     ensure_seed_data()
     ensure_local_owner_account()
     ensure_default_protocols()
@@ -2560,11 +2868,7 @@ except Exception as e:
 def landing(request: Request, expired: str = ""):
     user = get_session_user(request)
     if user:
-        if user.get("is_superuser"):
-            return RedirectResponse(url="/owner", status_code=303)
-        if user.get("role") == "admin":
-            return RedirectResponse(url="/admin", status_code=303)
-        return RedirectResponse(url="/radiologist", status_code=303)
+        return RedirectResponse(url=get_post_login_redirect_path(user), status_code=303)
     return templates.TemplateResponse("index.html", {"request": request, "expired": expired})
 
 
@@ -2573,11 +2877,9 @@ def login_page(request: Request, expired: str = ""):
     # Redirect to home if already logged in
     user = get_session_user(request)
     if user:
-        if user.get("is_superuser"):
-            return RedirectResponse(url="/owner", status_code=303)
-        if user.get("role") == "admin":
-            return RedirectResponse(url="/admin", status_code=303)
-        return RedirectResponse(url="/radiologist", status_code=303)
+        return RedirectResponse(url=get_post_login_redirect_path(user), status_code=303)
+    if request.session.get("pending_mfa_username"):
+        return RedirectResponse(url="/login/mfa", status_code=303)
     return templates.TemplateResponse("index.html", {"request": request, "expired": expired})
 
 
@@ -2617,50 +2919,74 @@ def login_submit(
             status_code=500,
         )
 
-    import time
-    import uuid
-    
-    # Generate unique session ID for multi-window logout
-    session_id = str(uuid.uuid4())
-    
-    request.session["user"] = {
-        "id": user.get("id"),  # May be None for old schema
-        "username": user["username"],
-        "first_name": user.get("first_name"),
-        "surname": user.get("surname"),
-        "email": user.get("email"),
-        "role": user["role"],
-        "radiologist_name": user["radiologist_name"],
-        "is_superuser": bool(user.get("is_superuser")),
-    }
-    request.session["login_time"] = time.time()  # Store login timestamp
-    request.session["session_id"] = session_id  # Track session for multi-window detection
-    
-    # Store session_id in database for multi-window logout detection
-    if user.get("id"):
-        try:
-            conn = get_db()
-            # Try to store in user_sessions table (new schema)
-            try:
-                conn.execute(
-                    "INSERT INTO user_sessions(user_id, session_id, created_at) VALUES(?, ?, datetime('now')) ON CONFLICT(user_id) DO UPDATE SET session_id=excluded.session_id, created_at=excluded.created_at",
-                    (user.get("id"), session_id)
-                )
-                conn.commit()
-            except Exception:
-                # Table might not exist, silently fail
-                pass
-            conn.close()
-        except Exception:
-            pass
+    if int(user.get("mfa_enabled") or 0) and user.get("mfa_secret"):
+        request.session.clear()
+        request.session["pending_mfa_username"] = user["username"]
+        return RedirectResponse(url="/login/mfa", status_code=303)
 
-    # Auto-route based on user role
-    if user.get("is_superuser"):
-        return RedirectResponse(url="/owner", status_code=303)
-    if user["role"] == "admin":
-        return RedirectResponse(url="/admin", status_code=303)
-    else:
-        return RedirectResponse(url="/radiologist", status_code=303)
+    return complete_login(request, user)
+
+
+@app.get("/login/mfa", response_class=HTMLResponse)
+def login_mfa_page(request: Request, error: str = ""):
+    pending_username = request.session.get("pending_mfa_username")
+    if not pending_username:
+        return RedirectResponse(url="/login", status_code=303)
+
+    return templates.TemplateResponse(
+        "mfa_verify.html",
+        {
+            "request": request,
+            "username": pending_username,
+            "error": error,
+        },
+    )
+
+
+@app.post("/login/mfa", response_class=HTMLResponse)
+def login_mfa_submit(request: Request, code: str = Form(...)):
+    pending_username = request.session.get("pending_mfa_username")
+    if not pending_username:
+        return RedirectResponse(url="/login", status_code=303)
+
+    client_ip = get_client_ip(request)
+    is_allowed, _remaining = check_rate_limit(f"mfa:{client_ip}", max_attempts=10, window_seconds=300)
+    if not is_allowed:
+        return templates.TemplateResponse(
+            "mfa_verify.html",
+            {
+                "request": request,
+                "username": pending_username,
+                "error": "Too many authentication attempts. Please wait a few minutes and try again.",
+            },
+            status_code=429,
+        )
+
+    conn = get_db()
+    user = conn.execute(
+        "SELECT * FROM users WHERE username = ? AND COALESCE(is_active, 1) = 1",
+        (pending_username,),
+    ).fetchone()
+    conn.close()
+
+    if not user:
+        request.session.pop("pending_mfa_username", None)
+        return RedirectResponse(url="/login", status_code=303)
+
+    user_dict = dict(user)
+    if not verify_totp_code(user_dict.get("mfa_secret"), code):
+        return templates.TemplateResponse(
+            "mfa_verify.html",
+            {
+                "request": request,
+                "username": pending_username,
+                "error": "Invalid authentication code.",
+            },
+            status_code=401,
+        )
+
+    reset_rate_limit(f"mfa:{client_ip}")
+    return complete_login(request, user_dict)
 
 
 @app.get("/forgot-password", response_class=HTMLResponse)
@@ -2901,6 +3227,7 @@ def owner_dashboard(request: Request, created: str = "", error: str = ""):
                 "admin_surname": "",
                 "admin_email": "",
                 "admin_username": "",
+                "admin_mfa_required": 0,
             },
         },
     )
@@ -2916,6 +3243,7 @@ def owner_create_organisation(
     admin_email: str = Form(""),
     admin_username: str = Form(...),
     admin_password: str = Form(...),
+    admin_mfa_required: str = Form("0"),
 ):
     user = require_superuser(request)
 
@@ -2926,6 +3254,7 @@ def owner_create_organisation(
     admin_email = admin_email.strip()
     admin_username = admin_username.strip()
     admin_password = admin_password.strip()
+    admin_mfa_required_value = 1 if str(admin_mfa_required).strip().lower() in {"1", "true", "on", "yes"} else 0
 
     form_data = {
         "org_name": org_name,
@@ -2934,6 +3263,7 @@ def owner_create_organisation(
         "admin_surname": admin_surname,
         "admin_email": admin_email,
         "admin_username": admin_username,
+        "admin_mfa_required": admin_mfa_required_value,
     }
 
     if not org_name or not admin_first_name or not admin_username or not admin_password:
@@ -3045,6 +3375,10 @@ def owner_create_organisation(
                     admin_surname,
                 ),
             )
+        conn.execute(
+            "UPDATE users SET mfa_required = ? WHERE username = ?",
+            (admin_mfa_required_value, admin_username),
+        )
         user_row = conn.execute("SELECT id FROM users WHERE username = ?", (admin_username,)).fetchone()
         user_id = user_row["id"] if isinstance(user_row, dict) else user_row[0]
 
@@ -3135,7 +3469,10 @@ def owner_edit_organisation_page(request: Request, org_id: int, saved: str = "",
             "request": request,
             "user": user,
             "organisation": organisation,
+            "org_users": list_organisation_users(org_id),
+            "org_institutions": list_organisation_institutions(org_id),
             "saved": saved,
+            "notice": request.query_params.get("notice", ""),
             "error": error,
         },
     )
@@ -3215,6 +3552,430 @@ def owner_edit_organisation_submit(
     return RedirectResponse(url=f"/owner/organisations/{org_id}?saved=1", status_code=303)
 
 
+@app.post("/owner/organisations/{org_id}/users/add")
+def owner_add_organisation_user(
+    request: Request,
+    org_id: int,
+    username: str = Form(...),
+    password: str = Form(...),
+    role: str = Form(...),
+    first_name: str = Form(""),
+    surname: str = Form(""),
+    email: str = Form(""),
+    gmc: str = Form(""),
+    speciality: str = Form(""),
+    mfa_required: str = Form("0"),
+):
+    require_superuser(request)
+    organisation = get_organisation_summary(org_id)
+    if not organisation:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+
+    username = username.strip()
+    password = password.strip()
+    role = role.strip()
+    first_name = first_name.strip()
+    surname = surname.strip()
+    email = email.strip()
+    gmc = gmc.strip()
+    speciality = speciality.strip()
+    mfa_required_value = 1 if str(mfa_required).strip().lower() in {"1", "true", "on", "yes"} else 0
+
+    if not username or not password or role not in {"admin", "radiologist", "user"}:
+        return templates.TemplateResponse(
+            "owner_organisation_edit.html",
+            {
+                "request": request,
+                "user": get_session_user(request),
+                "organisation": organisation,
+                "org_users": list_organisation_users(org_id),
+                "saved": "",
+                "notice": "",
+                "error": "Username, password, and a valid role are required.",
+            },
+            status_code=400,
+        )
+
+    if role == "radiologist" and not first_name:
+        return templates.TemplateResponse(
+            "owner_organisation_edit.html",
+            {
+                "request": request,
+                "user": get_session_user(request),
+                "organisation": organisation,
+                "org_users": list_organisation_users(org_id),
+                "saved": "",
+                "notice": "",
+                "error": "Practitioner accounts need at least a first name.",
+            },
+            status_code=400,
+        )
+
+    salt = secrets.token_bytes(16)
+    pw_hash = hash_password(password, salt)
+    now = utc_now_iso()
+    email_val = email or None
+    org_role = "org_admin" if role == "admin" else "radiologist" if role == "radiologist" else "org_user"
+
+    conn = get_db()
+    try:
+        if conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+            raise HTTPException(status_code=400, detail="That username is already in use.")
+        if email_val and conn.execute("SELECT 1 FROM users WHERE email = ?", (email_val,)).fetchone():
+            raise HTTPException(status_code=400, detail="That email address is already in use.")
+
+        conn.execute(
+            """
+            INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname, role, radiologist_name)
+            VALUES (?, ?, ?, ?, 0, 1, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                username,
+                email_val,
+                pw_hash.hex(),
+                salt.hex(),
+                now,
+                now,
+                first_name,
+                surname,
+                "admin" if role == "admin" else role,
+                None if role != "radiologist" else (f"{first_name} {surname}".strip() or username),
+            ),
+        )
+        conn.execute(
+            "UPDATE users SET mfa_required = ? WHERE username = ?",
+            (mfa_required_value, username),
+        )
+        user_row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+        user_id = user_row["id"] if isinstance(user_row, dict) else user_row[0]
+        conn.execute(
+            """
+            INSERT INTO memberships(org_id, user_id, org_role, is_active, created_at, modified_at)
+            VALUES (?, ?, ?, 1, ?, ?)
+            """,
+            (org_id, user_id, org_role, now, now),
+        )
+
+        if role == "radiologist" and table_exists("radiologist_profiles"):
+            display_name = f"{first_name} {surname}".strip() or username
+            existing_profile = conn.execute(
+                "SELECT id FROM radiologist_profiles WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            if existing_profile:
+                conn.execute(
+                    """
+                    UPDATE radiologist_profiles
+                    SET gmc = ?, specialty = ?, display_name = ?, modified_at = ?
+                    WHERE user_id = ?
+                    """,
+                    (gmc or None, speciality or None, display_name, now, user_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO radiologist_profiles(user_id, gmc, specialty, display_name, created_at, modified_at)
+                    VALUES(?, ?, ?, ?, ?, ?)
+                    """,
+                    (user_id, gmc or None, speciality or None, display_name, now, now),
+                )
+
+        conn.commit()
+    except HTTPException as exc:
+        conn.rollback()
+        conn.close()
+        return templates.TemplateResponse(
+            "owner_organisation_edit.html",
+            {
+                "request": request,
+                "user": get_session_user(request),
+                "organisation": organisation,
+                "org_users": list_organisation_users(org_id),
+                "saved": "",
+                "notice": "",
+                "error": exc.detail,
+            },
+            status_code=400,
+        )
+    except Exception as exc:
+        conn.rollback()
+        conn.close()
+        return templates.TemplateResponse(
+            "owner_organisation_edit.html",
+            {
+                "request": request,
+                "user": get_session_user(request),
+                "organisation": organisation,
+                "org_users": list_organisation_users(org_id),
+                "saved": "",
+                "notice": "",
+                "error": f"Unable to add user: {exc}",
+            },
+            status_code=400,
+        )
+    conn.close()
+
+    return RedirectResponse(url=f"/owner/organisations/{org_id}?notice=user_created", status_code=303)
+
+
+@app.post("/owner/organisations/{org_id}/users/{user_id}/edit")
+def owner_edit_organisation_user(
+    request: Request,
+    org_id: int,
+    user_id: int,
+    first_name: str = Form(""),
+    surname: str = Form(""),
+    email: str = Form(""),
+    role: str = Form(...),
+    is_active: str = Form("1"),
+    gmc: str = Form(""),
+    speciality: str = Form(""),
+    mfa_required: str = Form("0"),
+):
+    require_superuser(request)
+
+    role = role.strip()
+    if role not in {"admin", "radiologist", "user"}:
+        raise HTTPException(status_code=400, detail="Invalid role")
+
+    conn = get_db()
+    row = conn.execute(
+        """
+        SELECT u.id, u.username, u.email
+        FROM memberships m
+        INNER JOIN users u ON u.id = m.user_id
+        WHERE m.org_id = ? AND m.user_id = ? AND m.is_active = 1
+        """,
+        (org_id, user_id),
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found in that organisation")
+
+    clean_email = email.strip()
+    current_email = row["email"] if isinstance(row, dict) else row[2]
+    if clean_email and clean_email != current_email:
+        conflict = conn.execute("SELECT 1 FROM users WHERE email = ? AND id != ?", (clean_email, user_id)).fetchone()
+        if conflict:
+            conn.close()
+            raise HTTPException(status_code=400, detail="That email address is already in use.")
+
+    now = utc_now_iso()
+    active_value = 1 if str(is_active).strip() == "1" else 0
+    mfa_required_value = 1 if str(mfa_required).strip().lower() in {"1", "true", "on", "yes"} else 0
+    org_role = "org_admin" if role == "admin" else "radiologist" if role == "radiologist" else "org_user"
+    display_name = f"{first_name.strip()} {surname.strip()}".strip() or (row["username"] if isinstance(row, dict) else row[1])
+
+    conn.execute(
+        """
+        UPDATE users
+        SET first_name = ?, surname = ?, email = ?, role = ?, is_active = ?, radiologist_name = ?, modified_at = ?
+        WHERE id = ?
+        """,
+        (
+            first_name.strip(),
+            surname.strip(),
+            clean_email or None,
+            "admin" if role == "admin" else role,
+            active_value,
+            display_name if role == "radiologist" else None,
+            now,
+            user_id,
+        ),
+    )
+    if mfa_required_value:
+        conn.execute(
+            "UPDATE users SET mfa_required = ?, modified_at = ? WHERE id = ?",
+            (1, now, user_id),
+        )
+    else:
+        conn.execute(
+            """
+            UPDATE users
+            SET mfa_required = 0, mfa_enabled = 0, mfa_secret = NULL, mfa_pending_secret = NULL, modified_at = ?
+            WHERE id = ?
+            """,
+            (now, user_id),
+        )
+    conn.execute(
+        """
+        UPDATE memberships
+        SET org_role = ?, modified_at = ?
+        WHERE org_id = ? AND user_id = ? AND is_active = 1
+        """,
+        (org_role, now, org_id, user_id),
+    )
+
+    if table_exists("radiologist_profiles"):
+        if role == "radiologist":
+            profile_row = conn.execute("SELECT id FROM radiologist_profiles WHERE user_id = ?", (user_id,)).fetchone()
+            if profile_row:
+                conn.execute(
+                    """
+                    UPDATE radiologist_profiles
+                    SET gmc = ?, specialty = ?, display_name = ?, modified_at = ?
+                    WHERE user_id = ?
+                    """,
+                    (gmc.strip() or None, speciality.strip() or None, display_name, now, user_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO radiologist_profiles(user_id, gmc, specialty, display_name, created_at, modified_at)
+                    VALUES(?, ?, ?, ?, ?, ?)
+                    """,
+                    (user_id, gmc.strip() or None, speciality.strip() or None, display_name, now, now),
+                )
+        else:
+            conn.execute("DELETE FROM radiologist_profiles WHERE user_id = ?", (user_id,))
+
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url=f"/owner/organisations/{org_id}?notice=user_updated", status_code=303)
+
+
+@app.post("/owner/organisations/{org_id}/users/{user_id}/reset-password")
+def owner_reset_organisation_user_password(
+    request: Request,
+    org_id: int,
+    user_id: int,
+    password: str = Form(...),
+):
+    require_superuser(request)
+    password = password.strip()
+    if not password:
+        raise HTTPException(status_code=400, detail="Password is required")
+
+    conn = get_db()
+    membership = conn.execute(
+        "SELECT 1 FROM memberships WHERE org_id = ? AND user_id = ? AND is_active = 1",
+        (org_id, user_id),
+    ).fetchone()
+    if not membership:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found in that organisation")
+
+    salt = secrets.token_bytes(16)
+    pw_hash = hash_password(password, salt)
+    conn.execute(
+        "UPDATE users SET password_hash = ?, salt_hex = ?, modified_at = ? WHERE id = ?",
+        (pw_hash.hex(), salt.hex(), utc_now_iso(), user_id),
+    )
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url=f"/owner/organisations/{org_id}?notice=password_reset", status_code=303)
+
+
+@app.post("/owner/organisations/{org_id}/users/{user_id}/delete")
+def owner_delete_organisation_user(request: Request, org_id: int, user_id: int):
+    current_user = require_superuser(request)
+    conn = get_db()
+    row = conn.execute(
+        """
+        SELECT u.id, u.username
+        FROM memberships m
+        INNER JOIN users u ON u.id = m.user_id
+        WHERE m.org_id = ? AND m.user_id = ? AND m.is_active = 1
+        """,
+        (org_id, user_id),
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found in that organisation")
+
+    username = row["username"] if isinstance(row, dict) else row[1]
+    if username == current_user.get("username"):
+        conn.close()
+        raise HTTPException(status_code=400, detail="You cannot delete your own owner account from here.")
+
+    conn.execute("DELETE FROM memberships WHERE org_id = ? AND user_id = ?", (org_id, user_id))
+    remaining = conn.execute(
+        "SELECT COUNT(*) AS c FROM memberships WHERE user_id = ? AND is_active = 1",
+        (user_id,),
+    ).fetchone()
+    remaining_count = remaining["c"] if isinstance(remaining, dict) else remaining[0]
+    if remaining_count == 0:
+        if table_exists("radiologist_profiles"):
+            conn.execute("DELETE FROM radiologist_profiles WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url=f"/owner/organisations/{org_id}?notice=user_deleted", status_code=303)
+
+
+@app.post("/owner/organisations/{org_id}/institutions/{inst_id}/delete")
+def owner_delete_organisation_institution(request: Request, org_id: int, inst_id: int):
+    require_superuser(request)
+    inst = get_institution(inst_id, org_id)
+    if not inst:
+        raise HTTPException(status_code=404, detail="Institution not found")
+
+    conn = get_db()
+    if table_exists("cases"):
+        conn.execute(
+            "UPDATE cases SET institution_id = NULL WHERE institution_id = ? AND org_id = ?",
+            (inst_id, org_id),
+        )
+    if table_exists("protocols"):
+        conn.execute(
+            "DELETE FROM protocols WHERE institution_id = ? AND org_id = ?",
+            (inst_id, org_id),
+        )
+    conn.commit()
+    conn.close()
+
+    delete_institution(inst_id, org_id)
+    return RedirectResponse(url=f"/owner/organisations/{org_id}?notice=institution_deleted", status_code=303)
+
+
+@app.post("/owner/organisations/{org_id}/delete")
+def owner_delete_organisation(request: Request, org_id: int):
+    current_user = require_superuser(request)
+    organisation = get_organisation_summary(org_id)
+    if not organisation:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+
+    conn = get_db()
+    member_rows = conn.execute(
+        "SELECT DISTINCT user_id FROM memberships WHERE org_id = ?",
+        (org_id,),
+    ).fetchall()
+    member_ids = [row["user_id"] if isinstance(row, dict) else row[0] for row in member_rows]
+
+    if table_exists("cases"):
+        conn.execute("DELETE FROM cases WHERE org_id = ?", (org_id,))
+    if table_exists("protocols"):
+        conn.execute("DELETE FROM protocols WHERE org_id = ?", (org_id,))
+    if table_exists("institutions"):
+        conn.execute("DELETE FROM institutions WHERE org_id = ?", (org_id,))
+    if table_exists("study_description_presets"):
+        conn.execute("DELETE FROM study_description_presets WHERE organization_id = ?", (org_id,))
+    if table_exists("notify_events"):
+        conn.execute("DELETE FROM notify_events WHERE org_id = ?", (org_id,))
+    if table_exists("case_events"):
+        conn.execute("DELETE FROM case_events WHERE org_id = ?", (org_id,))
+    if table_exists("memberships"):
+        conn.execute("DELETE FROM memberships WHERE org_id = ?", (org_id,))
+
+    for member_id in member_ids:
+        if member_id == current_user.get("id"):
+            continue
+        remaining = conn.execute(
+            "SELECT COUNT(*) AS c FROM memberships WHERE user_id = ? AND is_active = 1",
+            (member_id,),
+        ).fetchone()
+        remaining_count = remaining["c"] if isinstance(remaining, dict) else remaining[0]
+        if remaining_count == 0:
+            if table_exists("radiologist_profiles"):
+                conn.execute("DELETE FROM radiologist_profiles WHERE user_id = ?", (member_id,))
+            conn.execute("DELETE FROM users WHERE id = ?", (member_id,))
+
+    conn.execute("DELETE FROM organisations WHERE id = ?", (org_id,))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/owner?created=deleted", status_code=303)
+
+
 # -------------------------
 # Admin dashboard (tabs + filters + TAT)
 # -------------------------
@@ -3228,6 +3989,8 @@ def build_admin_case_filters(
     status: str | None = None,
     created_since: str | None = None,
     created_on: str | None = None,
+    created_from: str | None = None,
+    created_to: str | None = None,
 ):
     clauses = ["1=1"]
     params: list = []
@@ -3269,6 +4032,14 @@ def build_admin_case_filters(
         clauses.append("SUBSTR(c.created_at, 1, 10) = ?")
         params.append(created_on)
 
+    if created_from:
+        clauses.append("SUBSTR(c.created_at, 1, 10) >= ?")
+        params.append(created_from)
+
+    if created_to:
+        clauses.append("SUBSTR(c.created_at, 1, 10) <= ?")
+        params.append(created_to)
+
     return clauses, params
 
 
@@ -3281,6 +4052,43 @@ def get_admin_org_name(org_id):
             org_name = org_row["name"]
         conn.close()
     return org_name
+
+
+def build_dashboard_filter_summary(
+    dashboard_range: str,
+    dashboard_date_from: str | None,
+    dashboard_date_to: str | None,
+    dashboard_institution: str | None,
+    dashboard_radiologist: str | None,
+    institutions: list[dict],
+) -> list[str]:
+    quick_range_map = {
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "90d": "Last 90 days",
+        "365d": "Last 12 months",
+        "all": "All time",
+    }
+    institution_name = "All institutions"
+    if dashboard_institution:
+        for inst in institutions:
+            if str(inst.get("id")) == str(dashboard_institution):
+                institution_name = str(inst.get("name") or institution_name)
+                break
+
+    if dashboard_date_from and dashboard_date_to:
+        if dashboard_date_from == dashboard_date_to:
+            date_label = dashboard_date_from
+        else:
+            date_label = f"{dashboard_date_from} to {dashboard_date_to}"
+    else:
+        date_label = quick_range_map.get(dashboard_range, "Last 30 days")
+
+    return [
+        f"Date scope: {date_label}",
+        f"Institution: {institution_name}",
+        f"Practitioner: {dashboard_radiologist or 'All practitioners'}",
+    ]
 
 
 def list_case_modalities(org_id, is_superuser: bool):
@@ -3305,6 +4113,9 @@ def build_dashboard_series(rows: list[dict]):
     institution_counts: dict[str, int] = {}
     radiologist_counts: dict[str, int] = {}
     avg_tat_values: list[int] = []
+    completed_tat_values: list[int] = []
+    unassigned_cases = 0
+    sla_breaches = 0
 
     for row in rows:
         status_key = str(row.get("status") or "").strip().lower()
@@ -3324,8 +4135,20 @@ def build_dashboard_series(rows: list[dict]):
 
         radiologist_name = row.get("radiologist") or "Unassigned"
         radiologist_counts[radiologist_name] = radiologist_counts.get(radiologist_name, 0) + 1
+        if not str(row.get("radiologist") or "").strip():
+            unassigned_cases += 1
 
-        avg_tat_values.append(tat_seconds(row.get("created_at"), row.get("vetted_at")))
+        tat_value = tat_seconds(row.get("created_at"), row.get("vetted_at"))
+        avg_tat_values.append(tat_value)
+        if status_key == "vetted":
+            completed_tat_values.append(tat_value)
+
+        try:
+            sla_hours = int(row.get("institution_sla_hours") or row.get("sla_hours") or 48)
+        except Exception:
+            sla_hours = 48
+        if status_key == "pending" and tat_value > sla_hours * 3600:
+            sla_breaches += 1
 
     status_chart = [
         {"label": "Pending", "value": status_counts["pending"], "tone": "pending"},
@@ -3357,6 +4180,10 @@ def build_dashboard_series(rows: list[dict]):
     radiologist_max = max([item["value"] for item in radiologist_chart] + [1])
 
     avg_tat_seconds = int(sum(avg_tat_values) / len(avg_tat_values)) if avg_tat_values else 0
+    completed_avg_tat_seconds = int(sum(completed_tat_values) / len(completed_tat_values)) if completed_tat_values else 0
+    completion_rate = round((status_counts["vetted"] / total_cases) * 100, 1) if total_cases else 0.0
+    top_institution_label = top_institutions[0][0] if top_institutions else "No data"
+    top_practitioner_label = top_radiologists[0][0] if top_radiologists else "No data"
 
     return {
         "status_chart": status_chart,
@@ -3375,6 +4202,17 @@ def build_dashboard_series(rows: list[dict]):
             "reopened": status_counts["reopened"],
             "avg_tat": format_tat(avg_tat_seconds),
         },
+        "operational_kpis": {
+            "completed_avg_tat": format_tat(completed_avg_tat_seconds),
+            "unassigned": unassigned_cases,
+            "sla_breaches": sla_breaches,
+            "completion_rate": f"{completion_rate:.1f}%",
+        },
+        "insights": {
+            "top_institution": top_institution_label,
+            "top_practitioner": top_practitioner_label,
+            "largest_status": max(status_counts.items(), key=lambda item: item[1])[0].capitalize() if total_cases else "No data",
+        },
     }
 
 
@@ -3382,7 +4220,7 @@ def build_dashboard_series(rows: list[dict]):
 def admin_dashboard(
     request: Request,
     view: str = "worklist",
-    tab: str = "all",
+    tab: str = "pending",
     institution: str | None = None,
     radiologist: str | None = None,
     modality: str | None = None,
@@ -3392,7 +4230,8 @@ def admin_dashboard(
     dashboard_range: str = "30d",
     dashboard_institution: str | None = None,
     dashboard_radiologist: str | None = None,
-    dashboard_date: str | None = None,
+    dashboard_date_from: str | None = None,
+    dashboard_date_to: str | None = None,
 ):
     try:
         user = require_admin(request)
@@ -3436,16 +4275,25 @@ def admin_dashboard(
                 "dashboard_range": dashboard_range,
                 "dashboard_institution": dashboard_institution or "",
                 "dashboard_radiologist": dashboard_radiologist or "",
-                "dashboard_date": dashboard_date or "",
+                "dashboard_date_from": dashboard_date_from or "",
+                "dashboard_date_to": dashboard_date_to or "",
                 "dashboard": build_dashboard_series([]),
+                "dashboard_filter_summary": build_dashboard_filter_summary(
+                    dashboard_range,
+                    dashboard_date_from,
+                    dashboard_date_to,
+                    dashboard_institution,
+                    dashboard_radiologist,
+                    institutions,
+                ),
                 "org_name": org_name,
                 "current_user": get_session_user(request),
             },
         )
 
-    tab = (tab or "all").strip().lower()
+    tab = (tab or "pending").strip().lower()
     if tab not in ("all", "pending", "vetted", "rejected", "reopened"):
-        tab = "all"
+        tab = "pending"
 
     # Validate sort parameters
     has_modality_column = table_has_column("cases", "modality")
@@ -3502,9 +4350,16 @@ def admin_dashboard(
     dashboard_range = (dashboard_range or "30d").strip().lower()
     if dashboard_range not in ("7d", "30d", "90d", "365d", "all"):
         dashboard_range = "30d"
-    dashboard_date = (dashboard_date or "").strip()
+    dashboard_date_from = (dashboard_date_from or "").strip()
+    dashboard_date_to = (dashboard_date_to or "").strip()
+    if dashboard_date_from and not dashboard_date_to:
+        dashboard_date_to = dashboard_date_from
+    if dashboard_date_to and not dashboard_date_from:
+        dashboard_date_from = dashboard_date_to
+    if dashboard_date_from and dashboard_date_to and dashboard_date_from > dashboard_date_to:
+        dashboard_date_from, dashboard_date_to = dashboard_date_to, dashboard_date_from
     created_since = None
-    if dashboard_range != "all" and not dashboard_date:
+    if dashboard_range != "all" and not dashboard_date_from and not dashboard_date_to:
         days = int(dashboard_range.replace("d", ""))
         created_since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
@@ -3514,10 +4369,11 @@ def admin_dashboard(
         institution=dashboard_institution,
         radiologist=dashboard_radiologist,
         created_since=created_since,
-        created_on=dashboard_date or None,
+        created_from=dashboard_date_from or None,
+        created_to=dashboard_date_to or None,
     )
     dashboard_sql = (
-        "SELECT c.*, i.name as institution_name "
+        "SELECT c.*, i.name as institution_name, i.sla_hours as institution_sla_hours "
         "FROM cases c LEFT JOIN institutions i ON c.institution_id = i.id "
         f"WHERE {' AND '.join(dashboard_clauses)} "
         "ORDER BY c.created_at DESC"
@@ -3547,6 +4403,14 @@ def admin_dashboard(
         cases.append(d)
 
     dashboard = build_dashboard_series(dashboard_rows)
+    dashboard_filter_summary = build_dashboard_filter_summary(
+        dashboard_range,
+        dashboard_date_from,
+        dashboard_date_to,
+        dashboard_institution,
+        dashboard_radiologist,
+        institutions,
+    )
 
     return templates.TemplateResponse(
         "home.html",
@@ -3573,8 +4437,10 @@ def admin_dashboard(
             "dashboard_range": dashboard_range,
             "dashboard_institution": dashboard_institution or "",
             "dashboard_radiologist": dashboard_radiologist or "",
-            "dashboard_date": dashboard_date or "",
+            "dashboard_date_from": dashboard_date_from or "",
+            "dashboard_date_to": dashboard_date_to or "",
             "dashboard": dashboard,
+            "dashboard_filter_summary": dashboard_filter_summary,
             "org_name": org_name,
             "current_user": get_session_user(request),
         },
@@ -3585,7 +4451,7 @@ def admin_dashboard(
 def admin_dashboard_csv(
     request: Request,
     view: str = "worklist",
-    tab: str = "all",
+    tab: str = "pending",
     institution: str | None = None,
     radiologist: str | None = None,
     modality: str | None = None,
@@ -3593,7 +4459,8 @@ def admin_dashboard_csv(
     dashboard_range: str = "30d",
     dashboard_institution: str | None = None,
     dashboard_radiologist: str | None = None,
-    dashboard_date: str | None = None,
+    dashboard_date_from: str | None = None,
+    dashboard_date_to: str | None = None,
 ):
     user = require_admin(request)
     org_id = user.get("org_id")
@@ -3607,8 +4474,15 @@ def admin_dashboard_csv(
         dashboard_range = (dashboard_range or "30d").strip().lower()
         if dashboard_range not in ("7d", "30d", "90d", "365d", "all"):
             dashboard_range = "30d"
-        dashboard_date = (dashboard_date or "").strip()
-        if dashboard_range != "all" and not dashboard_date:
+        dashboard_date_from = (dashboard_date_from or "").strip()
+        dashboard_date_to = (dashboard_date_to or "").strip()
+        if dashboard_date_from and not dashboard_date_to:
+            dashboard_date_to = dashboard_date_from
+        if dashboard_date_to and not dashboard_date_from:
+            dashboard_date_from = dashboard_date_to
+        if dashboard_date_from and dashboard_date_to and dashboard_date_from > dashboard_date_to:
+            dashboard_date_from, dashboard_date_to = dashboard_date_to, dashboard_date_from
+        if dashboard_range != "all" and not dashboard_date_from and not dashboard_date_to:
             days = int(dashboard_range.replace("d", ""))
             created_since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         clauses, params = build_admin_case_filters(
@@ -3617,12 +4491,13 @@ def admin_dashboard_csv(
             institution=dashboard_institution,
             radiologist=dashboard_radiologist,
             created_since=created_since,
-            created_on=dashboard_date or None,
+            created_from=dashboard_date_from or None,
+            created_to=dashboard_date_to or None,
         )
     else:
-        tab = (tab or "all").strip().lower()
+        tab = (tab or "pending").strip().lower()
         if tab not in ("all", "pending", "vetted", "rejected", "reopened"):
-            tab = "all"
+            tab = "pending"
         clauses, params = build_admin_case_filters(
             org_id,
             is_superuser,
@@ -3752,6 +4627,189 @@ def admin_dashboard_csv(
 
     filename = f"cases_{tab}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     return StreamingResponse(iter_csv(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@app.get("/admin/dashboard-report.pdf")
+def admin_dashboard_report_pdf(
+    request: Request,
+    dashboard_range: str = "30d",
+    dashboard_institution: str | None = None,
+    dashboard_radiologist: str | None = None,
+    dashboard_date_from: str | None = None,
+    dashboard_date_to: str | None = None,
+):
+    user = require_admin(request)
+    org_id = user.get("org_id")
+    is_superuser = bool(user.get("is_superuser"))
+    institutions = list_institutions(org_id)
+    org_name = get_admin_org_name(org_id)
+
+    dashboard_range = (dashboard_range or "30d").strip().lower()
+    if dashboard_range not in ("7d", "30d", "90d", "365d", "all"):
+        dashboard_range = "30d"
+    dashboard_date_from = (dashboard_date_from or "").strip()
+    dashboard_date_to = (dashboard_date_to or "").strip()
+    if dashboard_date_from and not dashboard_date_to:
+        dashboard_date_to = dashboard_date_from
+    if dashboard_date_to and not dashboard_date_from:
+        dashboard_date_from = dashboard_date_to
+    if dashboard_date_from and dashboard_date_to and dashboard_date_from > dashboard_date_to:
+        dashboard_date_from, dashboard_date_to = dashboard_date_to, dashboard_date_from
+
+    created_since = None
+    if dashboard_range != "all" and not dashboard_date_from and not dashboard_date_to:
+        days = int(dashboard_range.replace("d", ""))
+        created_since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+    clauses, params = build_admin_case_filters(
+        org_id,
+        is_superuser,
+        institution=dashboard_institution,
+        radiologist=dashboard_radiologist,
+        created_since=created_since,
+        created_from=dashboard_date_from or None,
+        created_to=dashboard_date_to or None,
+    )
+
+    sql = (
+        "SELECT c.*, i.name as institution_name, i.sla_hours as institution_sla_hours "
+        "FROM cases c LEFT JOIN institutions i ON c.institution_id = i.id "
+        f"WHERE {' AND '.join(clauses)} "
+        "ORDER BY c.created_at DESC"
+    )
+    conn = get_db()
+    rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
+    conn.close()
+
+    dashboard = build_dashboard_series(rows)
+    filter_summary = build_dashboard_filter_summary(
+        dashboard_range,
+        dashboard_date_from,
+        dashboard_date_to,
+        dashboard_institution,
+        dashboard_radiologist,
+        institutions,
+    )
+
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    accent = colors.HexColor("#1f6feb")
+    accent_soft = colors.HexColor("#dbeafe")
+    ink = colors.HexColor("#0f172a")
+    muted = colors.HexColor("#475569")
+    border = colors.HexColor("#cbd5e1")
+    card_fill = colors.HexColor("#f8fafc")
+    success = colors.HexColor("#dcfce7")
+    warning = colors.HexColor("#fef3c7")
+    danger = colors.HexColor("#fee2e2")
+
+    left = 36
+    right = width - 36
+    top = height - 36
+    y = top
+
+    def draw_text(x, y_pos, text, font="Helvetica", size=10, color=ink):
+        c.setFont(font, size)
+        c.setFillColor(color)
+        c.drawString(x, y_pos, str(text))
+
+    def draw_card(x, y_top, w, h, label, value, note="", fill=card_fill):
+        c.setFillColor(fill)
+        c.setStrokeColor(border)
+        c.roundRect(x, y_top - h, w, h, 12, stroke=1, fill=1)
+        draw_text(x + 10, y_top - 18, label, size=8, color=muted)
+        draw_text(x + 10, y_top - 42, value, font="Helvetica-Bold", size=16, color=ink)
+        if note:
+            draw_text(x + 10, y_top - 56, note, size=7, color=muted)
+
+    def draw_hbar_chart(x, y_top, w, title, items, max_value):
+        draw_text(x, y_top, title, font="Helvetica-Bold", size=11)
+        chart_y = y_top - 18
+        row_h = 18
+        for idx, item in enumerate(items[:4]):
+            current_y = chart_y - (idx * row_h)
+            label = "Completed" if item["label"] == "Vetted" else item["label"]
+            value = int(item["value"])
+            bar_w = ((w - 110) * value / max_value) if max_value else 0
+            draw_text(x, current_y, label, size=8, color=muted)
+            c.setFillColor(accent_soft)
+            c.roundRect(x + 66, current_y - 8, w - 110, 8, 4, stroke=0, fill=1)
+            c.setFillColor(accent)
+            c.roundRect(x + 66, current_y - 8, max(bar_w, 2 if value else 0), 8, 4, stroke=0, fill=1)
+            draw_text(x + w - 34, current_y, value, size=8, color=ink)
+
+    c.setFillColor(accent)
+    c.roundRect(left, y - 54, right - left, 54, 16, stroke=0, fill=1)
+    draw_text(left + 16, y - 20, "RadFlow Dashboard Report", font="Helvetica-Bold", size=18, color=colors.white)
+    draw_text(left + 16, y - 38, org_name or "Organisation", size=10, color=colors.white)
+    draw_text(right - 150, y - 38, datetime.now().strftime("%d %b %Y %H:%M"), size=9, color=colors.white)
+    y -= 70
+
+    c.setFillColor(card_fill)
+    c.setStrokeColor(border)
+    c.roundRect(left, y - 44, right - left, 44, 12, stroke=1, fill=1)
+    for idx, line in enumerate(filter_summary):
+        draw_text(left + 12 + (idx * 170), y - 26, line, size=8, color=muted)
+    y -= 58
+
+    gap = 10
+    kpi_w = (right - left - (gap * 4)) / 5
+    status_cards = [
+        ("Pending", str(dashboard["kpis"]["pending"]), "Awaiting review", warning),
+        ("Reopened", str(dashboard["kpis"]["reopened"]), "Returned for action", accent_soft),
+        ("Completed", str(dashboard["kpis"]["vetted"]), "Finished cases", success),
+        ("Rejected", str(dashboard["kpis"]["rejected"]), "Declined cases", danger),
+        ("Total Cases", str(dashboard["kpis"]["total"]), "Filtered scope", card_fill),
+    ]
+    for idx, (label, value, note, fill) in enumerate(status_cards):
+        draw_card(left + idx * (kpi_w + gap), y, kpi_w, 64, label, value, note, fill)
+    y -= 78
+
+    op_w = (right - left - (gap * 3)) / 4
+    op_cards = [
+        ("Completed Avg TAT", dashboard["operational_kpis"]["completed_avg_tat"], "", card_fill),
+        ("Unassigned", str(dashboard["operational_kpis"]["unassigned"]), "", card_fill),
+        ("SLA Breaches", str(dashboard["operational_kpis"]["sla_breaches"]), "", card_fill),
+        ("Completion Rate", dashboard["operational_kpis"]["completion_rate"], "", card_fill),
+    ]
+    for idx, (label, value, note, fill) in enumerate(op_cards):
+        draw_card(left + idx * (op_w + gap), y, op_w, 56, label, value, note, fill)
+    y -= 72
+
+    chart_w = (right - left - 16) / 2
+    c.setFillColor(card_fill)
+    c.setStrokeColor(border)
+    c.roundRect(left, y - 118, chart_w, 118, 14, stroke=1, fill=1)
+    c.roundRect(left + chart_w + 16, y - 118, chart_w, 118, 14, stroke=1, fill=1)
+    draw_hbar_chart(left + 12, y - 12, chart_w - 24, "Cases by Status", dashboard["status_chart"], dashboard["status_max"])
+    draw_hbar_chart(left + chart_w + 28, y - 12, chart_w - 24, "Top Institutions", dashboard["institution_chart"], dashboard["institution_max"])
+    y -= 134
+
+    c.setFillColor(card_fill)
+    c.setStrokeColor(border)
+    c.roundRect(left, y - 92, right - left, 92, 14, stroke=1, fill=1)
+    draw_text(left + 14, y - 18, "Key Takeaways", font="Helvetica-Bold", size=11)
+    takeaway_lines = [
+        f"Top institution: {dashboard['insights']['top_institution']}",
+        f"Busiest practitioner: {dashboard['insights']['top_practitioner']}",
+        f"Largest status group: {'Completed' if dashboard['insights']['largest_status'] == 'Vetted' else dashboard['insights']['largest_status']}",
+        f"Cases in selection: {dashboard['kpis']['total']} with {dashboard['operational_kpis']['completion_rate']} completion rate",
+    ]
+    for idx, line in enumerate(takeaway_lines):
+        draw_text(left + 18, y - 38 - (idx * 14), f"- {line}", size=9, color=muted)
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+
+    filename = f"dashboard_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.get("/admin.events.csv")
@@ -4471,15 +5529,18 @@ async def admin_case_edit_save(
         event_comment = f"{change_summary}. Notes: {note_text}"
 
     event_org_id = org_id or case_dict.get("org_id")
-    insert_case_event(
-        case_id=case_id,
-        org_id=event_org_id,
-        event_type="EDITED",
-        user=user,
-        comment=event_comment,
-    )
+    try:
+        insert_case_event(
+            case_id=case_id,
+            org_id=event_org_id,
+            event_type="EDITED",
+            user=user,
+            comment=event_comment,
+        )
+    except Exception as exc:
+        print(f"[WARN] Saved case {case_id} but failed to write edit event: {exc}")
 
-    return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
+    return RedirectResponse(url=f"/admin/case/{case_id}/edit?saved=1", status_code=303)
 
 
 @app.post("/admin/case/{case_id}/assign-radiologist")
@@ -4594,6 +5655,13 @@ def admin_reopen_case_submit(
     )
     conn.commit()
     conn.close()
+    insert_case_event(
+        case_id=case_id,
+        org_id=row["org_id"],
+        event_type="REOPENED",
+        user=user,
+        comment=reopen_notes.strip(),
+    )
     return RedirectResponse(url=f"/admin/case/{case_id}/edit?saved=1", status_code=303)
 
 
@@ -4742,7 +5810,7 @@ def ensure_extended_identity_schema() -> None:
     if org_row:
         default_org_id = org_row[0]
     else:
-        default_org_name = "Lumos Lab"
+        default_org_name = "Default Organisation"
         default_slug = slugify_org_name(default_org_name)
         suffix = 1
         while cur.execute("SELECT 1 FROM organisations WHERE slug = ?", (default_slug,)).fetchone():
@@ -4868,6 +5936,88 @@ def get_organisation_summary(org_id: int) -> dict | None:
     ).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def list_organisation_users(org_id: int) -> list[dict]:
+    if not table_exists("users"):
+        return []
+
+    conn = get_db()
+    profile_join = "LEFT JOIN radiologist_profiles rp ON rp.user_id = u.id" if table_exists("radiologist_profiles") else ""
+    profile_gmc = "rp.gmc" if table_exists("radiologist_profiles") else "NULL"
+    profile_specialty = "rp.specialty" if table_exists("radiologist_profiles") else "NULL"
+    profile_display = "rp.display_name" if table_exists("radiologist_profiles") else "NULL"
+    rows = conn.execute(
+        f"""
+        SELECT
+            u.id,
+            u.username,
+            u.first_name,
+            u.surname,
+            u.email,
+            u.is_active,
+            COALESCE(u.mfa_enabled, 0) AS mfa_enabled,
+            COALESCE(u.mfa_required, 0) AS mfa_required,
+            m.org_role,
+            {profile_gmc} AS gmc,
+            {profile_specialty} AS specialty,
+            COALESCE({profile_display}, NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.surname, '')), ''), u.username) AS display_name
+        FROM memberships m
+        INNER JOIN users u ON u.id = m.user_id
+        {profile_join}
+        WHERE m.org_id = ? AND m.is_active = 1
+        ORDER BY
+            CASE m.org_role
+                WHEN 'org_admin' THEN 0
+                WHEN 'radiologist' THEN 1
+                ELSE 2
+            END,
+            LOWER(COALESCE(u.surname, '')),
+            LOWER(COALESCE(u.first_name, '')),
+            LOWER(u.username)
+        """,
+        (org_id,),
+    ).fetchall()
+    conn.close()
+
+    users: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        role_value = item.get("org_role") or "org_user"
+        item["role_label"] = (
+            "Admin" if role_value == "org_admin"
+            else "Practitioner" if role_value == "radiologist"
+            else "Coordinator"
+        )
+        users.append(item)
+    return users
+
+
+def list_organisation_institutions(org_id: int) -> list[dict]:
+    if not table_exists("institutions"):
+        return []
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT
+            i.id,
+            i.name,
+            i.sla_hours,
+            i.created_at,
+            i.modified_at,
+            (
+                SELECT COUNT(*)
+                FROM cases c
+                WHERE c.org_id = i.org_id AND c.institution_id = i.id
+            ) AS case_count
+        FROM institutions i
+        WHERE i.org_id = ?
+        ORDER BY LOWER(i.name)
+        """,
+        (org_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
     insert_case_event(
         case_id=case_id,
@@ -5252,6 +6402,7 @@ def add_user(
     email: str = Form(""),
     gmc: str = Form(""),
     speciality: str = Form(""),
+    mfa_required: str = Form("0"),
 ):
     user = require_admin(request)
     # get_current_org_context is already called inside require_admin; fetch org_id from it
@@ -5264,6 +6415,7 @@ def add_user(
     radiologist_name = radiologist_name.strip() or None
     gmc = gmc.strip()
     speciality = speciality.strip()
+    mfa_required_value = 1 if str(mfa_required).strip().lower() in {"1", "true", "on", "yes"} else 0
 
     # For radiologist users, create profile with their name
     if role == "radiologist":
@@ -5315,6 +6467,11 @@ def add_user(
                 user_id = user_row["id"] if user_row else None
             if not user_id:
                 raise HTTPException(status_code=500, detail="Failed to create user")
+
+            conn.execute(
+                "UPDATE users SET mfa_required = ?, modified_at = ? WHERE id = ?",
+                (mfa_required_value, now, user_id),
+            )
 
             org_role = "org_admin" if role == "admin" else "radiologist" if role == "radiologist" else "org_user"
             conn.execute(
@@ -5378,6 +6535,10 @@ def add_user(
                 """,
                 (username, email_val, pw_hash.hex(), salt.hex(), now, now, first_name.strip(), surname.strip()),
             )
+            conn.execute(
+                "UPDATE users SET mfa_required = ?, modified_at = ? WHERE username = ?",
+                (mfa_required_value, now, username),
+            )
             conn.commit()
         finally:
             conn.close()
@@ -5405,12 +6566,14 @@ def edit_user(
     role: str = Form(...),
     radiologist_name: str = Form(""),
     password: str = Form(""),
+    mfa_required: str = Form("0"),
 ):
     user = require_admin(request)
     org_id = user.get("org_id")
     username = username.strip()
     role = role.strip()
     radiologist_name = radiologist_name.strip() or None
+    mfa_required_value = 1 if str(mfa_required).strip().lower() in {"1", "true", "on", "yes"} else 0
     
     conn = get_db()
     user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
@@ -5467,9 +6630,34 @@ def edit_user(
             target = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
             target_id = target["id"] if target else None
             if target_id:
+                if mfa_required_value:
+                    conn.execute(
+                        "UPDATE users SET mfa_required = ?, modified_at = ? WHERE id = ?",
+                        (1, utc_now_iso(), target_id),
+                    )
+                else:
+                    conn.execute(
+                        """
+                        UPDATE users
+                        SET mfa_required = 0, mfa_enabled = 0, mfa_secret = NULL, mfa_pending_secret = NULL, modified_at = ?
+                        WHERE id = ?
+                        """,
+                        (utc_now_iso(), target_id),
+                    )
                 conn.execute(
                     "UPDATE memberships SET org_role = ?, modified_at = ? WHERE user_id = ? AND org_id = ? AND is_active = 1",
                     (org_role, utc_now_iso(), target_id, org_id),
+                )
+        else:
+            if mfa_required_value:
+                conn.execute(
+                    "UPDATE users SET mfa_required = ? WHERE username = ?",
+                    (1, username),
+                )
+            else:
+                conn.execute(
+                    "UPDATE users SET mfa_required = 0, mfa_enabled = 0, mfa_secret = NULL, mfa_pending_secret = NULL WHERE username = ?",
+                    (username,),
                 )
     else:
         # Legacy schema
@@ -5499,6 +6687,16 @@ def edit_user(
                     "UPDATE users SET first_name = ?, surname = ?, role = ?, radiologist_name = ? WHERE username = ?",
                     (first_name.strip(), surname.strip(), role, radiologist_name, username)
                 )
+        if mfa_required_value:
+            conn.execute(
+                "UPDATE users SET mfa_required = ? WHERE username = ?",
+                (1, username),
+            )
+        else:
+            conn.execute(
+                "UPDATE users SET mfa_required = 0, mfa_enabled = 0, mfa_secret = NULL, mfa_pending_secret = NULL WHERE username = ?",
+                (username,),
+            )
     
     conn.commit()
     conn.close()
@@ -7301,7 +8499,7 @@ def account_page(request: Request, msg: str = "", error: str = ""):
 
     conn = get_db()
     db_user = conn.execute(
-        "SELECT id, username, first_name, surname, email FROM users WHERE username = ?",
+        "SELECT id, username, first_name, surname, email, COALESCE(mfa_enabled, 0) AS mfa_enabled, COALESCE(mfa_required, 0) AS mfa_required, mfa_pending_secret FROM users WHERE username = ?",
         (user["username"],)
     ).fetchone()
     conn.close()
@@ -7331,21 +8529,72 @@ def account_page(request: Request, msg: str = "", error: str = ""):
     elif error == "pw_short":
         error_html = '<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;padding:12px 16px;border-radius:8px;margin-bottom:16px;">⚠️ New password must be at least 8 characters.</div>'
 
-    html = f"""<!DOCTYPE html>
+    msg_map = {
+        "saved": "Your profile has been updated.",
+        "pw_changed": "Password changed successfully.",
+        "mfa_required": "Authenticator-based MFA is required for admin access. Complete setup below to continue.",
+        "mfa_started": "Authenticator setup started. Add the account in your app, then enter the 6-digit code below to finish.",
+        "mfa_enabled": "Authenticator-based MFA is now enabled for your account.",
+        "mfa_disabled": "Authenticator-based MFA has been disabled.",
+        "mfa_managed": "MFA is currently managed by your administrator and cannot be disabled here.",
+    }
+    msg_text = msg_map.get(msg, "")
+    msg_html = (
+        f'<div style="background:rgba(74,222,128,0.12);border:1px solid rgba(74,222,128,0.3);color:#4ade80;padding:12px 16px;border-radius:8px;margin-bottom:16px;">{html.escape(msg_text)}</div>'
+        if msg_text else ""
+    )
+    if msg == "mfa_started":
+        msg_html = f'<div style="background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.3);color:#93c5fd;padding:12px 16px;border-radius:8px;margin-bottom:16px;">{html.escape(msg_text)}</div>'
+    elif msg == "mfa_required":
+        msg_html = f'<div style="background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);color:#fde68a;padding:12px 16px;border-radius:8px;margin-bottom:16px;">{html.escape(msg_text)}</div>'
+
+    error_map = {
+        "email_taken": "That email address is already in use by another account.",
+        "pw_mismatch": "New passwords do not match. Please try again.",
+        "pw_wrong": "Current password is incorrect.",
+        "pw_short": "New password must be at least 8 characters.",
+        "mfa_invalid": "The authentication code was not valid. Please try again.",
+        "mfa_pw_wrong": "Your current password was incorrect.",
+        "mfa_managed": "MFA is currently managed by your administrator and cannot be disabled here.",
+    }
+    error_text = error_map.get(error, "")
+    error_html = (
+        f'<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;padding:12px 16px;border-radius:8px;margin-bottom:16px;">{html.escape(error_text)}</div>'
+        if error_text else ""
+    )
+
+    mfa_enabled = bool(db_user.get("mfa_enabled"))
+    mfa_required = bool(db_user.get("mfa_required"))
+    mfa_pending_secret = db_user.get("mfa_pending_secret") or ""
+    mfa_uri = build_totp_uri(mfa_pending_secret, db_user["username"]) if mfa_pending_secret else ""
+    mfa_qr_data_uri = build_totp_qr_data_uri(mfa_uri) if mfa_uri else ""
+
+    page_html = f"""<!DOCTYPE html>
 <html>
 <head>
     <title>My Account</title>
     <link rel="stylesheet" href="/static/css/site.css">
     <style>
-        .account-wrap {{ max-width: 600px; margin: 0 auto; padding: 40px 20px; }}
-        .page-title {{ font-size: 2em; color: white; margin-bottom: 6px; }}
-        .page-sub {{ color: var(--muted); margin-bottom: 28px; }}
+        .account-wrap {{ max-width: 1400px; width: 95%; margin: 0 auto; padding: 14px 20px 32px; }}
+        .account-shell {{ max-width: 1280px; margin: 0 auto; }}
+        .page-title {{ font-size: 2em; color: white; margin: 0 0 6px 0; }}
+        .page-sub {{ color: var(--muted); margin: 0 0 28px 0; }}
         .card {{
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: 10px;
             padding: 24px;
             margin-bottom: 24px;
+        }}
+        .cards-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            align-items: start;
+            margin-bottom: 24px;
+        }}
+        .cards-grid .card {{
+            margin-bottom: 0;
         }}
         .card h3 {{ margin-top: 0; color: rgba(255,255,255,0.9); font-size: 1.15em; }}
         .form-group {{ display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px; }}
@@ -7359,8 +8608,19 @@ def account_page(request: Request, msg: str = "", error: str = ""):
             font-size: 0.95em;
         }}
         .form-group input:focus {{ outline: none; border-color: rgba(31,111,235,0.6); }}
-        .topbar {{ display: flex; gap: 10px; margin-bottom: 24px; }}
+        .topbar {{ display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 24px; }}
+        .topbar-actions {{ display: flex; gap: 10px; align-items: center; }}
+        .profile-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
         .read-only {{ color: rgba(255,255,255,0.5); font-size: 0.92em; padding: 8px 0; }}
+        @media (max-width: 900px) {{
+            .account-wrap {{ width: 100%; padding: 14px 12px 24px; box-sizing: border-box; }}
+            .profile-grid {{ grid-template-columns: 1fr; }}
+            .cards-grid {{ grid-template-columns: 1fr; }}
+        }}
+        @media (max-width: 640px) {{
+            .topbar {{ flex-direction: column; align-items: stretch; }}
+            .topbar-actions {{ width: 100%; justify-content: space-between; }}
+        }}
     </style>
 </head>
 <body>
@@ -7373,20 +8633,24 @@ def account_page(request: Request, msg: str = "", error: str = ""):
     </button>
 </div>
 <div class="account-wrap">
+    <div class="account-shell">
     <div class="topbar">
         <a href="{back_url}" class="btn secondary">&larr; Back</a>
-        <a href="/logout" class="btn secondary">Logout</a>
+        <div class="topbar-actions">
+            <a href="/logout" class="btn secondary">Logout</a>
+        </div>
     </div>
     <h1 class="page-title">My Account</h1>
     <p class="page-sub">Edit your personal details. Role and permissions are managed by your administrator.</p>
 
     {msg_html}{error_html}
 
+    <div class="cards-grid">
     <!-- Profile Details -->
     <div class="card">
         <h3>Personal Details</h3>
         <form method="POST" action="/account/edit">
-            <div style="display:flex;gap:16px;">
+            <div class="profile-grid">
                 <div class="form-group" style="flex:1;">
                     <label>First Name</label>
                     <input type="text" name="first_name" value="{db_user.get('first_name') or ''}">
@@ -7428,12 +8692,67 @@ def account_page(request: Request, msg: str = "", error: str = ""):
             <button type="submit" class="btn btn-primary">Change Password</button>
         </form>
     </div>
+    </div>
+
+    <div class="card">
+        <h3>Authenticator App MFA</h3>
+        <p class="page-sub" style="margin-bottom:16px;">Use Microsoft Authenticator, Google Authenticator, or another TOTP app for a second sign-in step.</p>
+        {('<div class="read-only" style="margin-bottom:12px;color:#fde68a;">Your organisation currently requires MFA for this account.</div>' if mfa_required else '')}
+        {(
+            f'''
+        <div class="read-only" style="margin-bottom:12px;color:#4ade80;">Authenticator-based MFA is enabled for this account.</div>
+        <form method="POST" action="/account/mfa/disable">
+            <div class="form-group">
+                <label>Current Password</label>
+                <input type="password" name="current_password" required autocomplete="current-password">
+            </div>
+            <div class="form-group">
+                <label>Authenticator Code</label>
+                <input type="text" name="code" inputmode="numeric" pattern="[0-9]{{6}}" maxlength="6" placeholder="123456" required>
+            </div>
+            {"<button type=\"submit\" class=\"btn secondary\">Disable MFA</button>" if not mfa_required else "<div class=\"read-only\" style=\"color:#93c5fd;\">MFA is required for this account and can only be turned off by an administrator.</div>"}
+        </form>
+            '''
+            if mfa_enabled else
+            (
+                f'''
+        <div class="read-only" style="margin-bottom:12px;">Setup is in progress. Add this secret to your authenticator app and then verify with a current 6-digit code.</div>
+        <div style="display:flex;justify-content:center;margin:8px 0 18px;">
+            <img src="{mfa_qr_data_uri}" alt="MFA QR code" style="background:#fff;padding:10px;border-radius:10px;max-width:220px;width:100%;height:auto;">
+        </div>
+        <div class="form-group">
+            <label>Manual Setup Secret</label>
+            <input type="text" value="{mfa_pending_secret}" readonly>
+        </div>
+        <div class="form-group">
+            <label>Setup URI</label>
+            <input type="text" value="{html.escape(mfa_uri, quote=True)}" readonly>
+        </div>
+        <form method="POST" action="/account/mfa/enable">
+            <div class="form-group">
+                <label>6-Digit Code From App</label>
+                <input type="text" name="code" inputmode="numeric" pattern="[0-9]{{6}}" maxlength="6" placeholder="123456" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Enable MFA</button>
+        </form>
+                '''
+                if mfa_pending_secret else
+                '''
+        <div class="read-only" style="margin-bottom:12px;">Authenticator-based MFA is currently disabled.</div>
+        <form method="POST" action="/account/mfa/begin">
+            <button type="submit" class="btn btn-primary">Set Up Authenticator App</button>
+        </form>
+                '''
+            )
+        )}
+    </div>
+    </div>
 </div>
 <script src="/static/js/session.js"></script>
 </body>
 </html>"""
 
-    return HTMLResponse(content=html)
+    return HTMLResponse(content=page_html)
 
 
 @app.post("/account/edit")
@@ -7512,23 +8831,7 @@ def account_change_password(
     if len(new_password) < 8:
         return RedirectResponse(url="/account?error=pw_short", status_code=303)
 
-    # Verify current password
-    conn = get_db()
-    db_user = conn.execute(
-        "SELECT salt_hex, password_hash FROM users WHERE username = ?", (username,)
-    ).fetchone()
-    conn.close()
-
-    if not db_user or not db_user["salt_hex"]:
-        return RedirectResponse(url="/account?error=pw_wrong", status_code=303)
-
-    try:
-        salt = bytes.fromhex(db_user["salt_hex"])
-        expected_hash = db_user["password_hash"]
-        actual_hash = hash_password(current_password, salt).hex()
-        if actual_hash != expected_hash:
-            return RedirectResponse(url="/account?error=pw_wrong", status_code=303)
-    except Exception:
+    if not verify_current_password(username, current_password):
         return RedirectResponse(url="/account?error=pw_wrong", status_code=303)
 
     # Set new password
@@ -7544,6 +8847,98 @@ def account_change_password(
     conn.close()
 
     return RedirectResponse(url="/account?msg=pw_changed", status_code=303)
+
+
+@app.post("/account/mfa/begin")
+def account_mfa_begin(request: Request):
+    user = get_session_user(request)
+    if not user:
+        return RedirectResponse(url="/login?expired=1", status_code=303)
+
+    secret = generate_totp_secret()
+    conn = get_db()
+    conn.execute(
+        "UPDATE users SET mfa_pending_secret = ?, modified_at = ? WHERE username = ?",
+        (secret, utc_now_iso(), user["username"]),
+    )
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/account?msg=mfa_started", status_code=303)
+
+
+@app.post("/account/mfa/enable")
+def account_mfa_enable(request: Request, code: str = Form(...)):
+    user = get_session_user(request)
+    if not user:
+        return RedirectResponse(url="/login?expired=1", status_code=303)
+
+    conn = get_db()
+    row = conn.execute(
+        "SELECT mfa_pending_secret FROM users WHERE username = ?",
+        (user["username"],),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return RedirectResponse(url="/login?expired=1", status_code=303)
+
+    pending_secret = row["mfa_pending_secret"] if isinstance(row, dict) else row[0]
+    if not verify_totp_code(pending_secret, code):
+        conn.close()
+        return RedirectResponse(url="/account?error=mfa_invalid", status_code=303)
+
+    conn.execute(
+        "UPDATE users SET mfa_secret = ?, mfa_pending_secret = NULL, mfa_enabled = 1, modified_at = ? WHERE username = ?",
+        (pending_secret, utc_now_iso(), user["username"]),
+    )
+    conn.commit()
+    conn.close()
+    user["mfa_enabled"] = 1
+    request.session["user"] = user
+    return RedirectResponse(url="/account?msg=mfa_enabled", status_code=303)
+
+
+@app.post("/account/mfa/disable")
+def account_mfa_disable(
+    request: Request,
+    current_password: str = Form(...),
+    code: str = Form(...),
+):
+    user = get_session_user(request)
+    if not user:
+        return RedirectResponse(url="/login?expired=1", status_code=303)
+
+    if not verify_current_password(user["username"], current_password):
+        return RedirectResponse(url="/account?error=mfa_pw_wrong", status_code=303)
+
+    conn = get_db()
+    row = conn.execute(
+        "SELECT mfa_secret, COALESCE(mfa_required, 0) AS mfa_required FROM users WHERE username = ?",
+        (user["username"],),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return RedirectResponse(url="/login?expired=1", status_code=303)
+
+    mfa_secret = row["mfa_secret"] if isinstance(row, dict) else row[0]
+    mfa_required = int(row["mfa_required"] if isinstance(row, dict) else row[1] or 0)
+    if mfa_required:
+        conn.close()
+        return RedirectResponse(url="/account?error=mfa_managed", status_code=303)
+    if not verify_totp_code(mfa_secret, code):
+        conn.close()
+        return RedirectResponse(url="/account?error=mfa_invalid", status_code=303)
+
+    conn.execute(
+        "UPDATE users SET mfa_secret = NULL, mfa_pending_secret = NULL, mfa_enabled = 0, modified_at = ? WHERE username = ?",
+        (utc_now_iso(), user["username"]),
+    )
+    conn.commit()
+    conn.close()
+    user["mfa_enabled"] = 0
+    request.session["user"] = user
+    return RedirectResponse(url="/account?msg=mfa_disabled", status_code=303)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")

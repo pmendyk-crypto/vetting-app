@@ -3,6 +3,8 @@
 ## Overview
 This is a **FastAPI-based web application** for managing medical case vetting and radiologist workflows. It uses SQLite/PostgreSQL for data storage and Jinja2 templates for the frontend.
 
+The current production emphasis is a stable manual/admin-led workflow. A planned phase 2 extension introduces a shared draft-case intake model so secure email, portal referrals, and external system integrations can all feed the same review and approval path.
+
 ---
 
 ## 1. Core Technology Stack
@@ -165,7 +167,7 @@ RADIOLOGIST QUEUE (/radiologist)
 
 ### D. CASE SUBMISSION PAGE
 
-```
+``` 
 CASE SUBMISSION (/submit)
 ├── submit.html
 ├── Form for submitting new cases
@@ -186,6 +188,31 @@ CASE SUBMISSION (/submit)
    └── submitted.html
    └── Show confirmation & case ID
 ```
+
+### D2. PLANNED DRAFT INTAKE FLOW
+
+```
+INTAKE CHANNELS
+├── Secure email inbox
+├── Portal referral form
+└── RIS / PACS / HL7-style external message
+
+NORMALIZATION
+├── Parse inbound payload
+├── Preserve original attachment/source metadata
+└── Create draft case for review
+
+ADMIN DRAFT REVIEW
+├── Validate extracted fields
+├── Amend details if needed
+├── Approve into active workflow
+└── Reject / hold if incomplete
+```
+
+**Design intent:**
+- Different intake channels should converge on a single draft-case review model.
+- Automation should prepare work for admin review rather than bypass review.
+- This intake architecture is positioned as a phase 2 enhancement after the core workflow is stable.
 
 ---
 

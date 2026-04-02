@@ -28,3 +28,4 @@ itsdangerous
 SQLAlchemy==2.0.20
 psycopg2-binary==2.9.6
 azure-storage-blob==12.18.3
+qrcode==8.2

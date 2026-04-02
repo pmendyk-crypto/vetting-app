@@ -1,6 +1,6 @@
 # Technical Overview (Living Document)
 
-Last updated: 2026-03-08
+Last updated: 2026-04-02
 Owner: Product/Engineering
 Status: Active
 
@@ -15,6 +15,7 @@ Primary outcomes:
 - Role-based clinical workflow for admins and radiologists.
 - Case status lifecycle visibility and export.
 - Organization-aware data isolation model (partially enabled multi-tenant model).
+- Clear path to phase 2 intake automation through draft-case review.
 
 ## 2. Technology Stack
 Backend:
@@ -102,6 +103,13 @@ Reporting and outputs:
 - CSV export (`/admin.csv`).
 - PDF generation (`/case/{case_id}/pdf`).
 
+Planned phase 2 intake flow:
+1. Referral arrives through secure email, portal submission, or external system message.
+2. Intake adapter parses payload and stores original source content/attachments.
+3. Normalization layer maps inbound fields into a common draft-case model.
+4. Admin reviews, amends, and approves the draft case.
+5. Approved draft becomes a normal active case and continues through assignment/vetting.
+
 ## 8. Referral Parser Trial Feature
 Feature path:
 - `/submit/referral-trial`
@@ -114,6 +122,10 @@ Capabilities:
 
 Known limitation:
 - OCR for scanned image-heavy documents is not fully enabled for production workflow.
+
+Strategic fit:
+- Current parser capability aligns with a future draft-case intake workflow.
+- Parser outputs should eventually feed a draft review queue rather than bypass manual validation.
 
 ## 9. Configuration (Environment Variables)
 Key variables:
@@ -168,10 +180,12 @@ Medium term (1-2 quarters):
 - Split monolith into domain routers/services.
 - Move fully to migration-led schema lifecycle.
 - Complete and test true multi-tenant router integration.
+- Add draft-case status handling and source metadata to support intake expansion.
 
 Long term:
 - Add structured observability (logs, metrics, traces).
 - Expand parser capability with production-grade OCR pipeline.
+- Add adapter-based intake channels for secure email, portal referral forms, and RIS/PACS or HL7-style system messages.
 
 ## 14. Independent Reviewer Checklist
 Use this checklist for external IT review:
@@ -183,6 +197,7 @@ Use this checklist for external IT review:
 - Scalability bottlenecks in monolith and DB access layer.
 
 ## 15. Update Log
+- 2026-04-02: Added draft-case intake roadmap and multi-channel referral architecture direction.
 - 2026-03-08: Initial living version created.
 
 ## 16. Update Template (append on each revision)

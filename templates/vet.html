@@ -33,14 +33,6 @@
             color: rgba(255, 255, 255, 0.98);
         }
 
-        .brand-logo {
-            width: 52px;
-            height: 52px;
-            border-radius: 8px;
-            object-fit: cover;
-            flex: 0 0 auto;
-        }
-
         .org-label {
             color: rgba(255, 255, 255, 0.6);
             font-size: 12px;
@@ -621,11 +613,6 @@
                 align-items: flex-start;
             }
 
-            .brand-logo {
-                width: 44px;
-                height: 44px;
-            }
-
             .header-actions {
                 width: 100%;
                 flex-direction: column;
@@ -678,8 +665,6 @@
     <div class="vet-container">
         <div class="vet-header">
             <div style="display: flex; align-items: center; gap: 16px;">
-                 <img class="brand-logo" src="/static/images/logo-light.png" alt="Lumos Lab"
-                     onerror="this.style.display='none';">
                 <div>
                     <h1>Vetting Case</h1>
                     {% if org_name %}

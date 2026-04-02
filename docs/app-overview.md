@@ -12,6 +12,12 @@ It supports admin and radiologist workflows, document/file handling, reporting e
 5. Admins monitor queues, edit/reopen/reassign cases, and export reports (CSV/PDF).
 6. Superuser/tenant routes exist for organization-level management and governance.
 
+## Workflow (Planned Phase 2 Intake Expansion)
+1. Referrals may arrive through secure email, portal submission, or external system integration.
+2. Intake adapters normalize inbound payloads into a shared draft-case structure.
+3. Admin reviews, amends, and approves draft cases before they become active cases.
+4. Approved cases then follow the standard assignment, vetting, and reporting workflow.
+
 ## Tech Stack
 - Backend: FastAPI + Starlette middleware
 - Frontend: Jinja2 templates + static CSS/JS
@@ -52,3 +58,9 @@ before expanding the platform further.
 - Referral parser trial
 - iRefer search
 - Radiologist email notifications
+
+## Future Intake Direction
+- Secure email-to-draft intake for approved client workflows
+- Structured portal referral submission
+- RIS/PACS or HL7-style external message intake
+- Shared draft review queue with source-aware audit trail

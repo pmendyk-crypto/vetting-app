@@ -6,170 +6,64 @@
     <title>Edit Organisation - RadFlow</title>
     <link rel="stylesheet" href="/static/css/site.css">
     <style>
-        .edit-shell {
-            max-width: 1080px;
-            margin: 0 auto;
-            padding: 24px;
-        }
-
-        .page-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 18px;
-            margin-bottom: 26px;
-        }
-
-        .page-title {
-            margin: 0 0 8px 0;
-            font-size: 30px;
-            color: rgba(255, 255, 255, 0.98);
-        }
-
-        .page-subtitle {
-            margin: 0;
-            max-width: 720px;
-            color: rgba(255, 255, 255, 0.68);
-            line-height: 1.5;
-        }
-
-        .layout {
-            display: grid;
-            grid-template-columns: 1.15fr 0.85fr;
-            gap: 24px;
-            align-items: start;
-        }
-
-        .panel {
-            background: var(--card-bg);
-            border: var(--card-border);
-            border-radius: 14px;
-            padding: 22px;
-        }
-
-        .panel h2 {
-            margin: 0 0 8px 0;
-            color: #fff;
-            font-size: 22px;
-        }
-
-        .panel-copy {
-            margin: 0 0 18px 0;
-            color: rgba(255, 255, 255, 0.68);
-            line-height: 1.5;
-            font-size: 14px;
-        }
-
-        .notice {
-            border-radius: 10px;
-            padding: 12px 14px;
-            margin-bottom: 16px;
-            font-size: 14px;
-            line-height: 1.45;
-        }
-
-        .notice.success {
-            background: rgba(34, 197, 94, 0.12);
-            border: 1px solid rgba(34, 197, 94, 0.28);
-            color: #bbf7d0;
-        }
-
-        .notice.error {
-            background: rgba(248, 113, 113, 0.12);
-            border: 1px solid rgba(248, 113, 113, 0.28);
-            color: #fecaca;
-        }
-
-        .form-stack {
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
-
-        .field {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .field label {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: rgba(255, 255, 255, 0.62);
-        }
-
-        .field input,
-        .field select {
-            width: 100%;
-            box-sizing: border-box;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-
-        .stat-box {
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            padding: 14px;
-            background: rgba(7, 19, 58, 0.28);
-        }
-
-        .stat-label {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: rgba(255, 255, 255, 0.56);
-            margin-bottom: 6px;
-        }
-
-        .stat-value {
-            color: #fff;
-            font-size: 24px;
-            font-weight: 700;
-        }
-
-        .meta-list {
-            display: grid;
-            gap: 14px;
-            margin-top: 18px;
-        }
-
-        .meta-item {
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-            padding-top: 14px;
-        }
-
-        .meta-k {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: rgba(255, 255, 255, 0.56);
-            margin-bottom: 5px;
-        }
-
-        .meta-v {
-            color: rgba(255, 255, 255, 0.92);
-            line-height: 1.45;
-        }
-
-        @media (max-width: 980px) {
-            .layout {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 720px) {
-            .page-top {
-                flex-direction: column;
-            }
-
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
+        .edit-shell { max-width: 1320px; margin: 0 auto; padding: 24px; }
+        .page-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 26px; }
+        .page-title { margin: 0 0 8px 0; font-size: 30px; color: rgba(255, 255, 255, 0.98); }
+        .page-subtitle { margin: 0; max-width: 760px; color: rgba(255, 255, 255, 0.68); line-height: 1.5; }
+        .button-group { display: flex; gap: 10px; flex-wrap: wrap; }
+        .button-group .btn { min-width: 180px; justify-content: center; }
+        .layout { display: grid; grid-template-columns: minmax(320px, 420px) minmax(0, 1fr); gap: 24px; align-items: start; }
+        .stack { display: grid; gap: 24px; }
+        .panel { background: var(--card-bg); border: var(--card-border); border-radius: 14px; padding: 22px; }
+        .panel h2 { margin: 0 0 8px 0; color: #fff; font-size: 22px; }
+        .panel-copy { margin: 0 0 18px 0; color: rgba(255, 255, 255, 0.68); line-height: 1.5; font-size: 14px; }
+        .notice { border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 14px; line-height: 1.45; }
+        .notice.success { background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.28); color: #bbf7d0; }
+        .notice.error { background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.28); color: #fecaca; }
+        .form-stack { display: flex; flex-direction: column; gap: 14px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .field { display: flex; flex-direction: column; gap: 6px; }
+        .field label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.62); }
+        .field input, .field select { width: 100%; box-sizing: border-box; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .stat-box { border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px; background: rgba(7, 19, 58, 0.28); }
+        .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.56); margin-bottom: 6px; }
+        .stat-value { color: #fff; font-size: 24px; font-weight: 700; }
+        .meta-list { display: grid; gap: 14px; margin-top: 18px; }
+        .meta-item { border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 14px; }
+        .meta-k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.56); margin-bottom: 5px; }
+        .meta-v { color: rgba(255, 255, 255, 0.92); line-height: 1.45; }
+        .users-table-wrap { overflow-x: auto; }
+        .users-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .users-table th, .users-table td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; vertical-align: top; }
+        .users-table th { color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; }
+        .users-table td { color: rgba(255,255,255,0.9); font-size: 14px; }
+        .role-pill { display: inline-flex; align-items: center; justify-content: center; padding: 5px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; background: rgba(97, 168, 255, 0.14); color: #bfdbfe; border: 1px solid rgba(97, 168, 255, 0.24); }
+        .status-text { font-size: 12px; color: rgba(255,255,255,0.72); margin-top: 6px; }
+        .divider { height: 1px; background: rgba(255,255,255,0.08); }
+        .inline-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .inline-actions .btn { min-width: 170px; justify-content: center; }
+        .action-cell { white-space: nowrap; width: 150px; }
+        .action-cell .btn { min-width: 120px; justify-content: center; }
+        .edit-trigger { min-width: 120px; }
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(5, 10, 20, 0.72); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 1000; }
+        .modal-backdrop.open { display: flex; }
+        .modal-card { width: min(760px, 100%); max-height: calc(100vh - 48px); overflow: auto; border: 1px solid rgba(255,255,255,0.12); border-radius: 18px; background: #162041; box-shadow: 0 24px 60px rgba(0,0,0,0.38); padding: 24px; }
+        .modal-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+        .modal-title { margin: 0; color: #fff; font-size: 24px; }
+        .modal-copy { margin: 6px 0 0; color: rgba(255,255,255,0.68); }
+        .modal-close { min-width: 120px; }
+        @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+        @media (max-width: 760px) {
+            .page-top { flex-direction: column; }
+            .form-row, .stats-grid { grid-template-columns: 1fr; }
+            .button-group, .inline-actions { width: 100%; }
+            .button-group .btn, .inline-actions .btn { width: 100%; min-width: 0; }
+            .users-table { min-width: 760px; }
+            .modal-backdrop { padding: 12px; }
+            .modal-card { padding: 18px; }
+            .modal-top { flex-direction: column; }
+            .modal-close { width: 100%; }
         }
     </style>
 </head>
@@ -179,7 +73,7 @@
             <div>
                 <h1 class="page-title">Edit Organisation</h1>
                 <p class="page-subtitle">
-                    Update the core identity of this organisation. This first version focuses on the organisation record itself so we keep the owner workflow simple and reliable.
+                    Update the organisation itself and manage everyone inside it from one place.
                 </p>
             </div>
             <div class="button-group">
@@ -188,87 +82,385 @@
             </div>
         </div>
 
+        {% if saved %}
+        <div class="notice success">Organisation updated successfully.</div>
+        {% endif %}
+
+        {% if notice == 'user_created' %}
+        <div class="notice success">User added to the organisation.</div>
+        {% elif notice == 'user_updated' %}
+        <div class="notice success">User profile updated.</div>
+        {% elif notice == 'password_reset' %}
+        <div class="notice success">Password reset saved.</div>
+        {% elif notice == 'user_deleted' %}
+        <div class="notice success">User deleted from the organisation.</div>
+        {% elif notice == 'institution_deleted' %}
+        <div class="notice success">Institution deleted from the organisation.</div>
+        {% endif %}
+
+        {% if error %}
+        <div class="notice error">{{ error }}</div>
+        {% endif %}
+
         <div class="layout">
-            <section class="panel">
-                <h2>{{ organisation.name }}</h2>
-                <p class="panel-copy">
-                    Edit the organisation display name, code, and active status. More advanced organisation settings like report branding can sit here next.
-                </p>
+            <div class="stack">
+                <section class="panel">
+                    <h2>{{ organisation.name }}</h2>
+                    <p class="panel-copy">
+                        Edit the organisation display name, code, and active status.
+                    </p>
 
-                {% if saved %}
-                <div class="notice success">Organisation updated successfully.</div>
-                {% endif %}
+                    <form method="post" action="/owner/organisations/{{ organisation.id }}" class="form-stack">
+                        <div class="field">
+                            <label for="name">Organisation Name</label>
+                            <input id="name" name="name" type="text" value="{{ organisation.name }}" required>
+                        </div>
 
-                {% if error %}
-                <div class="notice error">{{ error }}</div>
-                {% endif %}
+                        <div class="field">
+                            <label for="slug">Organisation Code / Slug</label>
+                            <input id="slug" name="slug" type="text" value="{{ organisation.slug }}" required>
+                        </div>
 
-                <form method="post" action="/owner/organisations/{{ organisation.id }}" class="form-stack">
-                    <div class="field">
-                        <label for="name">Organisation Name</label>
-                        <input id="name" name="name" type="text" value="{{ organisation.name }}" required>
+                        <div class="field">
+                            <label for="is_active">Status</label>
+                            <select id="is_active" name="is_active">
+                                <option value="1" {% if organisation.is_active %}selected{% endif %}>Active</option>
+                                <option value="0" {% if not organisation.is_active %}selected{% endif %}>Inactive</option>
+                            </select>
+                        </div>
+
+                        <div class="inline-actions">
+                            <button type="submit" class="btn primary">Save Organisation</button>
+                            <button type="submit" class="btn secondary" formaction="/owner/organisations/{{ organisation.id }}/delete" formmethod="post" onclick="return confirm('Delete this organisation and all of its users, institutions, cases, and protocols?');">Delete Organisation</button>
+                        </div>
+                    </form>
+                </section>
+
+                <aside class="panel">
+                    <h2>Organisation Snapshot</h2>
+                    <p class="panel-copy">
+                        A quick summary of the current organisation footprint.
+                    </p>
+
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-label">Admins</div>
+                            <div class="stat-value">{{ organisation.admin_count or 0 }}</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Radiologists</div>
+                            <div class="stat-value">{{ organisation.radiologist_count or 0 }}</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Users</div>
+                            <div class="stat-value">{{ organisation.user_count or 0 }}</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Institutions</div>
+                            <div class="stat-value">{{ organisation.institution_count or 0 }}</div>
+                        </div>
                     </div>
 
-                    <div class="field">
-                        <label for="slug">Organisation Code / Slug</label>
-                        <input id="slug" name="slug" type="text" value="{{ organisation.slug }}" required>
+                    <div class="meta-list">
+                        <div class="meta-item">
+                            <div class="meta-k">Organisation ID</div>
+                            <div class="meta-v">{{ organisation.id }}</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-k">Created</div>
+                            <div class="meta-v">{{ organisation.created_at | display_datetime }}</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-k">Current Status</div>
+                            <div class="meta-v">{{ 'Active' if organisation.is_active else 'Inactive' }}</div>
+                        </div>
                     </div>
+                </aside>
+            </div>
 
-                    <div class="field">
-                        <label for="is_active">Status</label>
-                        <select id="is_active" name="is_active">
-                            <option value="1" {% if organisation.is_active %}selected{% endif %}>Active</option>
-                            <option value="0" {% if not organisation.is_active %}selected{% endif %}>Inactive</option>
-                        </select>
-                    </div>
+            <div class="stack">
+                <section class="panel">
+                    <h2>Institutions</h2>
+                    <p class="panel-copy">
+                        Review and delete institutions that belong to this organisation.
+                    </p>
 
-                    <div class="button-group">
-                        <button type="submit" class="btn primary">Save Organisation</button>
+                    {% if org_institutions %}
+                    <div class="users-table-wrap" style="margin-bottom:18px;">
+                        <table class="users-table">
+                            <thead>
+                                <tr>
+                                    <th>Institution</th>
+                                    <th>SLA</th>
+                                    <th>Cases</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for inst in org_institutions %}
+                                <tr>
+                                    <td>{{ inst.name }}</td>
+                                    <td>{{ inst.sla_hours or 48 }}h</td>
+                                    <td>{{ inst.case_count or 0 }}</td>
+                                    <td>
+                                        <form method="post" action="/owner/organisations/{{ organisation.id }}/institutions/{{ inst.id }}/delete" onsubmit="return confirm('Delete this institution? Existing cases will be kept but detached from the institution.');">
+                                            <button type="submit" class="btn secondary">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-                </form>
-            </section>
+                    {% else %}
+                    <p class="panel-copy">No institutions are linked to this organisation yet.</p>
+                    {% endif %}
+                </section>
 
-            <aside class="panel">
-                <h2>Organisation Snapshot</h2>
-                <p class="panel-copy">
-                    A quick summary of the current organisation footprint. This helps you sanity-check what you are editing before we add deeper organisation management.
-                </p>
+                <section class="panel">
+                    <h2>Add User</h2>
+                    <p class="panel-copy">
+                        Create a new account directly inside this organisation.
+                    </p>
 
-                <div class="stats-grid">
-                    <div class="stat-box">
-                        <div class="stat-label">Admins</div>
-                        <div class="stat-value">{{ organisation.admin_count or 0 }}</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Radiologists</div>
-                        <div class="stat-value">{{ organisation.radiologist_count or 0 }}</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Users</div>
-                        <div class="stat-value">{{ organisation.user_count or 0 }}</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Institutions</div>
-                        <div class="stat-value">{{ organisation.institution_count or 0 }}</div>
-                    </div>
-                </div>
+                    <form method="post" action="/owner/organisations/{{ organisation.id }}/users/add" class="form-stack">
+                        <div class="form-row">
+                            <div class="field">
+                                <label for="username">Username</label>
+                                <input id="username" name="username" type="text" required>
+                            </div>
+                            <div class="field">
+                                <label for="password">Password</label>
+                                <input id="password" name="password" type="password" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="field">
+                                <label for="first_name">First Name</label>
+                                <input id="first_name" name="first_name" type="text">
+                            </div>
+                            <div class="field">
+                                <label for="surname">Surname</label>
+                                <input id="surname" name="surname" type="text">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="field">
+                                <label for="email">Email</label>
+                                <input id="email" name="email" type="email">
+                            </div>
+                            <div class="field">
+                                <label for="role">Role</label>
+                                <select id="role" name="role" required>
+                                    <option value="admin">Admin</option>
+                                    <option value="radiologist">Practitioner</option>
+                                    <option value="user">Coordinator</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="field">
+                                <label for="gmc">GMC</label>
+                                <input id="gmc" name="gmc" type="text">
+                            </div>
+                            <div class="field">
+                                <label for="speciality">Speciality</label>
+                                <input id="speciality" name="speciality" type="text">
+                            </div>
+                        </div>
+                        <div class="form-row single">
+                            <div class="field">
+                                <label style="display:flex;align-items:center;gap:10px;">
+                                    <input name="mfa_required" type="checkbox" value="1">
+                                    <span>Require MFA setup for this user</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="inline-actions">
+                            <button type="submit" class="btn primary">Add User</button>
+                        </div>
+                    </form>
+                </section>
 
-                <div class="meta-list">
-                    <div class="meta-item">
-                        <div class="meta-k">Organisation ID</div>
-                        <div class="meta-v">{{ organisation.id }}</div>
+                <section class="panel">
+                    <h2>Organisation Users</h2>
+                    <p class="panel-copy">
+                        Edit existing users and reset passwords without leaving the owner workspace.
+                    </p>
+
+                    {% if org_users %}
+                    <div class="users-table-wrap">
+                        <table class="users-table">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>MFA</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for org_user in org_users %}
+                                <tr>
+                                    <td>{{ org_user.username }}</td>
+                                    <td>{{ org_user.first_name or '' }} {{ org_user.surname or '' }}</td>
+                                    <td>{{ org_user.email or 'N/A' }}</td>
+                                    <td><span class="role-pill">{{ org_user.role_label }}</span></td>
+                                    <td>
+                                        {% if org_user.mfa_required and org_user.mfa_enabled %}
+                                        Required and active
+                                        {% elif org_user.mfa_required %}
+                                        Required
+                                        {% elif org_user.mfa_enabled %}
+                                        Active
+                                        {% else %}
+                                        Off
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ 'Active' if org_user.is_active else 'Inactive' }}</td>
+                                    <td class="action-cell">
+                                        <button
+                                            type="button"
+                                            class="btn secondary edit-trigger"
+                                            onclick='openUserEditor({{ org_user.id }}, {{ org_user.username|tojson }}, {{ (org_user.first_name or "")|tojson }}, {{ (org_user.surname or "")|tojson }}, {{ (org_user.email or "")|tojson }}, {{ org_user.org_role|tojson }}, {{ (org_user.gmc or "")|tojson }}, {{ (org_user.specialty or "")|tojson }}, {{ 1 if org_user.is_active else 0 }}, {{ (org_user.display_name or org_user.username)|tojson }}, {{ 1 if org_user.mfa_required else 0 }})'
+                                        >Edit user</button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-                    <div class="meta-item">
-                        <div class="meta-k">Created</div>
-                        <div class="meta-v">{{ organisation.created_at | display_datetime }}</div>
-                    </div>
-                    <div class="meta-item">
-                        <div class="meta-k">Current Status</div>
-                        <div class="meta-v">{{ 'Active' if organisation.is_active else 'Inactive' }}</div>
-                    </div>
-                </div>
-            </aside>
+                    {% else %}
+                    <p class="panel-copy" style="margin-bottom:0;">No users are linked to this organisation yet.</p>
+                    {% endif %}
+                </section>
+            </div>
         </div>
     </div>
+
+    <div id="userEditorModal" class="modal-backdrop" onclick="closeUserEditor(event)">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <div class="modal-top">
+                <div>
+                    <h3 class="modal-title">Edit user</h3>
+                    <p class="modal-copy" id="userEditorSubtitle">Update user details, access, password, or delete the account.</p>
+                </div>
+                <button type="button" class="btn secondary modal-close" onclick="closeUserEditor()">Close</button>
+            </div>
+
+            <form id="userEditForm" method="post" class="form-stack">
+                <div class="form-row">
+                    <div class="field">
+                        <label>First Name</label>
+                        <input id="edit_first_name" name="first_name" type="text">
+                    </div>
+                    <div class="field">
+                        <label>Surname</label>
+                        <input id="edit_surname" name="surname" type="text">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="field">
+                        <label>Email</label>
+                        <input id="edit_email" name="email" type="email">
+                    </div>
+                    <div class="field">
+                        <label>Role</label>
+                        <select id="edit_role" name="role">
+                            <option value="admin">Admin</option>
+                            <option value="radiologist">Practitioner</option>
+                            <option value="user">Coordinator</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="field">
+                        <label>GMC</label>
+                        <input id="edit_gmc" name="gmc" type="text">
+                    </div>
+                    <div class="field">
+                        <label>Speciality</label>
+                        <input id="edit_speciality" name="speciality" type="text">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="field">
+                        <label>Status</label>
+                        <select id="edit_is_active" name="is_active">
+                            <option value="1">Active</option>
+                            <option value="0">Inactive</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Display Name</label>
+                        <input id="edit_display_name" type="text" disabled>
+                    </div>
+                </div>
+                <div class="form-row single">
+                    <div class="field">
+                        <label style="display:flex;align-items:center;gap:10px;">
+                            <input id="edit_mfa_required" name="mfa_required" type="checkbox" value="1">
+                            <span>Require MFA setup for this user</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="inline-actions">
+                    <button type="submit" class="btn primary">Save User Changes</button>
+                </div>
+            </form>
+
+            <div class="divider" style="margin: 20px 0;"></div>
+
+            <form id="userResetForm" method="post" class="form-stack">
+                <div class="form-row">
+                    <div class="field">
+                        <label>Reset Password</label>
+                        <input name="password" type="password" placeholder="Enter a new password" required>
+                    </div>
+                </div>
+                <div class="inline-actions">
+                    <button type="submit" class="btn secondary">Save New Password</button>
+                </div>
+            </form>
+
+            <div class="divider" style="margin: 20px 0;"></div>
+
+            <form id="userDeleteForm" method="post" class="form-stack" onsubmit="return confirm('Delete this user from the organisation?');">
+                <div class="inline-actions">
+                    <button type="submit" class="btn secondary">Delete User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openUserEditor(userId, username, firstName, surname, email, role, gmc, speciality, isActive, displayName, mfaRequired) {
+            document.getElementById('userEditorSubtitle').textContent = `Editing ${username}`;
+            document.getElementById('edit_first_name').value = firstName || '';
+            document.getElementById('edit_surname').value = surname || '';
+            document.getElementById('edit_email').value = email || '';
+            document.getElementById('edit_role').value = role || 'user';
+            document.getElementById('edit_gmc').value = gmc || '';
+            document.getElementById('edit_speciality').value = speciality || '';
+            document.getElementById('edit_is_active').value = String(isActive ? 1 : 0);
+            document.getElementById('edit_display_name').value = displayName || username;
+            document.getElementById('edit_mfa_required').checked = !!mfaRequired;
+
+            document.getElementById('userEditForm').action = `/owner/organisations/{{ organisation.id }}/users/${userId}/edit`;
+            document.getElementById('userResetForm').action = `/owner/organisations/{{ organisation.id }}/users/${userId}/reset-password`;
+            document.getElementById('userDeleteForm').action = `/owner/organisations/{{ organisation.id }}/users/${userId}/delete`;
+            document.getElementById('userEditorModal').classList.add('open');
+        }
+
+        function closeUserEditor(event) {
+            if (event && event.target !== document.getElementById('userEditorModal')) {
+                return;
+            }
+            document.getElementById('userEditorModal').classList.remove('open');
+        }
+    </script>
 </body>
 </html>

@@ -40,6 +40,13 @@
             flex-wrap: wrap;
         }
 
+        .owner-actions .btn,
+        .org-card-actions .btn,
+        .button-group .btn {
+            min-width: 180px;
+            justify-content: center;
+        }
+
         .owner-grid {
             display: grid;
             grid-template-columns: 420px 1fr;
@@ -250,6 +257,19 @@
             .org-stats {
                 grid-template-columns: 1fr;
             }
+
+            .owner-actions,
+            .org-card-actions,
+            .button-group {
+                width: 100%;
+            }
+
+            .owner-actions .btn,
+            .org-card-actions .btn,
+            .button-group .btn {
+                width: 100%;
+                min-width: 0;
+            }
         }
     </style>
 </head>
@@ -275,8 +295,10 @@
                     Set up a new organisation and create its first admin user in one step. That admin can then log in and manage their own users, institutions, and workflow.
                 </p>
 
-                {% if created %}
+                {% if created == '1' %}
                 <div class="notice success">Organisation created successfully.</div>
+                {% elif created == 'deleted' %}
+                <div class="notice success">Organisation deleted successfully.</div>
                 {% endif %}
 
                 {% if error %}
@@ -327,6 +349,14 @@
                             <input id="admin_password" name="admin_password" type="password" required>
                         </div>
                     </div>
+                    <div class="form-row single">
+                        <div class="field">
+                            <label style="display:flex;align-items:center;gap:10px;">
+                                <input id="admin_mfa_required" name="admin_mfa_required" type="checkbox" value="1" {% if form_data.admin_mfa_required %}checked{% endif %}>
+                                <span>Require MFA setup for this organisation admin</span>
+                            </label>
+                        </div>
+                    </div>
 
                     <div class="button-group">
                         <button type="submit" class="btn primary">Create Organisation</button>
@@ -375,6 +405,9 @@
 
                         <div class="org-card-actions">
                             <a class="btn secondary" href="/owner/organisations/{{ org.id }}">Edit Organisation</a>
+                            <form method="post" action="/owner/organisations/{{ org.id }}/delete" onsubmit="return confirm('Delete this organisation and all of its users, institutions, cases, and protocols?');">
+                                <button type="submit" class="btn secondary">Delete Organisation</button>
+                            </form>
                         </div>
                     </article>
                     {% endfor %}

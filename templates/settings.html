@@ -286,11 +286,13 @@
             display: flex;
             gap: 12px;
             margin-bottom: 16px;
-            overflow-x: auto;
+            flex-wrap: wrap;
             padding-bottom: 2px;
         }
 
         .tab-btn {
+            flex: 1 1 180px;
+            min-width: 180px;
             padding: 12px 20px;
             border: 1px solid rgba(255,255,255,0.1);
             background: rgba(255,255,255,0.03);
@@ -301,6 +303,7 @@
             border-radius: 14px;
             transition: all 0.2s ease;
             white-space: nowrap;
+            text-align: center;
         }
 
         .tab-btn.active {
@@ -339,6 +342,15 @@
             }
             .settings-hero-actions {
                 justify-content: flex-start;
+            }
+            .tabs {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            .tab-btn {
+                width: 100%;
+                min-width: 0;
             }
             .form-row,
             .form-row.three-col {
@@ -392,23 +404,6 @@
             align-items: center;
             gap: 16px;
             min-width: 0;
-        }
-        .settings-hero-logo {
-            width: 66px;
-            height: 66px;
-            border-radius: 16px;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.09);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex: 0 0 auto;
-        }
-        .settings-hero-logo img {
-            width: 44px;
-            height: 44px;
-            border-radius: 10px;
-            object-fit: cover;
         }
         .settings-hero-copy h1 {
             font-size: 18px;
@@ -465,9 +460,6 @@
         <div class="settings-header">
             <div class="settings-hero">
                 <div class="settings-hero-left">
-                    <div class="settings-hero-logo">
-                        <img src="/static/images/logo-light.png" alt="Lumos Lab" onerror="this.parentElement.style.display='none';">
-                    </div>
                     <div class="settings-hero-copy">
                         <h1>Settings</h1>
                         <p>{{ org_name or 'Organisation settings' }}</p>
@@ -475,7 +467,7 @@
                 </div>
                 <div class="settings-hero-actions">
                     <a href="/account" class="btn btn-secondary" style="margin-top: 0;">My Account</a>
-                    <a href="/admin" class="btn btn-secondary" style="margin-top: 0;">Back to Dashboard</a>
+                    <a href="/admin" class="btn btn-secondary" style="margin-top: 0;">Back</a>
                 </div>
             </div>
         </div>
@@ -512,7 +504,7 @@
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Institution Name</label>
-                                <input type="text" name="name" required placeholder="e.g., UHCL Medical Center">
+                                <input type="text" name="name" required placeholder="Enter institution name">
                             </div>
                             <div class="form-group">
                                 <label>SLA (hours)</label>
@@ -598,7 +590,7 @@
                                     <option value="">Select Role</option>
                                     <option value="admin">Admin</option>
                                     <option value="radiologist">Practitioner</option>
-                                    <option value="user">User</option>
+                                    <option value="user">Coordinator</option>
                                 </select>
                             </div>
                         </div>
@@ -612,6 +604,14 @@
                                     <label>Speciality</label>
                                     <input type="text" name="speciality" placeholder="e.g., General Radiology, Cardiology">
                                 </div>
+                            </div>
+                        </div>
+                        <div class="form-row full">
+                            <div class="form-group">
+                                <label style="display:flex;align-items:center;gap:10px;">
+                                    <input type="checkbox" name="mfa_required" value="1">
+                                    <span>Require MFA setup for this user</span>
+                                </label>
                             </div>
                         </div>
                         <div class="button-group">
@@ -630,6 +630,7 @@
                                 <th>Name</th>
                                 <th>Email</th>
                                 <th>Access Level</th>
+                                <th>MFA</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -646,14 +647,25 @@
                                         <select name="org_role">
                                             <option value="org_admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
                                             <option value="radiologist" {% if user.role == 'radiologist' %}selected{% endif %}>Practitioner</option>
-                                            <option value="org_user" {% if user.role == 'user' %}selected{% endif %}>User</option>
+                                            <option value="org_user" {% if user.role == 'user' %}selected{% endif %}>Coordinator</option>
                                         </select>
                                         <button type="submit" class="btn btn-secondary btn-small">Save</button>
                                     </form>
                                 </td>
                                 <td>
+                                    {% if user.mfa_required and user.mfa_enabled %}
+                                    Required and active
+                                    {% elif user.mfa_required %}
+                                    Required
+                                    {% elif user.mfa_enabled %}
+                                    Active
+                                    {% else %}
+                                    Off
+                                    {% endif %}
+                                </td>
+                                <td>
                                     <div class="action-buttons">
-                                        <button class="btn btn-secondary btn-small" onclick="editUser('{{ user.username }}', '{{ user.first_name }}', '{{ user.surname }}', '{{ user.email }}', '{{ user.role }}', '{{ user.radiologist_name or '' }}')">Edit</button>
+                                        <button class="btn btn-secondary btn-small" onclick="editUser('{{ user.username }}', '{{ user.first_name }}', '{{ user.surname }}', '{{ user.email }}', '{{ user.role }}', '{{ user.radiologist_name or '' }}', {{ 1 if user.mfa_required else 0 }})">Edit</button>
                                         {% if user.username != 'admin' %}
                                         <form style="display: inline;" method="POST" action="/settings/user/delete" onsubmit="return confirm('Delete user?');">
                                             <input type="hidden" name="username" value="{{ user.username }}">
@@ -893,9 +905,6 @@
             </div>
         </div>
 
-        <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(31,111,235,0.2);">
-            <a href="/admin" class="btn btn-secondary">Back to Dashboard</a>
-        </div>
     </div>
 
     <!-- Edit Institution Modal -->
@@ -977,6 +986,7 @@
                         <select id="editUserRole" name="role" required>
                             <option value="admin">Admin</option>
                             <option value="radiologist">Practitioner</option>
+                            <option value="user">Coordinator</option>
                         </select>
                     </div>
                 </div>
@@ -1008,6 +1018,14 @@
                     <div class="form-group">
                         <label>New Password (leave blank to keep current)</label>
                         <input type="password" id="editUserPassword" name="password" placeholder="Leave blank if no change">
+                    </div>
+                </div>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label style="display:flex;align-items:center;gap:10px;">
+                            <input type="checkbox" id="editUserMfaRequired" name="mfa_required" value="1">
+                            <span>Require MFA setup for this user</span>
+                        </label>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -1166,7 +1184,7 @@
             document.getElementById('editRadiologistModal').classList.add('active');
         }
 
-        function editUser(username, firstName, surname, email, role, radiologistName = null) {
+        function editUser(username, firstName, surname, email, role, radiologistName = null, mfaRequired = 0) {
             document.getElementById('editUserUsername').value = username;
             document.getElementById('editUserUsernameDisplay').value = username;
             document.getElementById('editUserFirstName').value = firstName;
@@ -1174,6 +1192,7 @@
             document.getElementById('editUserEmail').value = email || '';
             document.getElementById('editUserRole').value = role;
             document.getElementById('editUserPassword').value = '';
+            document.getElementById('editUserMfaRequired').checked = !!mfaRequired;
             
             // Show/hide radiologist field based on role
             const radiologistField = document.getElementById('radiologistNameField');

@@ -35,6 +35,31 @@ By default, the app can run locally with SQLite.
 - Set `AZURE_STORAGE_CONNECTION_STRING` if you want to test Azure Blob Storage locally.
 - Leave SMTP variables empty unless you are testing email flows.
 
+## Local Test Environment
+
+Use the isolated test setup when you want to try changes without touching `hub.local.db`.
+
+1. Bootstrap the test environment:
+   `.\scripts\setup-test-env.ps1`
+2. Start the app in test mode:
+   `.\scripts\run-test-local.ps1`
+
+This creates or reuses:
+
+- `.env.test.local`
+- `hub.test.db`
+- `uploads-test`
+
+Defaults for the test environment:
+
+- `APP_BASE_URL=http://127.0.0.1:8001`
+- `DB_PATH=hub.test.db`
+- `UPLOAD_DIR=uploads-test`
+
+The test runner starts without hot reload so it stays stable while you manually test against the isolated database on port `8001`.
+
+Use `.\scripts\setup-test-env.ps1 -Force` if you want to refresh the test database and env file from the tracked template.
+
 ## Normal Workflow
 
 1. Build and test locally first.

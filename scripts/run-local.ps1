@@ -1,10 +1,14 @@
 param(
     [string]$EnvFile = ".env.local",
     [string]$HostName = "127.0.0.1",
-    [int]$Port = 8000
+    [int]$Port = 8000,
+    [switch]$Reload
 )
 
 $ErrorActionPreference = "Stop"
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
 
 if (Test-Path $EnvFile) {
     Write-Host "Loading environment from $EnvFile"
@@ -37,4 +41,14 @@ if (-not $env:APP_BASE_URL) {
 }
 
 Write-Host "Starting local app at http://$HostName`:$Port"
-python -m uvicorn app.main:app --reload --host $HostName --port $Port
+if ($Reload) {
+    $uvicornArgs = @("-m", "uvicorn", "app.main:app", "--reload", "--host", $HostName, "--port", $Port)
+} else {
+    $uvicornArgs = @("-m", "uvicorn", "app.main:app", "--host", $HostName, "--port", $Port)
+}
+
+if (Test-Path $venvPython) {
+    & $venvPython @uvicornArgs
+} else {
+    python @uvicornArgs
+}

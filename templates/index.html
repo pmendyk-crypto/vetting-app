@@ -4,28 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RadFlow</title>
-  <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    html, body { height: 100%; margin: 0; }
+    html, body { min-height: 100%; margin: 0; padding: 0; }
     body {
       display: flex;
       flex-direction: column;
-      min-height: 100dvh;
-      overflow: hidden;
+      min-height: 100vh;
+      overflow-x: hidden;
+      overflow-y: auto;
       position: relative;
       font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      padding: 0;
+      margin: 0;
+      background-color: #05080e;
     }
-    body::before {
-      content: '';
+    body::after { display: none !important; content: none !important; }
+    .page-bg {
       position: fixed;
       inset: 0;
+      z-index: 0;
       background:
         linear-gradient(135deg, rgba(7,19,58,0.80) 0%, rgba(15,23,36,0.68) 50%, rgba(2,6,23,0.86) 100%),
         url('/static/images/login-bg.png') center center / cover no-repeat;
-      transform: scale(1.02);
-      transform-origin: center;
       pointer-events: none;
-      z-index: 0;
     }
     .main-content {
       position: relative;
@@ -34,8 +35,7 @@
       flex: 1;
       justify-content: center;
       align-items: center;
-      min-height: auto;
-      height: 100dvh;
+      min-height: 100vh;
       padding: 24px 60px;
       box-sizing: border-box;
       gap: 0;
@@ -95,8 +95,7 @@
       .main-content {
         align-items: flex-start;
         padding: 88px 14px 18px;
-        min-height: auto;
-        height: auto;
+        min-height: 100vh;
       }
       .right-section {
         flex: none;
@@ -153,12 +152,10 @@
     .small { font-size: 12px; color: rgba(255,255,255,0.5); }
     .err { color: #ffb4b4; background: rgba(255,180,180,0.08); padding: 8px 10px; border-radius: 6px; font-size: 12px; margin-top: 8px; }
     @media (max-width: 600px) {
-      body { overflow-y: auto; overflow-x: hidden; }
       .main-content {
         padding: 84px 12px 16px;
         align-items: flex-start;
-        min-height: auto;
-        height: auto;
+        min-height: 100vh;
       }
       .right-section {
         width: 100%;
@@ -173,8 +170,9 @@
   </style>
 </head>
 <body>
+  <div class="page-bg"></div>
   <div class="corner-logo">
-    <img src="/static/images/logo-light.png" alt="Lumos Lab" onerror="this.style.display='none'">
+    <img src="/static/images/logo-login.png" alt="Lumos Lab" onerror="this.style.display='none'">
   </div>
   <div class="main-content">
     <div class="left-section">
