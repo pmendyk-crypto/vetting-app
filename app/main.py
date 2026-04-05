@@ -381,7 +381,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        path = request.url.path.rstrip("/")
+        allow_same_origin_frame = (
+            path.endswith("/attachment/preview")
+            or path.endswith("/attachment/inline")
+            or (path.endswith("/pdf") and request.query_params.get("inline") == "1")
+        )
+        response.headers["X-Frame-Options"] = "SAMEORIGIN" if allow_same_origin_frame else "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         if IS_PRODUCTION:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -2169,32 +2175,39 @@ def ensure_seed_data() -> None:
         set_setting("system_initialized", "true")
 
 
-def ensure_local_owner_account() -> None:
-    if using_postgres():
-        return
+def ensure_owner_account(
+    username: str,
+    password: str,
+    email: str | None = None,
+    *,
+    demote_other_superusers: bool = False,
+) -> str:
     if not table_has_column("users", "is_superuser"):
-        return
+        raise RuntimeError("Users table does not support superuser accounts in this schema.")
 
-    owner_username = os.environ.get("OWNER_ADMIN_USERNAME", "P.Mendyk").strip() or "P.Mendyk"
-    owner_password = (os.environ.get("OWNER_ADMIN_PASSWORD") or "").strip()
-    owner_email = os.environ.get("OWNER_ADMIN_EMAIL", "").strip() or None
+    owner_username = (username or "").strip()
+    owner_password = (password or "").strip()
+    owner_email = (email or "").strip() or None
+    if not owner_username:
+        raise ValueError("Owner username is required.")
     if not owner_password:
-        print("[WARNING] OWNER_ADMIN_PASSWORD is not set. Skipping local owner password bootstrap.")
-        return
+        raise ValueError("Owner password is required.")
+
     now = utc_now_iso()
     salt = secrets.token_bytes(16)
     pw_hash = hash_password(owner_password, salt)
 
     conn = get_db()
-    conn.execute(
-        """
-        UPDATE users
-        SET is_superuser = 0,
-            modified_at = ?
-        WHERE COALESCE(username, '') != ?
-        """,
-        (now, owner_username),
-    )
+    if demote_other_superusers:
+        conn.execute(
+            """
+            UPDATE users
+            SET is_superuser = 0,
+                modified_at = ?
+            WHERE COALESCE(username, '') != ?
+            """,
+            (now, owner_username),
+        )
     existing = conn.execute("SELECT id FROM users WHERE username = ?", (owner_username,)).fetchone()
     if existing:
         conn.execute(
@@ -2215,7 +2228,7 @@ def ensure_local_owner_account() -> None:
         )
         conn.commit()
         conn.close()
-        return
+        return "updated"
 
     conn.execute(
         """
@@ -2235,6 +2248,28 @@ def ensure_local_owner_account() -> None:
     )
     conn.commit()
     conn.close()
+    return "created"
+
+
+def ensure_local_owner_account() -> None:
+    if using_postgres():
+        return
+    if not table_has_column("users", "is_superuser"):
+        return
+
+    owner_username = os.environ.get("OWNER_ADMIN_USERNAME", "P.Mendyk").strip() or "P.Mendyk"
+    owner_password = (os.environ.get("OWNER_ADMIN_PASSWORD") or "").strip()
+    owner_email = os.environ.get("OWNER_ADMIN_EMAIL", "").strip() or None
+    if not owner_password:
+        print("[WARNING] OWNER_ADMIN_PASSWORD is not set. Skipping local owner password bootstrap.")
+        return
+
+    ensure_owner_account(
+        owner_username,
+        owner_password,
+        owner_email,
+        demote_other_superusers=True,
+    )
 def list_institutions(org_id: int | None = None) -> list[dict]:
     conn = get_db()
     if table_has_column("institutions", "org_id"):
@@ -4017,10 +4052,11 @@ def build_admin_case_filters(
         params.append(modality.strip().upper())
 
     if q and q.strip():
-        like = f"%{q.strip()}%"
+        like = f"%{q.strip().lower()}%"
         clauses.append(
-            "(c.id LIKE ? OR c.patient_first_name LIKE ? OR c.patient_surname LIKE ? "
-            "OR c.patient_referral_id LIKE ? OR c.study_description LIKE ?)"
+            "(LOWER(COALESCE(c.id, '')) LIKE ? OR LOWER(COALESCE(c.patient_first_name, '')) LIKE ? "
+            "OR LOWER(COALESCE(c.patient_surname, '')) LIKE ? OR LOWER(COALESCE(c.patient_referral_id, '')) LIKE ? "
+            "OR LOWER(COALESCE(c.study_description, '')) LIKE ?)"
         )
         params.extend([like, like, like, like, like])
 
@@ -7793,20 +7829,23 @@ def download_attachment(request: Request, case_id: str):
         raise HTTPException(status_code=403, detail="Access denied")
 
     stored_path = case_data.get("stored_filepath")
+    filename = (case_data.get("uploaded_filename") or Path(stored_path).name).replace('"', "")
+    media_type, _ = mimetypes.guess_type(filename)
     
     # Try blob storage first
     file_bytes = None
     if BLOB_STORAGE_ENABLED and stored_path and not stored_path.startswith("/"):
         file_bytes = download_from_blob(stored_path)
         if file_bytes:
-            return FileResponse(
+            return StreamingResponse(
                 io.BytesIO(file_bytes),
-                filename=case_data.get("uploaded_filename") or Path(stored_path).name
+                media_type=media_type or "application/octet-stream",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
             )
     
     # Fallback to local filesystem
     if os.path.exists(stored_path):
-        return FileResponse(stored_path, filename=case_data.get("uploaded_filename") or Path(stored_path).name)
+        return FileResponse(stored_path, filename=filename)
     
     # File not found
     clear_case_stored_filepath(case_id)
@@ -7840,7 +7879,7 @@ def view_attachment_inline(request: Request, case_id: str):
         raise HTTPException(status_code=403, detail="Access denied")
 
     stored_path = case_data.get("stored_filepath")
-    filename = case_data.get("uploaded_filename") or Path(stored_path).name
+    filename = (case_data.get("uploaded_filename") or Path(stored_path).name).replace('"', "")
     media_type, _ = mimetypes.guess_type(filename)
     headers = {"Content-Disposition": f'inline; filename="{filename}"'}
     
@@ -7849,7 +7888,7 @@ def view_attachment_inline(request: Request, case_id: str):
     if BLOB_STORAGE_ENABLED and stored_path and not stored_path.startswith("/"):
         file_bytes = download_from_blob(stored_path)
         if file_bytes:
-            return FileResponse(
+            return StreamingResponse(
                 io.BytesIO(file_bytes),
                 media_type=media_type or "application/octet-stream",
                 headers=headers

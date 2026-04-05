@@ -16,6 +16,7 @@
             margin: 0 auto;
             padding: 20px;
             box-sizing: border-box;
+            min-width: 0;
         }
 
         .vet-header {
@@ -87,6 +88,7 @@
         .header-actions {
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
         }
 
         .btn {
@@ -146,6 +148,7 @@
             display: flex;
             flex-direction: column;
             gap: 20px;
+            min-width: 0;
         }
 
         .vet-card {
@@ -153,6 +156,7 @@
             border: var(--card-border);
             border-radius: 8px;
             padding: 20px;
+            min-width: 0;
         }
 
         .vet-card.stretch {
@@ -369,7 +373,9 @@
 
         .attachment-preview {
             width: 100%;
-            min-height: 500px;
+            min-height: 420px;
+            height: 62vh;
+            max-height: 680px;
             border: 1px solid rgba(31, 111, 235, 0.2);
             border-radius: 6px;
             background: rgba(0, 0, 0, 0.3);
@@ -604,6 +610,23 @@
         }
         .btn-irefer:hover { background: rgba(96,165,250,0.2); }
 
+        @media (max-width: 960px) {
+            .vet-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .header-actions {
+                width: 100%;
+                flex-direction: column;
+            }
+
+            .header-actions .btn {
+                width: 100%;
+                justify-content: center;
+                text-align: center;
+            }
+        }
+
         @media (max-width: 768px) {
             .vet-container {
                 padding: 16px 12px;
@@ -629,10 +652,6 @@
                 gap: 10px;
             }
 
-            .vet-layout {
-                grid-template-columns: 1fr;
-            }
-
             .vet-card {
                 padding: 16px;
             }
@@ -642,7 +661,8 @@
             }
 
             .attachment-preview {
-                height: 360px;
+                height: 52vh;
+                min-height: 280px;
             }
 
             .irefer-search {

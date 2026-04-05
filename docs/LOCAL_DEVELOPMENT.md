@@ -58,6 +58,7 @@ Optional integrations from the env templates:
 - `AZURE_STORAGE_CONNECTION_STRING` for blob-backed uploads
 - SMTP settings for password reset and practitioner notification emails
 - `IREFER_API_KEY` for iRefer lookup
+- `OWNER_ADMIN_USERNAME`, `OWNER_ADMIN_EMAIL`, `OWNER_ADMIN_PASSWORD` for the canonical owner account
 
 ## Isolated Test Run
 
@@ -105,3 +106,25 @@ Current auth behavior you should expect when testing locally:
 - admin access is blocked until required MFA enrollment is completed
 
 That makes the account page part of normal local verification whenever you change auth, role management, or admin-user setup flows.
+
+## Keeping Logins Aligned Across Environments
+
+To keep the owner login aligned across local, staging, and production, use the same canonical owner account values in each environment and seed them deliberately instead of relying on ad hoc DB state.
+
+Canonical owner variables:
+
+- `OWNER_ADMIN_USERNAME`
+- `OWNER_ADMIN_EMAIL`
+- `OWNER_ADMIN_PASSWORD`
+
+Seed command:
+
+`.\.venv\Scripts\python.exe .\scripts\seed_owner_account.py --env-file .env.local`
+
+Notes:
+
+- local SQLite bootstrapping still uses these env vars automatically when present
+- for the isolated test DB, use:
+  `.\.venv\Scripts\python.exe .\scripts\seed_owner_account.py --env-file .env.test.local`
+- staging and production should run the same seed script against their configured `DATABASE_URL`
+- do not rely on the older `create_superadmin.py` or `init_azure_superadmin.py` flows for environment setup

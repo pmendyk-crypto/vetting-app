@@ -105,38 +105,38 @@
     }
     .utility-button-group { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
     .utility-button-group .btn { min-width:170px; height:44px; min-height:44px; }
-    .data-panel { overflow:hidden; min-height:320px; } .table-scroll { overflow-x:auto; } table { width:100%; border-collapse:collapse; table-layout:fixed; }
+    .data-panel { overflow:hidden; min-height:320px; } .table-scroll { overflow-x:auto; } table { width:100%; border-collapse:collapse; table-layout:auto; }
     thead th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.08em; font-weight:600; color:rgba(255,255,255,0.52); padding:11px 16px; background:rgba(255,255,255,0.04); border-bottom:1px solid rgba(255,255,255,0.08); white-space:nowrap; vertical-align:middle; }
     thead th.head-right { text-align:right !important; }
     thead th.sortable { cursor:pointer; user-select:none; position:relative; padding-right:28px; }
     thead th.sortable::after { content:""; position:absolute; right:12px; top:50%; width:7px; height:7px; border-right:1.5px solid rgba(255,255,255,0.28); border-bottom:1.5px solid rgba(255,255,255,0.28); transform:translateY(-62%) rotate(45deg); transition:0.18s ease; }
     thead th.sort-asc::after { border-color:rgba(255,255,255,0.76); transform:translateY(-35%) rotate(-135deg); }
     thead th.sort-desc::after { border-color:rgba(255,255,255,0.76); transform:translateY(-70%) rotate(45deg); }
-    tbody td { padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.05); color:var(--soft-text); font-size:13px; vertical-align:middle; line-height:1.3; text-align:left; }
+    tbody td { padding:9px 12px; border-bottom:1px solid rgba(255,255,255,0.05); color:var(--soft-text); font-size:13px; vertical-align:middle; line-height:1.3; text-align:left; }
     tbody tr.case-row:hover { background:rgba(255,255,255,0.03); }
     .case-id { font-family:"Courier New", monospace; color:rgba(255,255,255,0.9); font-size:12px; white-space:nowrap; }
     .study-stack { display:flex; flex-direction:column; gap:2px; min-width:0; } .study-title { color:#fff; font-weight:400; line-height:1.25; word-break:break-word; } .study-meta { display:flex; gap:8px; flex-wrap:wrap; color:var(--muted-text); font-size:11px; }
     .micro-pill { display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border-radius:999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08); color:var(--muted-text); font-size:10px; text-transform:uppercase; letter-spacing:0.06em; }
     .date-stack { display:flex; flex-direction:column; gap:2px; white-space:nowrap; } .date-stack small { color:var(--muted-text); font-size:11px; }
     .assign-form { display:flex; flex-direction:column; gap:6px; min-width:0; width:100%; align-items:flex-start; justify-content:center; }
-    .assign-form select { width:100%; min-width:140px; min-height:36px; height:36px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.03); color:#fff; padding:5px 9px; margin:0; font-size:12px; }
-    .assign-save-btn { align-self:flex-start; border:none; background:none; color:var(--accent-blue); padding:0; font-size:12px; font-weight:500; cursor:pointer; text-align:left; line-height:1.1; }
+    .assign-form select { width:100%; min-width:112px; min-height:36px; height:36px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.03); color:#fff; padding:5px 9px; margin:0; font-size:12px; }
+    .assign-save-btn { align-self:flex-start; border:none; background:none; color:var(--accent-blue); padding:0; font-size:11px; font-weight:500; cursor:pointer; text-align:left; line-height:1.1; }
     .status-pill { display:inline-flex; align-items:center; justify-content:center; min-width:78px; padding:5px 10px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; }
     .status-pill.pending { background:rgba(245,178,63,0.16); color:#f6c96f; border:1px solid rgba(245,178,63,0.26); }
     .status-pill.vetted { background:rgba(51,209,122,0.16); color:#76e6a6; border:1px solid rgba(51,209,122,0.26); }
     .status-pill.rejected { background:rgba(255,107,107,0.16); color:#ff9f9f; border:1px solid rgba(255,107,107,0.26); }
     .status-pill.reopened { background:rgba(56,189,248,0.14); color:#7dd3fc; border:1px solid rgba(56,189,248,0.3); }
-    .row-actions { display:flex; flex-wrap:wrap; gap:10px; white-space:nowrap; justify-content:flex-start; align-items:center; } .row-actions a { color:var(--accent-blue); text-decoration:none; font-size:12px; font-weight:500; }
-    th.col-case-id, td.col-case-id { width:104px; }
-    th.col-first-name, td.col-first-name { width:112px; }
-    th.col-surname, td.col-surname { width:112px; }
-    th.col-study, td.col-study { width:260px; }
-    th.col-modality, td.col-modality { width:96px; }
-    th.col-institution, td.col-institution { width:150px; }
-    th.col-date, td.col-date { width:118px; }
-    th.col-radiologist, td.col-radiologist { width:176px; }
-    th.col-status, td.col-status { width:92px; }
-    th.col-actions, td.col-actions { width:164px; }
+    .row-actions { display:flex; flex-wrap:wrap; gap:8px; white-space:nowrap; justify-content:flex-start; align-items:center; } .row-actions a { color:var(--accent-blue); text-decoration:none; font-size:11px; font-weight:500; }
+    th.col-case-id, td.col-case-id { width:88px; }
+    th.col-first-name, td.col-first-name { width:92px; }
+    th.col-surname, td.col-surname { width:96px; }
+    th.col-study, td.col-study { min-width:200px; }
+    th.col-modality, td.col-modality { width:72px; }
+    th.col-institution, td.col-institution { width:124px; }
+    th.col-date, td.col-date { width:108px; }
+    th.col-radiologist, td.col-radiologist { width:146px; }
+    th.col-status, td.col-status { width:84px; }
+    th.col-actions, td.col-actions { width:128px; }
     .empty-state { padding:42px 24px; text-align:center; color:var(--muted-text); } .empty-state strong { display:block; color:#fff; font-size:18px; margin-bottom:8px; }
     .dashboard-layout { display:grid; grid-template-columns:minmax(0, 1.82fr) minmax(280px, 0.78fr); gap:18px; align-items:stretch; }
     .dashboard-main,.dashboard-sidebar { min-width:0; }
@@ -152,6 +152,16 @@
     .spark-bars { display:grid; grid-template-columns:repeat(auto-fit,minmax(24px,1fr)); gap:10px; align-items:end; min-height:180px; } .spark-column { display:flex; flex-direction:column; align-items:center; gap:10px; justify-content:end; min-width:0; } .spark-value { color:var(--muted-text); font-size:11px; } .spark-bar-wrap { width:100%; min-height:140px; display:flex; align-items:end; justify-content:center; } .spark-bar { width:100%; max-width:28px; min-height:10px; height:var(--bar-size, 10px); border-radius:12px 12px 6px 6px; background:linear-gradient(180deg, rgba(97,168,255,0.95), rgba(31,111,235,0.5)); box-shadow:0 10px 24px rgba(31,111,235,0.22); } .spark-label { color:var(--muted-text); font-size:11px; text-align:center; line-height:1.25; word-break:break-word; }
     @media (max-width:1200px) { .hero-panel { position:static; display:grid; grid-template-columns:1fr; min-height:0; } .hero-heading,.toolbar-group,.hero-actions { width:100%; justify-self:stretch; } .toolbar-group { position:static; transform:none; justify-content:center; } .hero-actions { justify-content:flex-start; padding-right:0; } .profile-stack { justify-content:flex-start; } .worklist-filter-row { grid-template-columns:repeat(2,minmax(0,1fr)); } .worklist-action-row { flex-direction:column; align-items:flex-start; gap:12px; } .action-column { margin-left:0; width:100%; flex-wrap:wrap; } .filter-grid,.filter-grid.dashboard,.worklist-filters { grid-template-columns:repeat(2,minmax(0,1fr)); } .filter-button-group { flex-wrap:wrap; } .utility-button-group { width:100%; flex-wrap:wrap; } .dashboard-actions { justify-content:flex-start; } .dashboard-layout { grid-template-columns:1fr; } .dashboard-main { display:block; } .metrics-grid { height:auto; } }
     @media (max-width:900px) { .chart-grid,.metrics-grid { grid-template-columns:1fr; } .bar-row { grid-template-columns:96px minmax(0,1fr) 38px; } .dashboard-layout { grid-template-columns:1fr; } }
+    @media (max-width:1180px) {
+      .table-scroll { overflow-x:visible; }
+      table, thead, tbody { display:block; width:100%; }
+      thead { display:none; }
+      tbody tr.case-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 14px; padding:14px; border-bottom:1px solid rgba(255,255,255,0.08); }
+      tbody td { border-bottom:none; padding:0; display:flex; flex-direction:column; gap:5px; min-width:0; }
+      tbody td::before { content:attr(data-label); font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted-text); }
+      td.col-study, td.col-radiologist, td.col-actions { grid-column:1 / -1; width:auto; }
+      .row-actions { white-space:normal; }
+    }
     @media (max-width:700px) { .page-shell { padding:18px 14px 28px; } .hero-panel,.surface-panel,.toolbar-panel { padding:18px; } .hero-heading,.view-tabs,.profile-stack { flex-direction:column; } .filter-grid,.filter-grid.dashboard,.metrics-grid,.utility-actions,.worklist-filters,.action-column { grid-template-columns:1fr; } .worklist-filter-row { grid-template-columns:1fr; } .brand-box,.org-box,.profile-stack,.view-tabs,.toolbar-group,.hero-actions,.utility-actions,.filter-actions { width:100%; } .view-tab,.utility-actions .btn,.profile-stack > .btn,.filter-actions .btn,.action-row .btn,.filter-button-group .btn,.utility-button-group .btn,.dashboard-actions .btn { width:100%; min-width:0; flex:1 1 100%; } thead th,tbody td { padding-left:14px; padding-right:14px; } .kpi-card { min-height:84px; } }
   </style>
 </head>
@@ -192,7 +202,7 @@
               <a href="/admin?view=worklist&tab=all&institution={{ selected_institution }}&radiologist={{ selected_radiologist }}&modality={{ selected_modality }}&q={{ q }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="status-chip all {% if tab == 'all' %}active{% endif %}">All <span class="chip-count">{{ total_count }}</span></a>
             </div>
             <div class="action-column utility-button-group">
-              <a class="btn secondary" href="/submit/referral-trial">Referral Scanner</a>
+              <a class="btn secondary" href="/submit/referral-trial">Referral Intake</a>
               <a class="btn secondary" href="/submit">Submit New Case</a>
               <a class="btn secondary" href="/admin/notify-radiologist">Notify Practitioner</a>
             </div>
@@ -203,7 +213,7 @@
               <div class="filter-group"><label for="institution">Institution</label><select id="institution" name="institution"><option value="">All institutions</option>{% for inst in institutions %}<option value="{{ inst.id }}" {% if selected_institution == inst.id|string %}selected{% endif %}>{{ inst.name }}</option>{% endfor %}</select></div>
               <div class="filter-group"><label for="radiologist">Practitioner</label><select id="radiologist" name="radiologist"><option value="">All practitioners</option>{% for r in radiologists %}<option value="{{ r }}" {% if selected_radiologist == r %}selected{% endif %}>{{ r }}</option>{% endfor %}</select></div>
               <div class="filter-group"><label for="modality">Modality</label><select id="modality" name="modality"><option value="">All modalities</option>{% for item in modalities %}<option value="{{ item }}" {% if selected_modality == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
-              <div class="filter-group"><label for="search">Search</label><input id="search" name="q" value="{{ q }}" placeholder="Search cases"></div>
+              <div class="filter-group"><label for="search">Search</label><input id="search" name="q" value="{{ q }}" placeholder="Search case ID, patient, patient ID or study"></div>
               <div class="filter-actions filter-button-group"><button type="submit" class="btn">Apply</button></div>
               <div class="filter-actions filter-button-group"><a class="btn secondary" href="/admin?view=worklist&tab={{ tab }}">Reset</a></div>
             </div>
@@ -212,7 +222,7 @@
       </section>
       <section class="data-panel">
         {% if cases|length == 0 %}<div class="empty-state"><strong>No cases found</strong>Adjust your filters or add a new case to populate the worklist.</div>{% else %}
-          <div class="table-scroll"><table><thead><tr><th class="col-case-id">Case ID</th><th class="sortable col-first-name" onclick="updateSort('patient_first_name')">First Name</th><th class="sortable col-surname" onclick="updateSort('patient_surname')">Surname</th><th class="sortable col-study" onclick="updateSort('study_description')">Study</th><th class="sortable col-modality" onclick="updateSort('modality')">Modality</th><th class="sortable col-institution" onclick="updateSort('institution_id')">Institution</th><th class="sortable col-date" onclick="updateSort('created_at')">Date</th><th class="sortable col-radiologist" onclick="updateSort('radiologist')">Practitioner</th><th class="sortable col-status" onclick="updateSort('status')">Status</th><th class="col-actions">Actions</th></tr></thead><tbody>{% for c in cases %}<tr class="case-row" data-open-url="/admin/case/{{ c['id'] }}"><td class="case-id col-case-id">{{ c["display_case_id"] }}</td><td class="col-first-name">{{ c["patient_first_name"] or "-" }}</td><td class="col-surname">{{ c["patient_surname"] or "-" }}</td><td class="col-study"><div class="study-stack"><div class="study-title">{{ c["study_description"] }}</div></div></td><td class="col-modality">{% if c["modality"] %}<span class="micro-pill">{{ c["modality"] }}</span>{% else %}-{% endif %}</td><td class="col-institution">{{ c["institution_name"] or "-" }}</td><td class="col-date"><div class="date-stack"><span>{{ c["created_display"] }}</span><small>TAT {{ c["tat_display"] }}</small></div></td><td class="col-radiologist"><form method="post" action="/admin/case/{{ c['id'] }}/assign-radiologist" class="assign-form"><select name="radiologist"><option value="">Unassigned</option>{% for r in radiologists %}<option value="{{ r }}" {% if c["radiologist"] == r %}selected{% endif %}>{{ r }}</option>{% endfor %}</select><button type="submit" class="assign-save-btn">Save assignment</button></form></td><td class="col-status"><span class="status-pill {{ c['status']|lower }}">{{ 'Justified' if c['status']|lower == 'vetted' else c["status"]|capitalize }}</span></td><td class="col-actions"><div class="row-actions"><a href="/admin/case/{{ c['id'] }}">Open</a><a href="/admin/case/{{ c['id'] }}/edit">Edit</a><a href="/case/{{ c['id'] }}/pdf" target="_blank">Download</a></div></td></tr>{% endfor %}</tbody></table></div>
+          <div class="table-scroll"><table><thead><tr><th class="col-case-id">Case ID</th><th class="sortable col-first-name" onclick="updateSort('patient_first_name')">First Name</th><th class="sortable col-surname" onclick="updateSort('patient_surname')">Surname</th><th class="sortable col-study" onclick="updateSort('study_description')">Study</th><th class="sortable col-modality" onclick="updateSort('modality')">Modality</th><th class="sortable col-institution" onclick="updateSort('institution_id')">Institution</th><th class="sortable col-date" onclick="updateSort('created_at')">Date</th><th class="sortable col-radiologist" onclick="updateSort('radiologist')">Practitioner</th><th class="sortable col-status" onclick="updateSort('status')">Status</th><th class="col-actions">Actions</th></tr></thead><tbody>{% for c in cases %}<tr class="case-row" data-open-url="/admin/case/{{ c['id'] }}"><td class="case-id col-case-id" data-label="Case ID">{{ c["display_case_id"] }}</td><td class="col-first-name" data-label="First Name">{{ c["patient_first_name"] or "-" }}</td><td class="col-surname" data-label="Surname">{{ c["patient_surname"] or "-" }}</td><td class="col-study" data-label="Study"><div class="study-stack"><div class="study-title">{{ c["study_description"] }}</div></div></td><td class="col-modality" data-label="Modality">{% if c["modality"] %}<span class="micro-pill">{{ c["modality"] }}</span>{% else %}-{% endif %}</td><td class="col-institution" data-label="Institution">{{ c["institution_name"] or "-" }}</td><td class="col-date" data-label="Date"><div class="date-stack"><span>{{ c["created_display"] }}</span><small>TAT {{ c["tat_display"] }}</small></div></td><td class="col-radiologist" data-label="Practitioner"><form method="post" action="/admin/case/{{ c['id'] }}/assign-radiologist" class="assign-form"><select name="radiologist"><option value="">Unassigned</option>{% for r in radiologists %}<option value="{{ r }}" {% if c["radiologist"] == r %}selected{% endif %}>{{ r }}</option>{% endfor %}</select><button type="submit" class="assign-save-btn">Save</button></form></td><td class="col-status" data-label="Status"><span class="status-pill {{ c['status']|lower }}">{{ 'Justified' if c['status']|lower == 'vetted' else c["status"]|capitalize }}</span></td><td class="col-actions" data-label="Actions"><div class="row-actions"><a href="/admin/case/{{ c['id'] }}">Open</a><a href="/admin/case/{{ c['id'] }}/edit">Edit</a><a href="/case/{{ c['id'] }}/pdf" target="_blank">Download</a></div></td></tr>{% endfor %}</tbody></table></div>
         {% endif %}
       </section>
     {% else %}

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Referral Trial Parser</title>
+  <title>Referral Intake Assistant</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
     .trial-wrap { max-width: 980px; margin: 20px auto; padding: 12px; }
@@ -66,19 +66,25 @@
     .protocol-item:last-child { border-bottom: none; }
     .protocol-item:hover { background: rgba(59, 130, 246, 0.28); color: #ffffff; padding-left: 14px; }
     .protocol-empty { padding: 14px 12px; text-align: center; color: rgba(148, 163, 184, 0.9); font-size: 12px; font-style: italic; }
+    @media (max-width: 760px) {
+      .trial-wrap { padding: 10px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .actions { flex-direction: column; }
+      .actions .btn { width: 100%; text-align: center; }
+    }
   </style>
 </head>
 <body>
   <div class="trial-wrap">
-    <h1>Referral Parser Trial (Local Test)</h1>
-    <p class="meta">Upload a referral file, review extracted fields, then create a booking/case.</p>
+    <h1>Referral Intake Assistant</h1>
+    <p class="meta">Upload a referral file, review the extracted fields, then create a case.</p>
 
     {% if error %}
       <div class="err">{{ error }}</div>
     {% endif %}
 
     <div class="card">
-      <h3>1) Parse referral file</h3>
+      <h3>1) Upload and parse referral</h3>
       <form method="post" action="/submit/referral-trial/parse" enctype="multipart/form-data">
         <div class="form-grid">
           <div class="form-row">
@@ -98,13 +104,14 @@
         <div class="actions" style="margin-top: 8px;">
           <button type="submit" class="btn btn-primary">Parse referral</button>
           <a class="btn btn-secondary" href="/submit">Back to manual submit</a>
+          <a class="btn btn-secondary" href="/admin">Cancel</a>
         </div>
       </form>
     </div>
 
     {% if parse_confidence is not none %}
     <div class="card">
-      <h3>2) Review extracted data</h3>
+      <h3>2) Review and confirm case details</h3>
       <p class="meta">Parser confidence: {{ (parse_confidence * 100) | round(0) }}%</p>
       {% if parse_warnings %}
         {% for warning in parse_warnings %}
@@ -196,6 +203,7 @@
         </div>
         <div class="actions" style="margin-top: 8px;">
           <button type="submit" class="btn btn-primary">Create booking/case</button>
+          <a class="btn btn-secondary" href="/admin">Cancel</a>
         </div>
       </form>
     </div>

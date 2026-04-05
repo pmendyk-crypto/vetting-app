@@ -21,6 +21,7 @@ body{
   display:flex;
   align-items:center;
   justify-content:center;
+  min-height:100svh;
 }
 /* dark overlay so text stays legible over the photo */
 body::before{
@@ -73,6 +74,47 @@ input::placeholder{color:rgba(255,255,255,0.45)}
 .err{color:#ffb4b4;background:rgba(255,180,180,0.06);padding:8px;border-radius:8px;margin-top:8px}
 .footer{margin-top:18px;font-size:12px;color:rgba(255,255,255,0.6)}
 @media (max-width:880px){
-  .container{grid-template-columns:1fr; padding:28px}
-  .hero{order:2}
+  body{
+    align-items:flex-start;
+    justify-content:stretch;
+    background-attachment:scroll;
+  }
+  .container{
+    grid-template-columns:1fr;
+    max-width:560px;
+    min-height:100svh;
+    padding:24px 18px 32px;
+    gap:18px;
+  }
+  .hero{
+    order:2;
+    padding:16px 4px 0;
+  }
+  .login-card{
+    padding:22px 18px;
+    border-radius:14px;
+  }
+  .hero h1{font-size:28px;}
+  .actions{
+    flex-direction:column;
+    align-items:stretch;
+    gap:10px;
+  }
+  .btn-primary{
+    width:100%;
+    text-align:center;
+  }
+}
+@media (max-width:480px){
+  .container{
+    padding:16px 12px 24px;
+  }
+  .hero h1{font-size:24px;}
+  .hero p{font-size:14px;}
+  .login-card{
+    padding:18px 14px;
+  }
+  input[type=text],input[type=password]{
+    font-size:16px;
+  }
 }

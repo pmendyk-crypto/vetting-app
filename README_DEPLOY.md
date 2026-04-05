@@ -56,6 +56,9 @@ Optional but currently supported:
 - `AZURE_STORAGE_CONNECTION_STRING`
 - SMTP settings for password reset and practitioner notifications
 - `IREFER_API_KEY`
+- `OWNER_ADMIN_USERNAME`
+- `OWNER_ADMIN_EMAIL`
+- `OWNER_ADMIN_PASSWORD`
 
 The tracked env examples also include:
 
@@ -63,6 +66,27 @@ The tracked env examples also include:
 - `CASE_RECORD_TTL_DAYS`
 - `REFERRAL_BLOB_CONTAINER`
 - `ALLOW_DIAGNOSTIC_ENDPOINT`
+
+## Aligning Owner Login Across Environments
+
+Use one canonical owner account across local, staging, and production, with the same username and the environment's configured password.
+
+Seed command:
+
+`.\.venv\Scripts\python.exe .\scripts\seed_owner_account.py`
+
+Expected inputs:
+
+- `OWNER_ADMIN_USERNAME`
+- `OWNER_ADMIN_EMAIL`
+- `OWNER_ADMIN_PASSWORD`
+- `DATABASE_URL` for Postgres environments, or `DB_PATH` for SQLite/local
+
+For local SQLite environments that use tracked env files, you can load the env file explicitly:
+
+`.\.venv\Scripts\python.exe .\scripts\seed_owner_account.py --env-file .env.local`
+
+This avoids the current drift where local bootstrap can create `P.Mendyk` automatically but staging or production may not contain the same owner account state unless it is explicitly seeded there.
 
 ## Manual Azure Deploy Script
 

@@ -94,7 +94,7 @@
             border: 1px solid rgba(31, 111, 235, 0.2);
             padding: 10px 16px;
             border-radius: 8px;
-            width: 280px;
+            width: min(100%, 280px);
             box-sizing: border-box;
         }
 
@@ -134,7 +134,7 @@
         .action-buttons {
             display: flex;
             gap: 8px;
-            width: 280px;
+            width: min(100%, 280px);
             justify-content: space-between;
             box-sizing: border-box;
         }
@@ -421,6 +421,12 @@
 
             .header-actions {
                 width: 100%;
+                align-items: stretch;
+            }
+
+            .user-info-card,
+            .action-buttons {
+                width: 100%;
             }
 
             .tabs {
@@ -443,6 +449,11 @@
 
             .dashboard-container {
                 padding: 16px 12px;
+            }
+
+            .view-toggle {
+                width: 100%;
+                justify-content: center;
             }
         }
 
