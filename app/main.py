@@ -2206,6 +2206,8 @@ def ensure_owner_account(
     now = utc_now_iso()
     salt = secrets.token_bytes(16)
     pw_hash = hash_password(owner_password, salt)
+    has_role_column = table_has_column("users", "role")
+    has_radiologist_name_column = table_has_column("users", "radiologist_name")
 
     conn = get_db()
     if demote_other_superusers:
@@ -2220,8 +2222,7 @@ def ensure_owner_account(
         )
     existing = conn.execute("SELECT id FROM users WHERE username = ?", (owner_username,)).fetchone()
     if existing:
-        conn.execute(
-            """
+        update_sql = """
             UPDATE users
             SET is_superuser = 1,
                 is_active = 1,
@@ -2230,31 +2231,56 @@ def ensure_owner_account(
                 email = ?,
                 first_name = ?,
                 surname = ?,
-                role = COALESCE(role, 'admin'),
                 modified_at = ?
-            WHERE username = ?
-            """,
-            (pw_hash.hex(), salt.hex(), owner_email, "P", "Mendyk", now, owner_username),
+        """
+        update_params: list = [pw_hash.hex(), salt.hex(), owner_email, "P", "Mendyk", now]
+        if has_role_column:
+            update_sql += ", role = COALESCE(role, 'admin')"
+        if has_radiologist_name_column:
+            update_sql += ", radiologist_name = NULL"
+        update_sql += " WHERE username = ?"
+        update_params.append(owner_username)
+        conn.execute(
+            update_sql,
+            tuple(update_params),
         )
         conn.commit()
         conn.close()
         return "updated"
 
+    insert_columns = [
+        "username",
+        "email",
+        "password_hash",
+        "salt_hex",
+        "is_superuser",
+        "is_active",
+        "created_at",
+        "modified_at",
+        "first_name",
+        "surname",
+    ]
+    insert_values = ["?", "?", "?", "?", "1", "1", "?", "?", "?", "?"]
+    insert_params: list = [
+        owner_username,
+        owner_email,
+        pw_hash.hex(),
+        salt.hex(),
+        now,
+        now,
+        "P",
+        "Mendyk",
+    ]
+    if has_role_column:
+        insert_columns.append("role")
+        insert_values.append("?")
+        insert_params.append("admin")
+    if has_radiologist_name_column:
+        insert_columns.append("radiologist_name")
+        insert_values.append("NULL")
     conn.execute(
-        """
-        INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname, role, radiologist_name)
-        VALUES (?, ?, ?, ?, 1, 1, ?, ?, ?, ?, 'admin', NULL)
-        """,
-        (
-            owner_username,
-            owner_email,
-            pw_hash.hex(),
-            salt.hex(),
-            now,
-            now,
-            "P",
-            "Mendyk",
-        ),
+        f"INSERT INTO users({', '.join(insert_columns)}) VALUES ({', '.join(insert_values)})",
+        tuple(insert_params),
     )
     conn.commit()
     conn.close()
