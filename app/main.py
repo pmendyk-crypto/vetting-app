@@ -299,6 +299,7 @@ LOGO_DARK_URL = os.environ.get("LOGO_DARK_URL", "/static/images/logo-light.png")
 ALLOW_DIAGNOSTIC_ENDPOINT = (os.environ.get("ALLOW_DIAGNOSTIC_ENDPOINT") or "").strip().lower() in {"1", "true", "yes"}
 COOKIE_HTTPS_ONLY = IS_PRODUCTION or APP_BASE_URL.startswith("https://")
 TRUSTED_HOSTS = [host.strip() for host in (os.environ.get("TRUSTED_HOSTS") or "").split(",") if host.strip()]
+OWNER_ADMIN_USERNAME = (os.environ.get("OWNER_ADMIN_USERNAME", "P.Mendyk") or "P.Mendyk").strip() or "P.Mendyk"
 
 
 def validate_security_configuration() -> None:
@@ -1944,8 +1945,17 @@ def verify_current_password(username: str, password: str) -> bool:
         return False
 
 
+def is_owner_portal_user(user: dict | None) -> bool:
+    if not user:
+        return False
+    if not user.get("is_superuser"):
+        return False
+    username = str(user.get("username") or "").strip().lower()
+    return bool(username) and username == OWNER_ADMIN_USERNAME.lower()
+
+
 def get_post_login_redirect_path(user: dict) -> str:
-    if user.get("is_superuser"):
+    if is_owner_portal_user(user):
         return "/owner"
     if int(user.get("mfa_required") or 0) and not int(user.get("mfa_enabled") or 0):
         return "/account?msg=mfa_required"
@@ -2423,7 +2433,7 @@ def get_current_org_context(request: Request) -> tuple[int | None, bool, int | N
 def require_admin(request: Request) -> dict:
     user = require_login(request)
     _user_id, is_superuser, _org_id, org_role = get_current_org_context(request)
-    if is_superuser:
+    if is_superuser and is_owner_portal_user(user):
         return user
     if table_exists("memberships"):
         if org_role in ("org_admin", "radiology_admin"):
@@ -2439,8 +2449,8 @@ def require_admin(request: Request) -> dict:
 
 def require_superuser(request: Request) -> dict:
     user = require_admin(request)
-    if not user.get("is_superuser"):
-        raise HTTPException(status_code=403, detail="Superuser only")
+    if not is_owner_portal_user(user):
+        raise HTTPException(status_code=403, detail="Owner account only")
     return user
 
 
@@ -3028,7 +3038,7 @@ def login_mfa_submit(request: Request, code: str = Form(...)):
 def forgot_password_page(request: Request, role: str = "admin"):
     user = get_session_user(request)
     if user:
-        if user.get("is_superuser"):
+        if is_owner_portal_user(user):
             return RedirectResponse(url="/owner", status_code=303)
         if user.get("role") == "admin":
             return RedirectResponse(url="/admin", status_code=303)
