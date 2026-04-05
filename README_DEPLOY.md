@@ -1,46 +1,75 @@
-Deployment guide — Azure, Heroku, and Cloud Run
+# Deployment
 
-This repo is ready to deploy. Below are short instructions for three common hosts.
+## Current Branch-To-Environment Workflow
 
-1) Azure App Service (recommended)
-- Create an Azure App Service for containers or use App Service with Docker.
-- Set environment variables in Azure portal (Configuration → Application Settings):
-  - `APP_SECRET`: Your secure secret key
-  - `DATABASE_URL`: PostgreSQL connection string
-  - `UPLOAD_DIR`: `/home/site/wwwroot/uploads` (persistent storage)
-  - `DB_PATH`: Not needed with PostgreSQL
-- Deploy via GitHub Actions, Azure CLI, or Docker push to Azure Container Registry:
-  ```bash
-  az login
-  az webapp deployment source config-zip --resource-group YOUR_RG --name YOUR_APP --src deployment.zip
-  ```
-- App Service includes built-in persistent storage at `/home/site/wwwroot`.
+The repo's active GitHub Actions deployment path is:
 
-2) Heroku (legacy)
-- Create an app and push:
-  ```bash
-  heroku login
-  git init
-  heroku create your-app-name
-  git add .
-  git commit -m "deploy"
-  git push heroku main
-  ```
-- Heroku will use the `Procfile` to run `uvicorn` and the `requirements.txt` for dependencies.
+- push to `develop` -> deploy staging via `.github/workflows/deploy-staging.yml`
+  - Azure Web App: `lumosradflow-staging`
+- push to `main` -> deploy production via `.github/workflows/deploy-production.yml`
+  - Azure Web App: `lumosradflow-prod`
 
-3) Google Cloud Run (container)
-- Build the container and push to Google Container Registry, then deploy to Cloud Run.
-  ```bash
-  gcloud auth login
-  gcloud config set project YOUR_PROJECT_ID
-  gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/vetting-app
-  gcloud run deploy vetting-app --image gcr.io/YOUR_PROJECT_ID/vetting-app --platform managed --region us-central1 --allow-unauthenticated --port 8080
-  ```
-- Cloud Run expects the container to listen on `$PORT` (Dockerfile sets `PORT=8080` by default).
+Both workflows currently:
 
-Notes
-- For production use, ensure `requirements.txt` lists all runtime dependencies.
-- Use a managed database service (Azure Database for PostgreSQL, Cloud SQL, RDS) rather than SQLite.
-- Set strong `APP_SECRET` values in production.
-- Uploads directory must be on persistent storage (App Service `/home/site/wwwroot`, or cloud storage).
+1. check out the repo
+2. set up Python 3.12
+3. run `pip install -r requirements.txt`
+4. deploy the repo package with `azure/webapps-deploy@v3`
 
+## Current Local-Then-Deploy Flow
+
+1. Work from `develop`.
+2. Install dependencies:
+   `python -m pip install --upgrade pip`
+   `pip install -r requirements.txt`
+3. Run locally:
+   `.\scripts\run-local.ps1 -Reload`
+4. Run the isolated manual test environment if needed:
+   `.\scripts\setup-test-env.ps1`
+   `.\scripts\run-test-local.ps1`
+5. Push `develop` and validate the staging site.
+6. Promote to `main` only after staging validation.
+
+## Runtime Expectations
+
+The app currently starts as ASGI app `app.main:app`.
+
+Repo startup/runtime assets:
+
+- `scripts/run-local.ps1` runs `uvicorn app.main:app`
+- `Dockerfile` uses:
+  `uvicorn app.main:app --host 0.0.0.0 --port ${PORT}`
+- `startup.sh` uses Gunicorn with Uvicorn workers:
+  `gunicorn --worker-class uvicorn.workers.UvicornWorker app.main:app`
+
+## Environment Settings To Provide
+
+At minimum, deployed environments should define:
+
+- `APP_SECRET`
+- `APP_BASE_URL`
+- either `DATABASE_URL` for PostgreSQL or `DB_PATH` for SQLite-style storage
+- `UPLOAD_DIR` when using local filesystem uploads
+
+Optional but currently supported:
+
+- `AZURE_STORAGE_CONNECTION_STRING`
+- SMTP settings for password reset and practitioner notifications
+- `IREFER_API_KEY`
+
+The tracked env examples also include:
+
+- `REFERRAL_FILE_TTL_DAYS`
+- `CASE_RECORD_TTL_DAYS`
+- `REFERRAL_BLOB_CONTAINER`
+- `ALLOW_DIAGNOSTIC_ENDPOINT`
+
+## Manual Azure Deploy Script
+
+The repo also contains `deploy.ps1`, which:
+
+1. logs into Azure Container Registry
+2. builds and pushes a Docker image
+3. restarts an Azure App Service named `Lumosradflow`
+
+That manual script does not match the GitHub Actions app names (`lumosradflow-staging` and `lumosradflow-prod`), so from code alone it looks like a separate or older manual deployment path. Use it only if your infrastructure process still relies on that app service/container route.

@@ -1,66 +1,75 @@
 # App Overview
 
 ## What The Application Does
-Vetting App is a FastAPI web platform for referral intake, radiology case triage/vetting, and operational management.
-It supports admin and radiologist workflows, document/file handling, reporting exports, and organization-aware access controls.
 
-## Workflow (Current)
-1. User authenticates and lands in role-specific workflow.
-2. Admin creates/ingests cases (`/submit`, optional referral parser trial).
-3. Cases move through pending/reopened/vetted/rejected lifecycle.
-4. Radiologists review assigned cases and submit decisions (`/vet/{case_id}`).
-5. Admins monitor queues, edit/reopen/reassign cases, and export reports (CSV/PDF).
-6. Superuser/tenant routes exist for organization-level management and governance.
+RadFlow is a FastAPI web application for referral intake, case triage, practitioner vetting, reporting, and organisation management.
 
-## Workflow (Planned Phase 2 Intake Expansion)
-1. Referrals may arrive through secure email, portal submission, or external system integration.
-2. Intake adapters normalize inbound payloads into a shared draft-case structure.
-3. Admin reviews, amends, and approves draft cases before they become active cases.
-4. Approved cases then follow the standard assignment, vetting, and reporting workflow.
+The current code supports:
 
-## Tech Stack
-- Backend: FastAPI + Starlette middleware
-- Frontend: Jinja2 templates + static CSS/JS
-- Database: SQLite (default) and PostgreSQL via `DATABASE_URL`
-- Data access: SQL-heavy route handlers + helper functions; SQLAlchemy wrapper for Postgres path
-- Storage: local filesystem uploads + optional Azure Blob storage
-- Reporting: ReportLab for PDF generation; CSV streaming endpoints
-- Deployment: Docker container, Azure App Service/ACR script workflow
+- session-based sign-in with password reset and optional TOTP MFA
+- owner, admin, practitioner, and coordinator-style access patterns
+- organisation-scoped case management and settings
+- admin reporting with CSV and PDF exports
+- practitioner notification and referral parser trial flows
 
-## Current Product Direction
-The application is currently being simplified to support a **single-client deployment**.
+## Current Workflow
 
-Although multi-tenant capabilities exist in the database schema and some routes, these features are not part of the current operational scope and will be disabled or simplified.
+1. User signs in through `/login`.
+2. If MFA is enabled, sign-in continues through `/login/mfa`.
+3. If MFA is required but not yet enrolled for an admin-capable user, the user is redirected to `/account` to complete enrollment.
+4. Owner users land on `/owner`.
+5. Organisation admins land on `/admin`.
+6. Practitioners land on `/radiologist`.
+7. Admins create or intake cases through `/submit` or `/intake/{org_id}`.
+8. Cases move through `pending`, `reopened`, `vetted`, and `rejected` states.
+9. Practitioners review assigned cases and submit decisions through `/vet/{case_id}`.
+10. Admins monitor dashboards, reopen/edit/reassign cases, notify practitioners, and export dashboard/case data.
 
-The priority is improving:
-- security
-- maintainability
-- operational stability
-- code clarity
+## Current Role Model
 
-before expanding the platform further.
+Operationally, the app now uses:
 
-## Current Operating Mode
-- One active client only.
-- No organisation switching in the UI.
-- No multi-tenant platform workflows exposed to users.
-- Existing organisation-related schema may remain in place for compatibility.
-- Multi-tenant expansion is paused until core application stabilization is complete.
+- Owner
+  - backed by `users.is_superuser`
+  - cross-organisation access and owner dashboard
+- Admin
+  - usually backed by `memberships.org_role = org_admin`
+  - `radiology_admin` is also treated as admin-capable in code
+- Practitioner
+  - backed by `memberships.org_role = radiologist`
+- Coordinator
+  - backed by `memberships.org_role = org_user`
 
-## In-Scope Features (Current)
-- Authentication
-- Case intake
-- Radiologist vetting workflow
-- Admin dashboard
-- File attachments
-- PDF generation
-- CSV export
-- Referral parser trial
-- iRefer search
-- Radiologist email notifications
+Legacy `users.role` values are still present for compatibility, but the active permission model is organisation-aware.
 
-## Future Intake Direction
-- Secure email-to-draft intake for approved client workflows
-- Structured portal referral submission
-- RIS/PACS or HL7-style external message intake
-- Shared draft review queue with source-aware audit trail
+## Product Direction
+
+The repo is no longer best described as "single-client only". The main application code actively uses `organisations`, `memberships`, owner routes, and organisation-scoped filtering.
+
+The more accurate current position is:
+
+- organisation-aware workflows are active in the main app
+- the old alternate multi-tenant router module is not the live path
+- owner/superuser governance now happens through `/owner*` routes, not the older `/mt/*` UX
+- future intake expansion is still expected to feed a reviewed workflow rather than bypass admin oversight
+
+## In-Scope Features
+
+- authentication, account management, and MFA
+- password reset
+- owner organisation management
+- admin dashboard and reporting
+- organisation settings and user management
+- practitioner queue and vetting
+- public org intake and admin submission
+- attachment handling and PDF generation
+- referral parser trial
+- iRefer lookup
+- practitioner notifications
+
+## Planned Intake Direction
+
+- secure email-to-draft intake
+- structured portal referral submission
+- external system adapters where appropriate
+- common reviewable draft-case model with source-aware audit trail

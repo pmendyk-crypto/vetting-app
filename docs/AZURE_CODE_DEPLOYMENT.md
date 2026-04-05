@@ -1,13 +1,13 @@
 # Azure Code Deployment
 
-This project deploys to Azure App Service using code publishing rather than containers.
+This repo currently deploys to Azure App Service through GitHub Actions code publishing.
 
 ## Current Environment Flow
 
-1. Work locally in VS Code.
+1. Work locally from `develop`.
 2. Push `develop` to deploy staging.
 3. Validate staging on Azure.
-4. Merge `develop` into `main`.
+4. Merge or promote `develop` into `main`.
 5. Push `main` to deploy production.
 
 ## Azure App Services
@@ -26,13 +26,13 @@ This project deploys to Azure App Service using code publishing rather than cont
 - `AZUREAPPSERVICE_PUBLISHPROFILE_STAGING`
 - `AZUREAPPSERVICE_PUBLISHPROFILE_PRODUCTION`
 
-These secrets must contain the full publish profile XML downloaded from the matching App Service.
+These secrets must contain the publish profile XML for the matching App Service.
 
 ## Azure App Configuration
 
-Use Python 3.12 on Linux for both apps.
+Use Python 3.12 on Linux for the GitHub Actions code deployment path.
 
-Recommended app settings for each environment:
+Recommended app settings:
 
 - `APP_BASE_URL`
 - `APP_SECRET`
@@ -44,21 +44,33 @@ Recommended app settings for each environment:
 - `REFERRAL_FILE_TTL_DAYS=7`
 - `CASE_RECORD_TTL_DAYS=28`
 - `LOGO_DARK_URL=/static/images/logo-light.png`
+- `ALLOW_DIAGNOSTIC_ENDPOINT=false` for production unless intentionally needed
+
+Optional app settings when relevant:
+
+- SMTP settings for password reset and practitioner notifications
+- `IREFER_API_KEY`
 
 Environment-specific notes:
 
-- Staging can keep `APP_BASE_URL` on the Azure default hostname.
-- Production should keep `APP_BASE_URL` on the Azure hostname until the custom domain is moved.
+- staging can keep `APP_BASE_URL` on the Azure default hostname
+- production should use the live external hostname for `APP_BASE_URL`
 
 ## Startup Commands
 
-- Staging currently uses: `bash startup.sh`
-- Production can use either `bash startup.sh` or a direct Gunicorn command if needed:
-  `gunicorn --bind=0.0.0.0:8000 --worker-class uvicorn.workers.UvicornWorker --timeout 600 app.main:app`
+- `bash startup.sh` is the repo-provided startup path if you want Gunicorn with Uvicorn workers
+- the repo also supports direct startup with:
+  `uvicorn app.main:app --host 0.0.0.0 --port ${PORT}`
 
-## Demo-Ready Checklist
+## Manual Script Caveat
 
-- Confirm both GitHub Actions workflows succeed.
-- Confirm staging and production load in the browser.
-- Confirm login and key demo flows work.
-- Keep the old broken container app out of the demo path.
+`deploy.ps1` still exists and performs an ACR-backed container deploy/restart flow against an app named `Lumosradflow`.
+
+That naming does not match the current GitHub Actions targets, so treat it as a separate or legacy manual deployment path unless infrastructure ownership confirms otherwise.
+
+## Validation Checklist
+
+- confirm the relevant GitHub Actions workflow succeeds
+- confirm staging or production loads in the browser
+- confirm owner, admin, practitioner, MFA, and password-reset flows behave as expected
+- confirm dashboard PDF, CSV exports, and settings/report text updates work

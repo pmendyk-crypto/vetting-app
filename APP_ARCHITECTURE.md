@@ -1,522 +1,190 @@
-# Vetting App - Architecture & Structure Guide
+# RadFlow Architecture
 
 ## Overview
-This is a **FastAPI-based web application** for managing medical case vetting and radiologist workflows. It uses SQLite/PostgreSQL for data storage and Jinja2 templates for the frontend.
-
-The current production emphasis is a stable manual/admin-led workflow. A planned phase 2 extension introduces a shared draft-case intake model so secure email, portal referrals, and external system integrations can all feed the same review and approval path.
-
----
-
-## 1. Core Technology Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Backend Framework** | FastAPI (Python) |
-| **Database** | SQLite (default) / PostgreSQL (production) |
-| **Frontend** | Jinja2 Templates + HTML/CSS |
-| **Session Management** | Starlette SessionMiddleware |
-| **Static Assets** | CSS, Images |
-| **Document Generation** | ReportLab (PDF generation) |
-
----
-
-## 2. Application Hierarchy & User Roles
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                 VETTING APP                              │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────────────┐  ┌──────────────────┐             │
-│  │   ADMIN ROLE     │  │ RADIOLOGIST ROLE │             │
-│  └────────┬─────────┘  └────────┬─────────┘             │
-│           │                      │                       │
-│    ┌──────┴──────┐        ┌──────┴──────┐              │
-│    │             │        │             │              │
-│  Admin      Settings    Queue      Dashboard           │
-│  Dashboard  Management  Page       Page                │
-│    │             │        │             │              │
-│  Cases      Institutions  Cases    Case Details       │
-│  Details    Radiologists  Under     & Actions         │
-│  & Vetting  Protocols     Review                       │
-│             Users                                       │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
-```
-
----
-
-## 3. Database Schema
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                        DATABASE                               │
-├──────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌─────────────────┐  ┌──────────────────┐                  │
-│  │   CASES         │  │  INSTITUTIONS    │                  │
-│  ├─────────────────┤  ├──────────────────┤                  │
-│  │ id (PRIMARY KEY)├──┤ id (FK)          │                  │
-│  │ created_at      │  │ name             │                  │
-│  │ patient_*       │  │ sla_hours        │                  │
-│  │ institution_id  │  │ created_at       │                  │
-│  │ status          │  │ modified_at      │                  │
-│  │ decision        │  └──────────────────┘                  │
-│  │ vetted_at       │                                         │
-│  │ radiologist     │  ┌──────────────────┐                  │
-│  └─────────────────┘  │  RADIOLOGISTS    │                  │
-│         │             ├──────────────────┤                  │
-│         │             │ name (PRIMARY)   │                  │
-│  ┌──────┴──────────┐  │ email            │                  │
-│  │  PROTOCOLS      │  │ surname          │                  │
-│  ├─────────────────┤  │ gmc              │                  │
-│  │ id (PRIMARY KEY)│  │ speciality       │                  │
-│  │ name            │  └──────────────────┘                  │
-│  │ institution_id  │                                         │
-│  │ instructions    │  ┌──────────────────┐                  │
-│  │ is_active       │  │    USERS         │                  │
-│  └─────────────────┘  ├──────────────────┤                  │
-│         │             │ username (PK)    │                  │
-│         │             │ role             │                  │
-│         │             │ radiologist_name │                  │
-│  ┌──────┴──────────┐  │ pw_hash_hex      │                  │
-│  │   CONFIG        │  │ salt_hex         │                  │
-│  ├─────────────────┤  └──────────────────┘                  │
-│  │ key (PRIMARY)   │                                         │
-│  │ value           │                                         │
-│  └─────────────────┘                                         │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 4. Page & Route Hierarchy
-
-### A. PUBLIC/AUTHENTICATION PAGES
-
-| Route | Template | Purpose |
-|-------|----------|---------|
-| `/` | `landing.html` | Public landing page (first visit) |
-| `/login` | `login.html` | User login page |
-| `/forgot-password` | `forgot_password.html` | Password reset page |
-| `/logout` | (redirect) | Clear session & logout |
-
----
-
-### B. ADMIN ROLE PAGES
-
-```
-ADMIN DASHBOARD (/admin)
-├── admin_case.html
-├── Shows all cases with status (pending/vetted)
-├── Filters & sorting
-├── Quick actions
-│
-├─ VIEW CASE DETAILS (/admin/case/{case_id})
-│  └── case_edit.html (read-only view of submission)
-│
-├─ EDIT CASE (/admin/case/{case_id}/edit) [POST]
-│  └── case_edit.html (edit form)
-│  └── Update case details, notes, assignments
-│
-└─ EXPORT (/admin.csv) [GET]
-   └── CSV download of all cases
-```
-
-**Admin Functions:**
-- View all submitted cases
-- Filter by status, date, institution, radiologist
-- Assign cases to radiologists
-- Add/edit case details & admin notes
-- Monitor SLAs (Service Level Agreements)
-- Export case data to CSV
-
----
-
-### C. RADIOLOGIST ROLE PAGES
-
-```
-RADIOLOGIST QUEUE (/radiologist)
-├── radiologist_queue.html
-├── Shows cases assigned to this radiologist
-├── Status: pending, under review
-│
-├─ RADIOLOGIST DASHBOARD (/radiologist) [ALTERNATE VIEW]
-│  └── radiologist_dashboard.html
-│  └── Different view of assigned cases
-│
-└─ VET A CASE (/vet/{case_id})
-   ├── vet.html
-   ├── Radiologist review form
-   ├── Decision options:
-   │  ├── Approve
-   │  ├── Reject
-   │  └── Approve with comment
-   └── Submit decision [POST /vet/{case_id}]
-```
-
-**Radiologist Functions:**
-- View assigned cases in queue
-- Review case details
-- Make vetting decisions (Approve/Reject/Comment)
-- Add decision comments
-- Track completed cases
-
----
-
-### D. CASE SUBMISSION PAGE
-
-``` 
-CASE SUBMISSION (/submit)
-├── submit.html
-├── Form for submitting new cases
-├── Fields:
-│  ├── Patient name (first, surname)
-│  ├── Referral ID
-│  ├── Institution dropdown
-│  ├── Protocol dropdown
-│  ├── Study description
-│  └── File upload (images/attachments)
-│
-├─ POST /submit
-│  └── Process form & file upload
-│  └── Create new case in database
-│  └── Generate unique case ID
-│
-└─ CONFIRMATION (/submitted/{case_id})
-   └── submitted.html
-   └── Show confirmation & case ID
-```
-
-### D2. PLANNED DRAFT INTAKE FLOW
-
-```
-INTAKE CHANNELS
-├── Secure email inbox
-├── Portal referral form
-└── RIS / PACS / HL7-style external message
-
-NORMALIZATION
-├── Parse inbound payload
-├── Preserve original attachment/source metadata
-└── Create draft case for review
-
-ADMIN DRAFT REVIEW
-├── Validate extracted fields
-├── Amend details if needed
-├── Approve into active workflow
-└── Reject / hold if incomplete
-```
-
-**Design intent:**
-- Different intake channels should converge on a single draft-case review model.
-- Automation should prepare work for admin review rather than bypass review.
-- This intake architecture is positioned as a phase 2 enhancement after the core workflow is stable.
-
----
-
-### E. SETTINGS MANAGEMENT PAGE
-
-```
-SETTINGS (/settings)
-└── settings.html
-    │
-    ├─ INSTITUTIONS TAB
-    │  ├── POST /settings/institution/add
-    │  ├── POST /settings/institution/edit/{inst_id}
-    │  └── POST /settings/institution/delete/{inst_id}
-    │  └── Manage hospital/clinic names & SLAs
-    │
-    ├─ RADIOLOGISTS TAB
-    │  ├── POST /settings/radiologist/add
-    │  ├── POST /settings/radiologist/delete
-    │  ├── GET /settings/radiologist/edit/{name}
-    │  └── POST /settings/radiologist/update
-    │  └── Manage radiologist profiles
-    │
-    ├─ PROTOCOLS TAB
-    │  ├── POST /settings/protocol/add
-    │  ├── POST /settings/protocol/edit/{protocol_id}
-    │  ├── POST /settings/protocol/delete
-    │  └── POST /settings/protocol/delete/{protocol_id}
-    │  └── Manage scanning protocols
-    │
-    └─ USERS TAB
-       ├── POST /settings/user/add
-       ├── POST /settings/user/delete
-       ├── POST /settings/user/edit
-       └── Manage system users & roles
-```
-
----
-
-### F. FILE & ATTACHMENT ENDPOINTS
-
-| Route | Method | Purpose |
-|-------|--------|---------|
-| `/case/{case_id}/attachment` | GET | Download uploaded file |
-| `/case/{case_id}/attachment/inline` | GET | View file inline (browser) |
-| `/case/{case_id}/pdf` | GET | Generate & download PDF report |
-
----
-
-## 5. Data Flow Diagrams
-
-### Flow 1: Case Submission
-
-```
-┌──────────────┐
-│  Submit Form │
-│  (/submit)   │
-└──────┬───────┘
-       │
-       │ User fills form & uploads file
-       │
-       ▼
-┌──────────────────────┐
-│  POST /submit        │
-│  - Store file        │
-│  - Generate case ID  │
-│  - Create DB record  │
-│  - Set status=pending│
-└──────┬───────────────┘
-       │
-       ▼
-┌──────────────────────┐
-│  /submitted/{case_id}│
-│  Show confirmation   │
-└──────────────────────┘
-```
-
-### Flow 2: Case Vetting (Admin → Radiologist → Admin)
-
-```
-┌──────────────────┐
-│  Admin Dashboard │
-│  (/admin)        │
-└────────┬─────────┘
-         │
-         │ Assign case to radiologist
-         │
-         ▼
-┌──────────────────────────┐
-│  Radiologist Queue       │
-│  (/radiologist)          │
-│  Shows assigned cases    │
-└────────┬─────────────────┘
-         │
-         │ Click to review
-         │
-         ▼
-┌──────────────────┐
-│  Vet Case        │
-│  (/vet/{case_id})│
-│  Review details  │
-│  Make decision   │
-└────────┬─────────┘
-         │
-         │ Submit decision
-         │ POST /vet/{case_id}
-         │
-         ▼
-┌──────────────────────────┐
-│  Update Case Record      │
-│  - Set status=vetted     │
-│  - Store decision        │
-│  - Record decision_date  │
-│  - Calculate TAT         │
-└────────┬─────────────────┘
-         │
-         ▼
-┌──────────────────────┐
-│  Admin Dashboard     │
-│  Shows updated case  │
-│  (now in vetted list)│
-└──────────────────────┘
-```
-
-### Flow 3: Settings Management
-
-```
-┌──────────────────┐
-│  Settings Page   │
-│  (/settings)     │
-└────────┬─────────┘
-         │
-    ┌────┴────┬────────┬───────┐
-    │          │        │       │
-    ▼          ▼        ▼       ▼
-Institutions Radiologists Protocols Users
-    │          │        │       │
-    │          │        │       │
- Add/Edit   Add/Edit  Add/Edit Add/Edit
- Delete     Delete    Delete   Delete
-```
-
----
-
-## 6. Key Features by Page
-
-| Page | Key Features | User Role |
-|------|--------------|-----------|
-| **Admin Dashboard** | Case list, filters, status tracking, SLA monitoring | Admin |
-| **Radiologist Queue** | Case assignments, pending review count, quick actions | Radiologist |
-| **Case Submission** | Multi-field form, file upload, validation | Public/All |
-| **Case Details** | View/edit patient info, notes, protocol, decision | Admin & Radiologist |
-| **Vetting** | Decision form (Approve/Reject/Comment), comments field | Radiologist |
-| **Settings** | CRUD operations for Institutions, Users, Protocols, Radiologists | Admin |
-| **CSV Export** | Download all cases with metadata | Admin |
-
----
-
-## 7. File Organization
-
-```
-Vetting App/
-├── app/
-│   └── main.py (FastAPI routes & business logic - 1940 lines)
-│
-├── templates/ (Jinja2 HTML templates)
-│   ├── landing.html (public entry point)
-│   ├── login.html & forgot_password.html (auth)
-│   ├── index.html (home redirect)
-│   ├── admin_case.html (admin dashboard)
-│   ├── case_edit.html (case detail/edit)
-│   ├── radiologist_queue.html (radiologist queue)
-│   ├── radiologist_dashboard.html (alt dashboard)
-│   ├── radiologist_edit.html (radiologist profile edit)
-│   ├── submit.html (case submission form)
-│   ├── submitted.html (submission confirmation)
-│   ├── vet.html (vetting decision form)
-│   ├── settings.html (admin settings)
-│   └── home.html (user home page)
-│
-├── static/
-│   ├── css/
-│   │   ├── login.css (login page styling)
-│   │   └── site.css (global styling)
-│   └── images/ (app images & icons)
-│
-├── uploads/ (user-submitted files)
-│
-└── Database Files:
-    ├── hub.db (SQLite default)
-    └── or PostgreSQL (DATABASE_URL env var)
-```
-
----
-
-## 8. Dependencies & Connections
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    EXTERNAL DEPENDENCIES                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  FastAPI       ← Core framework                              │
-│  Starlette     ← Session & middleware support                │
-│  Jinja2        ← Template rendering                          │
-│  SQLAlchemy    ← PostgreSQL support (optional)               │
-│  ReportLab     ← PDF generation                              │
-│  SQLite3       ← Default database                            │
-│                                                               │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 9. Authentication & Authorization Flow
-
-```
-┌──────────────────┐
-│  Login Page      │ (POST /login)
-└────────┬─────────┘
-         │
-         ▼
-┌─────────────────────────────────────┐
-│  Verify Credentials                 │
-│  - Check users table                │
-│  - Hash password & compare          │
-│  - Retrieve user role & metadata    │
-└────────┬────────────────────────────┘
-         │
-    ┌────┴─────┬───────────┐
-    │ SUCCESS   │  FAILURE  │
-    ▼           ▼
-┌──────────┐  ┌──────────┐
-│ Create   │  │ Show     │
-│ Session  │  │ Error    │
-│ Redirect │  │ Message  │
-│ to /     │  └──────────┘
-└──────────┘
-    │
-    ▼
-┌────────────────────────────────────┐
-│  Session Middleware                │
-│  - Set session cookie              │
-│  - Store user info in session      │
-│  - Enable role-based access        │
-└────────────────────────────────────┘
-```
-
----
-
-## 10. Quick Reference: Route Summary
-
-**35 Total Routes:**
-
-| Category | Count | Routes |
-|----------|-------|--------|
-| Authentication | 5 | /, /login (GET/POST), /forgot-password (GET/POST), /logout |
-| Admin | 6 | /admin, /admin.csv, /admin/case/{id} (GET/view), /admin/case/{id}/edit (GET/POST) |
-| Radiologist | 2 | /radiologist, /vet/{case_id} (GET/POST) |
-| Submission | 3 | /submit (GET/POST), /submitted/{case_id} |
-| Settings | 12 | /settings + institution/radiologist/protocol/user CRUD ops |
-| Files | 3 | /case/{id}/attachment, /attachment/inline, /pdf |
-
----
-
-## 11. Important Concepts
-
-### Case Status Flow
-```
-pending → (assigned to radiologist) → (radiologist reviews) → vetted
-```
-
-### Decision Types
-- **Approve**: Case accepted
-- **Reject**: Case rejected
-- **Approve with comment**: Approved + notes
-
-### SLA (Service Level Agreement)
-- Stored per institution
-- Tracks time from case creation to vetting completion
-- Formatted as: `Xd XXh XXm` (days, hours, minutes)
-
----
-
-## 12. Environment Configuration
-
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| `DB_PATH` | SQLite database location | `./hub.db` |
-| `UPLOAD_DIR` | File upload storage path | `./uploads` |
-| `DATABASE_URL` | PostgreSQL URL (optional) | None |
-| `APP_SECRET` | Session encryption key | `dev-secret-change-me` |
-| `PORT` | Server port (Docker) | `8080` |
-
----
-
-## Summary
-
-Your Vetting App is a **multi-role medical case management system** with:
-
-1. **Two main user roles** (Admin & Radiologist)
-2. **Clear data flow** from case submission → admin review → radiologist vetting
-3. **Comprehensive settings** for managing institutions, users, and protocols
-4. **Database-backed** with support for SQLite and PostgreSQL
-5. **Document export** capabilities (CSV & PDF)
-6. **SLA tracking** for performance monitoring
-
-The app follows a **typical web application pattern** with FastAPI backend + Jinja2 frontend, organized by user roles and workflows.
+
+RadFlow is a FastAPI application with server-rendered Jinja templates for referral intake, admin triage, practitioner vetting, and owner-level organisation management. It runs against SQLite by default for local work and can use PostgreSQL in deployed environments via `DATABASE_URL`.
+
+The current implementation is centred in `app/main.py`. The app includes:
+
+- public landing and sign-in
+- session-based authentication with optional TOTP MFA
+- organisation-scoped admin and practitioner workspaces
+- owner/superuser organisation management
+- PDF and CSV reporting/export
+
+## Core Stack
+
+| Layer | Current implementation |
+|---|---|
+| Backend | FastAPI |
+| Templates | Jinja2 |
+| Auth/session | Starlette `SessionMiddleware` + password hashing in app code |
+| MFA | Authenticator-app TOTP with QR provisioning |
+| Database | SQLite locally, PostgreSQL-compatible code paths in production |
+| Reporting | ReportLab PDF generation + CSV exports |
+| File storage | Local uploads by default, optional Azure Blob storage |
+
+## Runtime Structure
+
+| Area | Main routes/templates | Purpose |
+|---|---|---|
+| Public/auth | `/`, `/login`, `/login/mfa`, `/forgot-password`, `/reset-password`, `/logout` | Entry, password reset, MFA step-up, sign-out |
+| Account | `/account`, `/account/edit`, `/account/change-password`, `/account/mfa/*` | Profile maintenance and self-service MFA enrollment |
+| Admin workspace | `/admin`, `/admin/case/{id}`, `/admin/case/{id}/edit`, `/admin/case/{id}/reopen`, `/admin.csv`, `/admin.events.csv`, `/admin/dashboard-report.pdf`, `/admin/notify-radiologist` | Operational dashboard, case management, exports, practitioner notifications |
+| Practitioner workspace | `/radiologist`, `/vet/{case_id}` | Assigned queue and vetting decisions |
+| Submission | `/submit`, `/submitted/{case_id}`, `/intake/{org_id}` | New case creation and org-specific intake |
+| Settings | `/settings` and `/settings/*` | Institutions, protocols, users, report text, radiologist/profile metadata |
+| Owner workspace | `/owner`, `/owner/organisations`, `/owner/organisations/{org_id}` and child user/org routes | Superuser-only organisation administration |
+
+## Current Roles And Permission Model
+
+There are two layers of permission data in the current code:
+
+1. `users.is_superuser`
+   Used for the owner-level account with cross-organisation access.
+2. `memberships.org_role`
+   Used for organisation-scoped access in normal operation.
+
+Current organisation role names in code:
+
+| Stored value | UI label | Effective access |
+|---|---|---|
+| `org_admin` | Admin | Full organisation admin access |
+| `radiology_admin` | Admin | Accepted by `require_admin`; treated as admin-capable |
+| `radiologist` | Practitioner | Practitioner queue and vetting access |
+| `org_user` | Coordinator | Non-admin organisation user |
+
+Legacy `users.role` values (`admin`, `radiologist`, `user`) still exist and are mapped into the membership model for compatibility and setup flows.
+
+### Permission boundaries
+
+- `require_superuser` gates owner routes.
+- `require_admin` allows:
+  - any `is_superuser` user
+  - organisation members with `org_role` of `org_admin` or `radiology_admin`
+  - legacy fallback users with `role == "admin"`
+- `require_radiologist` allows:
+  - any `is_superuser` user
+  - organisation members with `org_role == "radiologist"`
+  - legacy fallback users with `role == "radiologist"`
+
+## Authentication And MFA Flow
+
+Current sign-in is a two-step session flow:
+
+1. User posts credentials to `POST /login`.
+2. Login attempts are rate-limited by client IP.
+3. Credentials are checked against the current user store.
+4. If the account has `mfa_enabled` and `mfa_secret`, the session is parked in a pending MFA state and the user is redirected to `GET /login/mfa`.
+5. `POST /login/mfa` verifies a 6-digit TOTP code and only then completes the login session.
+6. On success, the app stores a session with user identity, role context, MFA flags, and a session id.
+7. Post-login redirect is role-sensitive:
+   - superuser -> `/owner`
+   - admin -> `/admin`
+   - practitioner -> `/radiologist`
+   - users with required-but-not-enabled MFA -> `/account?msg=mfa_required`
+
+### MFA enrollment and enforcement
+
+- User records include `mfa_required`, `mfa_enabled`, `mfa_secret`, and `mfa_pending_secret`.
+- Users enroll from `/account`:
+  - `POST /account/mfa/begin` generates a pending secret
+  - the account page renders the TOTP secret and QR code
+  - `POST /account/mfa/enable` verifies the first code and promotes the secret to active MFA
+  - `POST /account/mfa/disable` disables MFA when allowed
+- Admin access is MFA-aware:
+  - if an admin-capable account is marked `mfa_required` but has not completed enrollment, `require_admin` returns `403` with `MFA enrollment required`
+  - the global auth handler redirects signed-in users in that state to `/account?msg=mfa_required`
+- Owner and organisation user creation/edit flows can mark admin or user accounts as MFA-required.
+
+## Main Operational Flows
+
+### Submission
+
+- Cases are created through `/submit` or org-specific `/intake/{org_id}`.
+- Submission stores patient/referral details, assignment, notes, and uploaded referral files.
+- Status starts as pending and the confirmation page is `/submitted/{case_id}`.
+
+### Admin workflow
+
+- `/admin` is the main workspace for organisation admins and superusers.
+- The admin page combines:
+  - worklist filtering and sorting
+  - dashboard metrics and charts
+  - case assignment/reassignment
+  - reopen flow
+  - CSV export
+  - PDF dashboard report export
+- `/admin/case/{id}` and `/admin/case/{id}/edit` handle case review and editing.
+- `/admin/notify-radiologist` sends practitioner notifications and records notify events when configured.
+
+### Practitioner workflow
+
+- `/radiologist` shows the logged-in practitioner's queue.
+- `/vet/{case_id}` is the decision screen.
+- Decisions and timeline data flow back into the shared admin reporting surface.
+
+### Owner workflow
+
+- `/owner` is reserved for `is_superuser` accounts.
+- Owners can create organisations, seed the first admin, require MFA for that admin, manage organisation users, reset passwords, and delete organisations or child records from the owner organisation screens.
+
+## Reporting And Dashboard Changes
+
+The current admin dashboard is more than a simple case list. It now includes:
+
+- KPI-style summary cards for filtered case volume and turnaround metrics
+- chart sections for:
+  - cases by status
+  - cases over time
+  - cases by institution
+  - practitioner workload
+- dashboard-specific filters for range, date window, institution, and practitioner
+- `GET /admin/dashboard-report.pdf` to export the dashboard slice as PDF
+- `POST /settings/report` to manage organisation-specific report header/footer text used in generated reports
+- `GET /admin.events.csv` for case event export in addition to the main case CSV export
+
+## Data Model Notes
+
+Important current tables/entities visible in code:
+
+- `users`
+- `organisations`
+- `memberships`
+- `institutions`
+- `protocols`
+- `cases`
+- `case_events`
+- `radiologist_profiles`
+- `notify_events`
+- settings/config storage used for report header/footer values
+
+The code still carries compatibility logic for older single-tenant and legacy-role schemas, but active permissions are now organisation-aware.
+
+## File And Code Layout
+
+| Path | Current role |
+|---|---|
+| `app/main.py` | Main FastAPI app, auth, routing, business logic, reporting, migrations/bootstrap |
+| `app/security.py` | Security helpers used by the app |
+| `app/referral_ingest.py` | Referral parsing support |
+| `templates/landing.html` | Public role-selection landing page |
+| `templates/login.html` | Role-aware sign-in page |
+| `templates/mfa_verify.html` | MFA verification step |
+| `templates/home.html` | Admin workspace/dashboard |
+| `templates/radiologist_dashboard.html` | Practitioner workspace |
+| `templates/settings.html` | Organisation settings and report settings |
+| `templates/owner_dashboard.html` | Owner/superuser overview |
+| `templates/owner_organisation_edit.html` | Owner organisation detail and user management |
+| `scripts/run-local.ps1` | Local app runner |
+| `scripts/setup-test-env.ps1` | Test environment bootstrap |
+| `scripts/run-test-local.ps1` | Isolated local test runner |
+
+## Deployment Workflow In Repo
+
+The GitHub workflow configuration shows the current branch-to-environment path:
+
+- push to `develop` -> `.github/workflows/deploy-staging.yml` -> Azure Web App `lumosradflow-staging`
+- push to `main` -> `.github/workflows/deploy-production.yml` -> Azure Web App `lumosradflow-prod`
+
+There is also a manual `deploy.ps1` that builds/pushes a container image and restarts an Azure app named `Lumosradflow`. The repo does not fully explain whether that script is a legacy/manual production path or a parallel deployment path, so treat it as a separately maintained manual option unless the infrastructure owner confirms otherwise.

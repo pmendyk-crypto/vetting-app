@@ -1,479 +1,166 @@
-# Staging Environment Test Plan - Vetting App V2
+# Staging Environment Test Plan
 
 ## Overview
-This document outlines a comprehensive test plan for validating all 10 bug fixes in a staging environment before production deployment.
 
----
+This document outlines the current staging validation plan before promoting `develop` to `main`.
 
 ## Pre-Deployment Setup
 
-### 1. Environment Preparation
+### 1. Deployment Trigger
 
 ```powershell
-# Create staging directory structure
-$stagingPath = "C:\Staging\VettingApp_V2_$(Get-Date -Format 'yyyyMMdd')"
-New-Item -ItemType Directory -Path $stagingPath -Force
-
-# Copy production code to staging
-Copy-Item "C:\Users\pmend\project\Vetting app\*" $stagingPath -Recurse -Force
-
-# Backup production database
-Copy-Item "C:\Users\pmend\project\Vetting app\hub.db" `
-    "C:\Backups\hub.db.production.$(Get-Date -Format 'yyyyMMdd_HHmmss').backup" -Force
-
-# Copy database to staging (fresh or copy for testing)
-Copy-Item "C:\Users\pmend\project\Vetting app\hub.db" "$stagingPath\hub.db" -Force
+git push origin develop
 ```
 
-### 2. Staging Server Configuration
-- Use separate port: 8001 (vs production 8000)
-- Use separate database or database backup
-- Enable verbose logging
-- Configure monitoring/alerting
+### 2. Staging Configuration
 
----
+- staging is deployed by `.github/workflows/deploy-staging.yml`
+- target Azure Web App: `lumosradflow-staging`
+- confirm staging app settings are present for auth, storage, reporting, and SMTP-sensitive flows when needed
 
 ## Test Execution Plan
 
-### Phase 1: Smoke Tests (Basic Functionality)
-**Duration: 15 minutes**
-**Tester: QA Lead**
+### Phase 1: Smoke Tests
+
+Duration: 15 minutes
+Tester: QA Lead
 
 | Test | Steps | Expected Result | Status |
 |------|-------|-----------------|--------|
-| App Startup | Start staging application | No errors in logs | ☐ PASS |
-| Database Migration | Check logs for migration | modified_at column created | ☐ PASS |
-| Login | Admin login with admin/admin123 | Dashboard loads | ☐ PASS |
-| Navigation | Click through main pages | All pages load without errors | ☐ PASS |
+| App Startup | Open staging URL | App loads without server error | [ ] PASS |
+| Owner Login | Sign in as owner/superuser | Redirects to `/owner` | [ ] PASS |
+| Admin Login | Sign in as admin | Redirects to `/admin` | [ ] PASS |
+| Practitioner Login | Sign in as practitioner | Redirects to `/radiologist` | [ ] PASS |
+| MFA Login | Test MFA-enabled account | Redirects through `/login/mfa` and completes sign-in | [ ] PASS |
 
-### Phase 2: Bug Fix Validation Tests
-**Duration: 45 minutes**
-**Tester: QA Team**
+### Phase 2: Core Workflow Validation
 
-#### Bug 1: User Creation without Radiologist Profile
-**Test ID:** BUG1-TC01
-```
-Steps:
-1. Navigate to Settings > Users tab
-2. Click "Add New User"
-3. Fill form:
-   - Username: test_admin_user
-   - Password: TempPassword123!
-   - First Name: Test
-   - Surname: Admin
-   - Email: test@example.com
-   - Role: Admin (NOT radiologist)
-   - Leave "Link to Radiologist" blank
-4. Click "Add User"
+Duration: 45 minutes
+Tester: QA Team
 
-Expected Result:
-✓ User created successfully
-✓ No error about radiologist profile
-✓ User appears in Current Users list with Admin role
-✓ radiologist_name field is NULL in database
+#### Test 1: Owner organisation management
 
-Acceptance Criteria:
-- Admin users can be created without radiologist profile
-- System doesn't enforce radiologist_name for admin role
-```
-
-#### Bug 2: Institution Timestamps
-**Test ID:** BUG2-TC01
-```
-Steps:
-1. Navigate to Settings > Institutions tab
-2. Create new institution:
-   - Name: Test Hospital V2
-   - SLA: 48 hours
-3. Click "Add Institution"
-4. Verify in Current Institutions table:
-   - Created column shows timestamp (DD-MM-YYYY HH:MM format)
-   - Modified column shows timestamp
-
-Expected Result:
-✓ Both Created and Modified columns displayed
-✓ Timestamps in DD-MM-YYYY HH:MM format
-✓ Both show same time (since just created)
-
-Acceptance Criteria:
-- Institution timestamps are properly formatted
-- Modified column exists and displays
-```
-
-**Test ID:** BUG2-TC02
-```
-Steps:
-1. Find "Test Hospital V2" in Current Institutions
-2. Click "Edit" button
-3. Change SLA to 72 hours
-4. Click save
-5. Navigate back to Institutions tab
-6. Verify Modified timestamp changed
-
-Expected Result:
-✓ Modified timestamp updated to current time
-✓ Created timestamp remains unchanged
-✓ Time difference visible between Created and Modified
-
-Acceptance Criteria:
-- Modified timestamp updates on edit
-- Created timestamp immutable
-- Both timestamps properly formatted
-```
-
-#### Bug 3: Column Sorting
-**Test ID:** BUG3-TC01
-```
-Steps:
-1. Navigate to Admin Dashboard
-2. Locate column headers: Study, Radiologist
-3. Click "Study" column header
-4. Verify:
-   - Arrow indicator appears (↑ or ↓)
-   - Cases reorder by study description
-5. Click "Study" again
-6. Verify order reverses
-
-Expected Result:
-✓ Sort arrow appears next to Study
-✓ Cases sort alphabetically by study_description
-✓ Clicking again reverses sort direction
-✓ URL updates with sort_by=study_description
-
-Acceptance Criteria:
-- Study column is sortable with visual indicator
-- Sort direction toggles properly
-```
-
-**Test ID:** BUG3-TC02
-```
-Steps:
-1. Click "Radiologist" column header
-2. Verify:
-   - Arrow indicator appears
-   - Cases reorder by radiologist name
-3. Click again to reverse order
-
-Expected Result:
-✓ Sort arrow appears next to Radiologist
-✓ Cases sort by radiologist name
-✓ Sort direction toggles properly
-
-Acceptance Criteria:
-- Radiologist column is sortable with visual indicator
-```
-
-#### Bug 4: Edit Case Form Readability
-**Test ID:** BUG4-TC01
-```
-Steps:
-1. Navigate to Admin Dashboard
-2. Click a case "Open" link
-3. Click "Edit Case" button
-4. Evaluate form readability:
-   - Can you clearly see form labels?
-   - Can you read text in input fields?
-   - Is contrast good when typing?
-   - Does focus state (blue border) show clearly?
-
-Expected Result:
-✓ Labels clearly visible (white text on dark)
-✓ Input text clearly readable (white text on dark blue)
-✓ Good contrast throughout
-✓ Focus state has visible blue border + shadow
-✓ No white-on-white or light-on-light issues
-
-Acceptance Criteria:
-- All form elements have adequate contrast
-- Text is legible when typing
-- Focus states are clearly visible
-```
-
-#### Bug 5: Radiologist Vetting - No Download
-**Test ID:** BUG5-TC01
-```
-Prerequisites:
-- Have a case with an attachment assigned to radiologist
-- Case status: pending
+Test ID: `STAGE-TC01`
 
 Steps:
-1. Login as radiologist user
-2. Navigate to Radiologist Dashboard
-3. Open a pending case with attachment
-4. Look at "Attachment" section
 
-Expected Result:
-✓ Attachment filename shown
-✓ NO "Download" link visible
-✓ NO "Download" button visible
-✓ Attachment preview visible in right panel
-✓ Can view attachment in embedded preview only
+1. Open `/owner`
+2. Create or edit a staging organisation
+3. Add or edit an organisation user
+4. Set MFA-required where appropriate
 
-Acceptance Criteria:
-- Download option completely removed
-- Radiologist can only view via preview
-- No HTML/CSS remnants of download link
-```
+Expected result:
 
-#### Bug 6 & 7: Protocol Requirement on Reject
-**Test ID:** BUG6-TC01
-```
-Prerequisites:
-- Case assigned to radiologist
-- Case status: pending
-- With protocols defined
+- organisation page loads
+- user management actions succeed
+- MFA-required flag persists
+
+#### Test 2: Admin dashboard and reporting
+
+Test ID: `STAGE-TC02`
 
 Steps:
-1. Login as radiologist
-2. Open pending case
-3. In "Vetting Decision" form:
-   - Select "Reject" from Decision dropdown
-4. Observe Protocol field
 
-Expected Result:
-✓ Protocol field becomes HIDDEN
-✓ Protocol field not required
-✓ Comment field appears and is REQUIRED
-✓ Info box shows: "⚠️ Required: Comment is mandatory when rejecting a case"
+1. Open `/admin`
+2. Apply dashboard filters
+3. Export `/admin.csv`
+4. Export `/admin.events.csv`
+5. Export `/admin/dashboard-report.pdf`
 
-Acceptance Criteria:
-- Protocol field hidden for Reject
-- Comment field mandatory for Reject
-- User cannot submit without comment
-```
+Expected result:
 
-**Test ID:** BUG6-TC02
-```
-Steps (continue from BUG6-TC01):
-1. Try to submit form without comment
-2. Observe error
+- dashboard loads
+- filters update results
+- all exports download successfully
 
-Expected Result:
-✓ Form validation prevents submission
-✓ Error message: "Comment is required when rejecting a case"
-✓ Focus moves to comment field
+#### Test 3: Settings
 
-Acceptance Criteria:
-- Backend validates comment is required for reject
-```
-
-**Test ID:** BUG6-TC03
-```
-Steps:
-1. Select "Approve" from Decision dropdown
-2. Observe Protocol field
-
-Expected Result:
-✓ Protocol field becomes VISIBLE
-✓ Protocol field is REQUIRED
-✓ Comment field optional
-✓ Cannot submit without selecting protocol
-
-Acceptance Criteria:
-- Protocol field visible for Approve
-- Protocol field mandatory for Approve
-- Validation prevents empty protocol
-```
-
-#### Bug 8: PDF Generation
-**Test ID:** BUG8-TC01
-```
-Prerequisites:
-- Have a vetted case (status=vetted, decision=Approve)
+Test ID: `STAGE-TC03`
 
 Steps:
-1. Navigate to Admin Dashboard
-2. Find vetted case
-3. Click case to view details
-4. Click "Open vetting Form" (PDF link)
-5. Wait for PDF to generate and download
-6. Verify PDF content
 
-Expected Result:
-✓ PDF downloads without error
-✓ No error message in logs
-✓ PDF contains case details:
-  - Case ID
-  - Created timestamp
-  - Patient name
-  - Radiologist
-  - Vetting decision
-  - Protocol
-✓ Timestamps formatted correctly (DD-MM-YYYY HH:MM)
+1. Open `/settings`
+2. Verify institutions, protocols, users, and study description presets
+3. Save report header/footer text
 
-Acceptance Criteria:
-- PDF generates without 'sqlite3.Row' error
-- All case data present in PDF
-- PDF is readable and properly formatted
-```
+Expected result:
 
-**Test ID:** BUG8-TC02
-```
-Prerequisites:
-- Have a rejected case (status=rejected, decision=Reject)
+- CRUD actions succeed
+- report text saves
+- updated report text appears in generated report output where expected
+
+#### Test 4: Submission and vetting
+
+Test ID: `STAGE-TC04`
 
 Steps:
-1. Navigate to Admin Dashboard
-2. Find rejected case
-3. Click "Open vetting Form"
-4. Verify PDF generates correctly
 
-Expected Result:
-✓ PDF generates without error
-✓ Decision shows "Reject"
-✓ Protocol field omitted (since rejected)
-✓ Comment displayed if provided
+1. Create a case via `/submit` or `/intake/{org_id}`
+2. Assign a practitioner
+3. Sign in as practitioner
+4. Vet the case
+5. Re-open or review the case from admin
 
-Acceptance Criteria:
-- PDF generation works for rejected cases
-- Protocol not shown for rejected decisions
-```
+Expected result:
 
-#### Bug 9: Prevent Editing Approved Cases
-**Test ID:** BUG9-TC01
-```
-Prerequisites:
-- Have an approved case (status=vetted, decision=Approve)
+- case moves through the expected lifecycle
+- practitioner action is reflected in admin view
+- exports include the updated state
+
+#### Test 5: Authentication edge cases
+
+Test ID: `STAGE-TC05`
 
 Steps:
-1. Navigate to Admin Dashboard
-2. Click on approved case
-3. Observe Edit button
 
-Expected Result:
-✓ "Edit Case" button is NOT visible
-✓ No Edit button displayed
-✓ Only "Back" and "Logout" buttons shown
+1. Test invalid login
+2. Test MFA-enabled login
+3. Test MFA-required but not enrolled admin login
+4. Test forgot-password and reset-password if SMTP is configured
 
-Acceptance Criteria:
-- Edit button hidden for approved cases
-```
+Expected result:
 
-**Test ID:** BUG9-TC02
-```
-Prerequisites:
-- Have a pending case (status=pending)
+- invalid login is rejected
+- MFA flow completes
+- MFA-required user is sent to `/account`
+- password reset behaves correctly for the environment configuration
 
-Steps:
-1. Navigate to Admin Dashboard
-2. Click on pending case
-3. Observe Edit button
+### Phase 3: Regression Checks
 
-Expected Result:
-✓ "Edit Case" button IS visible
-✓ Can click button without restriction
-✓ Edit form loads
-
-Acceptance Criteria:
-- Edit button visible for non-approved cases
-```
-
-**Test ID:** BUG9-TC03
-```
-Steps:
-1. Try to manually navigate to approved case edit URL:
-   URL: /admin/case/{approved_case_id}/edit
-2. Observe response
-
-Expected Result:
-✓ Returns 403 Forbidden error
-✓ Error message: "Cannot edit approved cases"
-✓ Redirected to case details or home
-
-Acceptance Criteria:
-- Backend prevents access to edit endpoint
-- Security enforced even if button bypassed
-```
-
-#### Bug 10: Updated Labels
-**Test ID:** BUG10-TC01
-```
-Prerequisites:
-- Case with attachment
-
-Steps:
-1. Navigate to case details page
-2. Look at the attachment links
-
-Expected Result:
-✓ Link text reads "Download referral" (not "Download attachments")
-✓ Link text reads "Open vetting Form" (not "Open PDF")
-
-Acceptance Criteria:
-- Labels updated as specified
-- User-friendly terminology used
-```
-
-### Phase 3: Integration Tests
-**Duration: 30 minutes**
-**Tester: QA Team**
+Duration: 30 minutes
+Tester: QA Team
 
 | Scenario | Test Steps | Expected Result | Status |
 |----------|-----------|-----------------|--------|
-| User Workflow | Create user → Create case → Assign radiologist → Vet case → Review PDF | All steps work without errors | ☐ PASS |
-| Concurrent Users | Multiple users on dashboard simultaneously | No database locks or conflicts | ☐ PASS |
-| Data Integrity | Reject case → Try to edit → Approve case → Try to edit | State transitions work correctly | ☐ PASS |
-| Performance | Load dashboard with 100+ cases | Loads in <3 seconds | ☐ PASS |
-
-### Phase 4: Regression Tests
-**Duration: 30 minutes**
-**Tester: QA Lead**
-
-| Feature | Test | Expected Result | Status |
-|---------|------|-----------------|--------|
-| Login | Login with valid credentials | Dashboard loads | ☐ PASS |
-| Submission | Submit new case | Case created, status=pending | ☐ PASS |
-| Settings | Manage institutions/radiologists/users | CRUD operations work | ☐ PASS |
-| CSV Export | Export cases to CSV | File generated correctly | ☐ PASS |
-| Filtering | Filter cases by institution/radiologist | Results accurate | ☐ PASS |
-
----
+| Login | Owner, admin, and practitioner logins all work | Correct landing pages | [ ] PASS |
+| Submission | Submit new case | Case created and visible | [ ] PASS |
+| Settings | Manage institutions, protocols, users, presets | CRUD operations work | [ ] PASS |
+| Exports | CSV and PDF exports | Files generate correctly | [ ] PASS |
+| Notifications | Practitioner notify flow | Email path works when configured | [ ] PASS |
 
 ## Test Execution Tracking
 
-### Test Summary Template
-```
 Date: __________
 Tester: __________
 Environment: Staging
-Build Version: V2
-
-Total Tests Planned: 15
-Tests Passed: ____
-Tests Failed: ____
-Tests Blocked: ____
+Branch: `develop`
 
 Issues Found:
-1. [Description] - Severity: [Critical/High/Medium/Low]
-2. [Description] - Severity: [Critical/High/Medium/Low]
 
-Blockers for Production:
-- [ ] None
-- [ ] Yes, see issue #_
+1. ___________________________________
+2. ___________________________________
 
 Recommendation:
-[ ] Ready for Production
-[ ] Needs Fixes (issues listed above)
-[ ] Not Ready
-```
 
----
+- [ ] Ready for promotion to `main`
+- [ ] Needs fixes before promotion
+- [ ] Not ready
 
-## Defect Severity Guidelines
+## Severity Guidelines
 
 | Severity | Definition | Example |
 |----------|-----------|---------|
-| **Critical** | Application crash or data loss | PDF generation error with every case |
-| **High** | Major feature broken | Can't reject cases |
-| **Medium** | Feature works but has issues | Sort direction doesn't toggle |
-| **Low** | Minor UI/UX issue | Label text slightly off |
-
----
-
-## Sign-Off
-
-- [ ] QA Lead: _________________ Date: _________
-- [ ] Tech Lead: ________________ Date: _________
-- [ ] Product Manager: __________ Date: _________
-
-**Production Deployment Approved:** YES / NO
+| Critical | Application crash or data loss | Staging cannot start or sign-in fails for all users |
+| High | Major workflow broken | Admin or practitioner flow cannot complete |
+| Medium | Feature works but has issues | Export succeeds but formatting/content is wrong |
+| Low | Minor UI/UX issue | Small wording or presentation issue |

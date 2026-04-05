@@ -1,68 +1,107 @@
 # Local Development
 
-## Daily Start
+## Branch Workflow
 
-1. Switch to the working branch:
+The current repo automation is wired like this:
+
+- work locally from `develop`
+- push `develop` to trigger staging deployment
+- validate on staging
+- merge or fast-forward into `main` only when ready for production
+- push `main` to trigger production deployment
+
+This is backed by:
+
+- `.github/workflows/deploy-staging.yml` on `develop`
+- `.github/workflows/deploy-production.yml` on `main`
+
+## Local Run
+
+1. Check out and update the working branch:
    `git checkout develop`
-2. Pull the latest staging branch:
    `git pull origin develop`
-3. Activate the virtual environment:
+2. Create and activate the virtual environment if needed:
+   `py -m venv .venv`
    `.venv\Scripts\Activate.ps1`
-4. Create a local environment file once:
+3. Install dependencies:
+   `python -m pip install --upgrade pip`
+   `pip install -r requirements.txt`
+4. Create the local env file once:
    `Copy-Item .env.local.example .env.local`
 5. Start the app:
-   `.\scripts\run-local.ps1`
+   `.\scripts\run-local.ps1 -Reload`
 
-Then open:
+Default local URL:
 
 - `http://127.0.0.1:8000`
 
-## Local Environment File
+`run-local.ps1` loads env vars from the selected env file, sets `APP_BASE_URL` if missing, and runs `uvicorn app.main:app`.
 
-Use `.env.local` for local-only settings. It is ignored by Git.
+## Local Environment Values
 
-Minimal local values:
+Tracked examples currently define:
 
-- `APP_BASE_URL=http://127.0.0.1:8000`
-- `APP_SECRET=local-dev-secret-change-me`
-- `DB_PATH=hub.local.db`
+- `.env.local.example`
+  - `APP_ENV=development`
+  - `APP_BASE_URL=http://127.0.0.1:8000`
+  - `APP_SECRET=local-dev-secret-change-me`
+  - `DB_PATH=hub.local.db`
+  - `UPLOAD_DIR=uploads`
+- `.env.test.local.example`
+  - `APP_BASE_URL=http://127.0.0.1:8001`
+  - `DB_PATH=hub.test.db`
+  - `UPLOAD_DIR=uploads-test`
 
-By default, the app can run locally with SQLite.
+Optional integrations from the env templates:
 
-## Optional Local Integrations
+- `DATABASE_URL` for PostgreSQL
+- `AZURE_STORAGE_CONNECTION_STRING` for blob-backed uploads
+- SMTP settings for password reset and practitioner notification emails
+- `IREFER_API_KEY` for iRefer lookup
 
-- Set `DATABASE_URL` if you want to test against PostgreSQL locally.
-- Set `AZURE_STORAGE_CONNECTION_STRING` if you want to test Azure Blob Storage locally.
-- Leave SMTP variables empty unless you are testing email flows.
+## Isolated Test Run
 
-## Local Test Environment
-
-Use the isolated test setup when you want to try changes without touching `hub.local.db`.
+The current repo supports an isolated manual-test environment rather than a dedicated automated test harness.
 
 1. Bootstrap the test environment:
    `.\scripts\setup-test-env.ps1`
-2. Start the app in test mode:
+2. Start the isolated app:
    `.\scripts\run-test-local.ps1`
 
-This creates or reuses:
+What this creates or reuses:
 
 - `.env.test.local`
 - `hub.test.db`
 - `uploads-test`
 
-Defaults for the test environment:
+Default isolated URL:
 
-- `APP_BASE_URL=http://127.0.0.1:8001`
-- `DB_PATH=hub.test.db`
-- `UPLOAD_DIR=uploads-test`
+- `http://127.0.0.1:8001`
 
-The test runner starts without hot reload so it stays stable while you manually test against the isolated database on port `8001`.
+Use `.\scripts\setup-test-env.ps1 -Force` to recreate the test DB and env file from the tracked template.
 
-Use `.\scripts\setup-test-env.ps1 -Force` if you want to refresh the test database and env file from the tracked template.
+## Current Testing Reality
 
-## Normal Workflow
+What can be verified from the repo today:
 
-1. Build and test locally first.
-2. Commit and push to `develop`.
-3. Validate on staging.
-4. Merge to `main` only when ready for production.
+- local manual testing is a first-class path via `setup-test-env.ps1` and `run-test-local.ps1`
+- there is no tracked `pytest` dependency in `requirements.txt`
+- there are ad hoc test scripts and `tests/` utilities, but no single documented automated test command is wired into the repo scripts
+
+So the safest current workflow is:
+
+1. run locally on `.env.local`
+2. verify risky changes again on the isolated test environment
+3. push to `develop`
+4. validate staging before promoting to `main`
+
+## Local Auth And MFA Notes
+
+Current auth behavior you should expect when testing locally:
+
+- `/login` performs the credential step
+- users with active MFA are redirected to `/login/mfa`
+- users marked `mfa_required` but not yet enrolled are redirected to `/account?msg=mfa_required`
+- admin access is blocked until required MFA enrollment is completed
+
+That makes the account page part of normal local verification whenever you change auth, role management, or admin-user setup flows.

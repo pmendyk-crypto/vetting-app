@@ -1,77 +1,45 @@
-# ✅ YOUR APP IS WORKING NOW!
+# Quick Start
 
-## 🌐 Access Your App
+## Start Locally
 
-**Homepage:** http://127.0.0.1:8000
+1. Create and activate a virtual environment if needed:
+   `py -m venv .venv`
+   `.venv\Scripts\Activate.ps1`
+2. Install dependencies:
+   `python -m pip install --upgrade pip`
+   `pip install -r requirements.txt`
+3. Create the local env file once:
+   `Copy-Item .env.local.example .env.local`
+4. Start the app:
+   `.\scripts\run-local.ps1 -Reload`
 
-## 🔑 Login Credentials
+Local URL:
 
-Use your existing admin account:
-- **Username:** `admin`  
-- **Password:** (your existing password)
+- `http://127.0.0.1:8000`
 
-## 🚀 Multi-Tenant Features (NEW!)
+## What To Expect
 
-After logging in as admin, you can access:
+- public landing page at `/`
+- sign-in at `/login`
+- MFA verification at `/login/mfa` for enrolled users
+- account management and MFA setup at `/account`
+- owner dashboard at `/owner` for superusers
+- admin dashboard at `/admin`
+- practitioner dashboard at `/radiologist`
 
-### 1. **Test Multi-Tenant Database**
-http://127.0.0.1:8000/mt/test
+## Optional Isolated Test Environment
 
-Shows:
-- All database tables
-- Organisations
-- Users with superuser status
-- Memberships
+1. Bootstrap:
+   `.\scripts\setup-test-env.ps1`
+2. Run:
+   `.\scripts\run-test-local.ps1`
 
-### 2. **View All Organisations** (Coming Soon)
-http://127.0.0.1:8000/mt/organisations
+Test URL:
 
-Will show:
-- All organisations
-- Member counts
-- Ability to create new organisations
+- `http://127.0.0.1:8001`
 
-### 3. **View All Users** (Coming Soon)
-http://127.0.0.1:8000/mt/users
+## Current Notes
 
-Will show:
-- All users
-- Their organisations
-- Superuser status
-
-## 📊 What Happened During Migration
-
-✅ **Database migrated successfully:**
-- Created `organisations` table (1 default org)
-- Migrated 3 users (admin, P.Mendyk, admin2)
-- Migrated 6 radiologists with profiles
-- Added `org_id` to all cases, institutions, protocols
-- Your admin account is now a **superuser**
-
-✅ **Your existing app still works:**
-- All your existing routes work normally
-- Login works with your current credentials
-- All data is preserved
-
-## 🎯 Next Steps
-
-1. **Login:** Go to http://127.0.0.1:8000 and login
-2. **Test:** Visit http://127.0.0.1:8000/mt/test to see multi-tenant data
-3. **Explore:** Your admin dashboard works as before
-
-## ⚠️ Important Notes
-
-- Your original login and routes work exactly as before
-- Multi-tenant features are available through new `/mt/*` routes
-- The conflicting multi-tenant router has been disabled
-- Your data is safe - everything was backed up during migration
-
-## 🔧 Technical Details
-
-**Database:** `hub.db` (migrated to multi-tenant schema)
-**Backup:** `hub.db.backup_*` (created during migration)
-**Test DB:** `hub_test.db` (for testing before production)
-
----
-
-**Need help?** The server is running on port 8000 and will auto-reload when you make changes.
+- the live management path is `/owner*`, not the older `/mt/*` route set
+- `develop` is the staging branch and `main` is the production branch
+- password reset and MFA flows are part of the normal app path and should be included in smoke testing after local startup
