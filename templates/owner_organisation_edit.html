@@ -6,13 +6,13 @@
     <title>Edit Organisation - RadFlow</title>
     <link rel="stylesheet" href="/static/css/site.css">
     <style>
-        .edit-shell { max-width: 1320px; margin: 0 auto; padding: 24px; }
+        .edit-shell { width: min(1720px, calc(100vw - 40px)); max-width: none; margin: 0 auto; padding: 24px 0 36px; }
         .page-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 26px; }
         .page-title { margin: 0 0 8px 0; font-size: 30px; color: rgba(255, 255, 255, 0.98); }
         .page-subtitle { margin: 0; max-width: 760px; color: rgba(255, 255, 255, 0.68); line-height: 1.5; }
         .button-group { display: flex; gap: 10px; flex-wrap: wrap; }
         .button-group .btn { min-width: 180px; justify-content: center; }
-        .layout { display: grid; grid-template-columns: minmax(320px, 420px) minmax(0, 1fr); gap: 24px; align-items: start; }
+        .layout { display: grid; grid-template-columns: minmax(360px, 480px) minmax(0, 1fr); gap: 28px; align-items: start; }
         .stack { display: grid; gap: 24px; }
         .panel { background: var(--card-bg); border: var(--card-border); border-radius: 14px; padding: 22px; }
         .panel h2 { margin: 0 0 8px 0; color: #fff; font-size: 22px; }
@@ -55,6 +55,7 @@
         .modal-close { min-width: 120px; }
         @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
         @media (max-width: 760px) {
+            .edit-shell { width: calc(100vw - 24px); padding: 16px 0 28px; }
             .page-top { flex-direction: column; }
             .form-row, .stats-grid { grid-template-columns: 1fr; }
             .button-group, .inline-actions { width: 100%; }
@@ -223,31 +224,31 @@
                         Create a new account directly inside this organisation.
                     </p>
 
-                    <form method="post" action="/owner/organisations/{{ organisation.id }}/users/add" class="form-stack">
+                    <form method="post" action="/owner/organisations/{{ organisation.id }}/users/add" class="form-stack" autocomplete="off">
                         <div class="form-row">
                             <div class="field">
                                 <label for="username">Username</label>
-                                <input id="username" name="username" type="text" required>
+                                <input id="username" name="username" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required>
                             </div>
                             <div class="field">
                                 <label for="password">Password</label>
-                                <input id="password" name="password" type="password" required>
+                                <input id="password" name="password" type="password" autocomplete="new-password" required>
                             </div>
                         </div>
                         <div class="form-row">
                             <div class="field">
                                 <label for="first_name">First Name</label>
-                                <input id="first_name" name="first_name" type="text">
+                                <input id="first_name" name="first_name" type="text" autocomplete="off">
                             </div>
                             <div class="field">
                                 <label for="surname">Surname</label>
-                                <input id="surname" name="surname" type="text">
+                                <input id="surname" name="surname" type="text" autocomplete="off">
                             </div>
                         </div>
                         <div class="form-row">
                             <div class="field">
                                 <label for="email">Email</label>
-                                <input id="email" name="email" type="email">
+                                <input id="email" name="email" type="email" autocomplete="off">
                             </div>
                             <div class="field">
                                 <label for="role">Role</label>
