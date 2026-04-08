@@ -438,12 +438,22 @@
     </div>
 
     <script>
+        function normalizeEditorRole(role) {
+            if (role === 'org_admin' || role === 'radiology_admin' || role === 'admin') {
+                return 'admin';
+            }
+            if (role === 'radiologist') {
+                return 'radiologist';
+            }
+            return 'user';
+        }
+
         function openUserEditor(userId, username, firstName, surname, email, role, gmc, speciality, isActive, displayName, mfaRequired) {
             document.getElementById('userEditorSubtitle').textContent = `Editing ${username}`;
             document.getElementById('edit_first_name').value = firstName || '';
             document.getElementById('edit_surname').value = surname || '';
             document.getElementById('edit_email').value = email || '';
-            document.getElementById('edit_role').value = role || 'user';
+            document.getElementById('edit_role').value = normalizeEditorRole(role);
             document.getElementById('edit_gmc').value = gmc || '';
             document.getElementById('edit_speciality').value = speciality || '';
             document.getElementById('edit_is_active').value = String(isActive ? 1 : 0);
