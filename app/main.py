@@ -4470,6 +4470,13 @@ def admin_dashboard(
         inst = get_institution(d.get("institution_id")) if d.get("institution_id") else None
         sla_hours = inst["sla_hours"] if inst else 48
         sla_seconds = sla_hours * 3600
+        tat_ratio = (secs / sla_seconds) if sla_seconds else 0
+        if tat_ratio >= 1:
+            d["tat_tone"] = "danger"
+        elif tat_ratio >= 0.5:
+            d["tat_tone"] = "warning"
+        else:
+            d["tat_tone"] = "good"
         d["sla_breached"] = (d.get("status") == "pending") and (secs > sla_seconds)
         d["display_case_id"] = d.get("id") or "-"
         cases.append(d)
@@ -6264,6 +6271,97 @@ def update_report_settings(
     return RedirectResponse(url="/settings?tab=report", status_code=303)
 
 
+@app.get("/settings/report/preview", response_class=HTMLResponse)
+def preview_report_settings(request: Request):
+    user = require_admin(request)
+    org_id = user.get("org_id") or 0
+    org_name = get_admin_org_name(user.get("org_id"))
+    header_text = get_setting(f"report_header:{org_id}", org_name or "").strip() or (org_name or "Organisation")
+    footer_text = get_setting(f"report_footer:{org_id}", "Confidential workflow document").strip() or "Confidential workflow document"
+    sample_now = datetime.now().strftime("%d %b %Y %H:%M")
+    body = f"""<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Report Preview</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+  <style>
+    body {{ margin: 0; background: #eef3f8; color: #102033; font-family: Arial, sans-serif; }}
+    .page {{ max-width: 900px; margin: 32px auto; background: white; border: 1px solid #d6e0eb; box-shadow: 0 18px 40px rgba(16,32,51,0.08); }}
+    .toolbar {{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding: 16px 20px; border-bottom: 1px solid #e5edf5; background: #f8fbff; }}
+    .btn {{ display:inline-flex; align-items:center; justify-content:center; padding: 10px 14px; border-radius: 8px; text-decoration:none; background:#1f6feb; color:white; }}
+    .page-inner {{ padding: 28px 36px 32px; }}
+    .header-rule {{ height: 8px; border-radius: 999px; background: linear-gradient(90deg, #1f6feb, #6ea8ff); margin-bottom: 20px; }}
+    .report-header {{ font-size: 28px; font-weight: 700; margin: 0 0 4px; }}
+    .report-sub {{ color: #526274; font-size: 13px; margin-bottom: 24px; }}
+    .status {{ display:inline-block; padding: 6px 12px; border-radius: 999px; background:#dcfce7; color:#166534; font-size: 12px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; }}
+    .section {{ margin-top: 24px; }}
+    .section h2 {{ font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #526274; margin: 0 0 12px; }}
+    .grid {{ display:grid; grid-template-columns: 180px 1fr; gap: 10px 18px; }}
+    .label {{ color:#526274; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; }}
+    .value {{ color:#102033; font-size:14px; }}
+    .card {{ border: 1px solid #dbe7f3; border-radius: 12px; padding: 16px 18px; background: #fbfdff; }}
+    .footer {{ margin-top: 28px; padding-top: 16px; border-top: 1px solid #dbe7f3; color:#526274; font-size:12px; line-height:1.6; white-space:pre-wrap; }}
+    @media (max-width: 760px) {{ .page {{ margin: 0; border: 0; box-shadow:none; }} .page-inner {{ padding: 22px 18px 28px; }} .grid {{ grid-template-columns: 1fr; gap: 6px; }} .toolbar {{ flex-direction:column; align-items:flex-start; }} }}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="toolbar">
+      <div>
+        <strong>Decision Report Preview</strong><br>
+        <span style="color:#526274;font-size:12px;">Sample layout using the current header and footer settings.</span>
+      </div>
+      <a class="btn" href="/settings?tab=report">Back to Settings</a>
+    </div>
+    <div class="page-inner">
+      <div class="header-rule"></div>
+      <div class="report-header">{html.escape(header_text)}</div>
+      <div class="report-sub">Preview generated {html.escape(sample_now)}</div>
+      <span class="status">Justified With Comment</span>
+
+      <div class="section">
+        <h2>Case Summary</h2>
+        <div class="card">
+          <div class="grid">
+            <div class="label">Case ID</div><div class="value">PREVIEW-001</div>
+            <div class="label">Patient</div><div class="value">Jane Example</div>
+            <div class="label">Patient ID</div><div class="value">RAD-12345</div>
+            <div class="label">Study</div><div class="value">MRI Brain with contrast</div>
+            <div class="label">Institution</div><div class="value">{html.escape(org_name or 'Sample Institution')}</div>
+            <div class="label">Practitioner</div><div class="value">Dr Sample Practitioner</div>
+            <div class="label">Recorded At</div><div class="value">{html.escape(sample_now)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Decision</h2>
+        <div class="card">
+          <div class="grid">
+            <div class="label">Decision</div><div class="value">Approve with comment</div>
+            <div class="label">Protocol</div><div class="value">MRI Brain with contrast protocol</div>
+            <div class="label">Comment</div><div class="value">Clinical details support the request. Please correlate with prior imaging and proceed with contrast if renal function is satisfactory.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Protocol Notes</h2>
+        <div class="card">
+          Use thin-slice acquisition through the posterior fossa and include post-contrast axial and coronal sequences.
+        </div>
+      </div>
+
+      <div class="footer">{html.escape(footer_text)}</div>
+    </div>
+  </div>
+</body>
+</html>"""
+    return HTMLResponse(body)
+
+
 @app.post("/settings/institution/add")
 def add_institution(request: Request, name: str = Form(...), sla_hours: str = Form(...)):
     user = require_admin(request)
@@ -7769,19 +7867,30 @@ def vet_submit(
     user = require_radiologist(request)
     rad_name = user.get("radiologist_name")
     org_id = user.get("org_id")
+    decision = (decision or "").strip()
+    decision_comment = (decision_comment or "").strip()
+    protocol = (protocol or "").strip()
+    contrast_required = (contrast_required or "").strip()
+    contrast_details = (contrast_details or "").strip()
 
     if decision not in DECISIONS:
         raise HTTPException(status_code=400, detail="Invalid decision")
 
-    # If decision is "Reject", comment is mandatory and protocol is not required
     if decision == "Reject":
-        if not decision_comment.strip():
+        if not decision_comment:
             raise HTTPException(status_code=400, detail="Comment is required when rejecting a case")
-        protocol = ""  # Clear protocol for rejected cases
+        protocol = ""
+        contrast_required = ""
+        contrast_details = ""
     else:
-        # For Approve/Approve with comment, protocol is required
-        if not protocol.strip():
+        if not protocol:
             raise HTTPException(status_code=400, detail="Protocol is required for approved cases")
+        if decision == "Approve with comment" and not decision_comment:
+            raise HTTPException(status_code=400, detail="Comment is required when approving with comment")
+        if contrast_required not in {"Yes", "No"}:
+            raise HTTPException(status_code=400, detail="Please specify whether contrast is required")
+        if contrast_required != "Yes":
+            contrast_details = ""
 
     conn = get_db()
     if org_id:
@@ -7813,8 +7922,16 @@ def vet_submit(
             contrast_details = ?
         WHERE id = ?
         """,
-        (case_status, protocol.strip(), decision, decision_comment.strip(), utc_now_iso(),
-         contrast_required.strip() or None, contrast_details.strip() or None, case_id),
+        (
+            case_status,
+            protocol or None,
+            decision,
+            decision_comment or None,
+            utc_now_iso(),
+            contrast_required or None,
+            contrast_details or None,
+            case_id,
+        ),
     )
     conn.commit()
     conn.close()
@@ -7825,8 +7942,8 @@ def vet_submit(
         event_type="VETTED",
         user=user,
         decision=decision,
-        protocol=protocol.strip() or None,
-        comment=decision_comment.strip() or None,
+        protocol=protocol or None,
+        comment=decision_comment or None,
     )
 
     return RedirectResponse(url="/radiologist", status_code=303)

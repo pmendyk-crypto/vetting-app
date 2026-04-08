@@ -702,8 +702,7 @@
                 </div>
             </div>
             <div class="header-actions">
-                <a href="/radiologist" class="btn btn-secondary">Back to Cases</a>
-                <a href="/logout" class="btn btn-secondary">Logout</a>
+                <a href="/radiologist" class="btn btn-secondary">Back</a>
             </div>
         </div>
 
@@ -796,7 +795,7 @@
                                 Decision
                                 <span class="required-marker">*</span>
                             </label>
-                            <select id="decision" name="decision" required onchange="validateRejectComment()">
+                            <select id="decision" name="decision" required onchange="syncDecisionForm()">
                                 <option value="">Select a decision...</option>
                                 {% for d in decisions %}
                                 <option value="{{ d }}">{{ d }}</option>
@@ -1008,13 +1007,14 @@
         function showProtocolInstructions() {
             const select = document.getElementById('protocol');
             const selected = select.options[select.selectedIndex];
-            const instructions = selected.getAttribute('data-instructions');
+            const instructions = selected ? selected.getAttribute('data-instructions') : '';
             const instructionsDiv = document.getElementById('protocolInstructions');
 
             if (instructions && instructions.trim()) {
                 instructionsDiv.textContent = instructions;
                 instructionsDiv.classList.add('visible');
             } else {
+                instructionsDiv.textContent = '';
                 instructionsDiv.classList.remove('visible');
             }
         }
@@ -1033,44 +1033,65 @@
             }
         }
 
-        function validateRejectComment() {
+        function syncDecisionForm() {
             const decision = document.getElementById('decision').value;
             const comment = document.getElementById('decision_comment');
             const commentRequired = document.getElementById('commentRequired');
-            const rejectWarning = document.getElementById('rejectWarning');
+            const commentWarning = document.getElementById('rejectWarning');
             const protocolGroup = document.getElementById('protocolGroup');
             const protocolSelect = document.getElementById('protocol');
             const contrastSelect = document.getElementById('contrast_required');
+            const requiresComment = decision === 'Reject' || decision === 'Approve with comment';
 
             if (decision === 'Reject') {
-                commentRequired.style.display = 'inline';
-                rejectWarning.style.display = 'block';
-                comment.setAttribute('required', 'required');
                 protocolGroup.style.display = 'none';
                 protocolSelect.removeAttribute('required');
-                // Contrast not required on reject
+                protocolSelect.value = '';
+                showProtocolInstructions();
                 contrastSelect.removeAttribute('required');
+                contrastSelect.disabled = true;
+                contrastSelect.value = '';
+                toggleContrastDetails();
             } else {
-                commentRequired.style.display = 'none';
-                rejectWarning.style.display = 'none';
-                comment.removeAttribute('required');
                 protocolGroup.style.display = 'block';
                 protocolSelect.setAttribute('required', 'required');
+                contrastSelect.disabled = false;
                 contrastSelect.setAttribute('required', 'required');
+            }
+
+            if (requiresComment) {
+                commentRequired.style.display = 'inline';
+                commentWarning.style.display = 'block';
+                comment.setAttribute('required', 'required');
+                commentWarning.innerHTML = decision === 'Reject'
+                    ? '<strong>Required:</strong> Comment is mandatory when rejecting a case.'
+                    : '<strong>Required:</strong> Comment is mandatory when approving with comment.';
+            } else {
+                commentRequired.style.display = 'none';
+                commentWarning.style.display = 'none';
+                comment.removeAttribute('required');
             }
         }
 
-        // Form submission validation
         document.getElementById('vetForm').addEventListener('submit', function(e) {
             const decision = document.getElementById('decision').value;
             const comment = document.getElementById('decision_comment').value.trim();
             const protocol = document.getElementById('protocol').value;
+            const contrastRequired = document.getElementById('contrast_required').value;
 
             if (decision === 'Reject' && !comment) {
                 e.preventDefault();
                 document.getElementById('decision_comment').focus();
                 document.getElementById('decision_comment').style.borderColor = '#ff6464';
                 alert('Comment is required when rejecting a case.');
+                return false;
+            }
+
+            if (decision === 'Approve with comment' && !comment) {
+                e.preventDefault();
+                document.getElementById('decision_comment').focus();
+                document.getElementById('decision_comment').style.borderColor = '#ff6464';
+                alert('Comment is required when approving with comment.');
                 return false;
             }
 
@@ -1081,10 +1102,21 @@
                 alert('Protocol is required for non-rejected decisions.');
                 return false;
             }
+
+            if (decision !== 'Reject' && !contrastRequired) {
+                e.preventDefault();
+                document.getElementById('contrast_required').focus();
+                document.getElementById('contrast_required').style.borderColor = '#ff6464';
+                alert('Please specify whether contrast is required.');
+                return false;
+            }
         });
 
-        // Initialize on page load
-        validateRejectComment();
+        document.addEventListener('DOMContentLoaded', function() {
+            showProtocolInstructions();
+            syncDecisionForm();
+            toggleContrastDetails();
+        });
     </script>
     <script src="/static/js/session.js"></script>
 </body>

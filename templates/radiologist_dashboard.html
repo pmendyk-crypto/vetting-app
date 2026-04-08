@@ -572,7 +572,7 @@
 
         <!-- Search -->
         <div style="margin-bottom: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
-            <input id="caseSearch" type="search" placeholder="Search by patient name, ID or study description…"
+            <input id="caseSearch" type="search" placeholder="Search by case ID, patient name, ID or study description…"
                    oninput="filterCases()"
                    style="width:100%;max-width:480px;padding:9px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:14px;outline:none;box-sizing:border-box;">
             <button class="view-toggle" id="viewToggle" type="button" onclick="toggleView()">Switch to cards</button>
@@ -589,6 +589,7 @@
         <table class="data-table" id="casesTable">
             <thead>
                 <tr>
+                    <th>Case ID</th>
                     <th>Status</th>
                     <th>Created</th>
                     <th>TAT</th>
@@ -600,6 +601,7 @@
             <tbody>
                 {% for c in cases %}
                 <tr class="case-row" data-open-url="/vet/{{ c.id }}">
+                    <td data-label="Case ID"><span style="font-family:'Courier New', monospace; color: rgba(255,255,255,0.88);">{{ c.id }}</span></td>
                     <td data-label="Status">
                         <span class="status-badge status-{{ c.status|lower }}">
                             {{ 'Justified' if c.status == 'vetted' else c.status }}

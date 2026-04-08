@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
     body { margin: 24px; display: flex; flex-direction: column; min-height: 100vh; }
-    .container { max-width: 800px; margin: 0 auto; flex: 1; }
+    .container { max-width: 1320px; margin: 0 auto; flex: 1; }
     .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
     .btn { display: inline-block; padding: 10px 14px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
     .btn.secondary { background: #555; }
@@ -44,6 +44,9 @@
     .logo-text p { margin: 2px 0 0 0; font-size: 12px; color: #666; }
     
     .main-content { flex: 1; }
+    .case-edit-grid { display: grid; grid-template-columns: minmax(340px, 0.95fr) minmax(0, 1.3fr); gap: 20px; align-items: start; }
+    .preview-panel { order: 1; }
+    .edit-panel { order: 2; }
     .page-footer { text-align: center; padding: 30px 20px; border-top: 1px solid #ddd; margin-top: 50px; color: #666; font-size: 13px; }
     .page-footer p { margin: 0; }
     
@@ -55,6 +58,9 @@
       .actions { width: 100%; }
       .btn { width: 100%; text-align: center; }
       .form-row { grid-template-columns: 1fr; }
+      .case-edit-grid { grid-template-columns: 1fr; }
+      .preview-panel { order: 2; }
+      .edit-panel { order: 1; }
     }
 
     .protocol-modal {
@@ -175,11 +181,11 @@
       <div class="actions">
         <a class="btn secondary" href="/admin/case/{{ case['id'] }}">View Case</a>
         <a class="btn secondary" href="/admin">Back</a>
-        <a class="btn secondary" href="/logout">Logout</a>
       </div>
     </div>
 
-    <div class="card">
+    <div class="case-edit-grid">
+    <div class="card edit-panel">
       {% if saved %}
       <div style="margin-bottom:16px;padding:10px 12px;border-radius:8px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.28);color:#bbf7d0;font-size:13px;">
         Case changes saved successfully.
@@ -290,7 +296,7 @@
       </form>
     </div>
 
-    <div class="card">
+    <div class="card preview-panel">
       <h3 style="margin-top:0;">Referral Preview</h3>
       {% if case['uploaded_filename'] %}
         <p class="small" style="margin-top:0;">
