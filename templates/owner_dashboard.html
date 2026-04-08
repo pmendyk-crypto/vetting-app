@@ -219,6 +219,10 @@
             border-radius: 12px;
             padding: 12px;
             background: rgba(7, 19, 58, 0.28);
+            min-height: 102px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
 
         .stat-label {
@@ -396,12 +400,12 @@
                                 <div class="stat-value">{{ org.admin_count or 0 }}</div>
                             </div>
                             <div class="stat-box">
-                                <div class="stat-label">Radiologists</div>
-                                <div class="stat-value">{{ org.radiologist_count or 0 }}</div>
+                                <div class="stat-label">Practitioners</div>
+                                <div class="stat-value">{{ org.practitioner_count or 0 }}</div>
                             </div>
                             <div class="stat-box">
-                                <div class="stat-label">Users</div>
-                                <div class="stat-value">{{ org.user_count or 0 }}</div>
+                                <div class="stat-label">Coordinators</div>
+                                <div class="stat-value">{{ org.coordinator_count or 0 }}</div>
                             </div>
                             <div class="stat-box">
                                 <div class="stat-label">Institutions</div>

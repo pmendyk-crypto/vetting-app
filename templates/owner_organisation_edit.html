@@ -26,7 +26,7 @@
         .field label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.62); }
         .field input, .field select { width: 100%; box-sizing: border-box; }
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .stat-box { border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px; background: rgba(7, 19, 58, 0.28); }
+        .stat-box { border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px; background: rgba(7, 19, 58, 0.28); min-height: 108px; display: flex; flex-direction: column; justify-content: space-between; }
         .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.56); margin-bottom: 6px; }
         .stat-value { color: #fff; font-size: 24px; font-weight: 700; }
         .meta-list { display: grid; gap: 14px; margin-top: 18px; }
@@ -34,10 +34,16 @@
         .meta-k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.56); margin-bottom: 5px; }
         .meta-v { color: rgba(255, 255, 255, 0.92); line-height: 1.45; }
         .users-table-wrap { overflow-x: auto; }
-        .users-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        .users-table th, .users-table td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; vertical-align: top; }
+        .users-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+        .users-table th, .users-table td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
         .users-table th { color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; }
         .users-table td { color: rgba(255,255,255,0.9); font-size: 14px; }
+        .users-table th:nth-child(1), .users-table td:nth-child(1) { width: 15%; }
+        .users-table th:nth-child(2), .users-table td:nth-child(2) { width: 16%; }
+        .users-table th:nth-child(3), .users-table td:nth-child(3) { width: 29%; }
+        .users-table th:nth-child(4), .users-table td:nth-child(4) { width: 12%; }
+        .users-table th:nth-child(5), .users-table td:nth-child(5) { width: 10%; }
+        .users-table th:nth-child(6), .users-table td:nth-child(6) { width: 10%; }
         .role-pill { display: inline-flex; align-items: center; justify-content: center; padding: 5px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; background: rgba(97, 168, 255, 0.14); color: #bfdbfe; border: 1px solid rgba(97, 168, 255, 0.24); }
         .status-text { font-size: 12px; color: rgba(255,255,255,0.72); margin-top: 6px; }
         .divider { height: 1px; background: rgba(255,255,255,0.08); }
@@ -149,12 +155,12 @@
                             <div class="stat-value">{{ organisation.admin_count or 0 }}</div>
                         </div>
                         <div class="stat-box">
-                            <div class="stat-label">Radiologists</div>
-                            <div class="stat-value">{{ organisation.radiologist_count or 0 }}</div>
+                            <div class="stat-label">Practitioners</div>
+                            <div class="stat-value">{{ organisation.practitioner_count or 0 }}</div>
                         </div>
                         <div class="stat-box">
-                            <div class="stat-label">Users</div>
-                            <div class="stat-value">{{ organisation.user_count or 0 }}</div>
+                            <div class="stat-label">Coordinators</div>
+                            <div class="stat-value">{{ organisation.coordinator_count or 0 }}</div>
                         </div>
                         <div class="stat-box">
                             <div class="stat-label">Institutions</div>

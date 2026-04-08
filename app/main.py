@@ -5989,7 +5989,22 @@ def list_organisations_summary() -> list[dict]:
                 SELECT COUNT(*)
                 FROM memberships m
                 WHERE m.org_id = o.id AND m.org_role = 'radiologist' AND m.is_active = 1
+            ) AS practitioner_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.org_role = 'radiologist' AND m.is_active = 1
             ) AS radiologist_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.org_role = 'org_user' AND m.is_active = 1
+            ) AS coordinator_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.is_active = 1
+            ) AS member_count,
             (
                 SELECT COUNT(*)
                 FROM memberships m
@@ -6029,7 +6044,22 @@ def get_organisation_summary(org_id: int) -> dict | None:
                 SELECT COUNT(*)
                 FROM memberships m
                 WHERE m.org_id = o.id AND m.org_role = 'radiologist' AND m.is_active = 1
+            ) AS practitioner_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.org_role = 'radiologist' AND m.is_active = 1
             ) AS radiologist_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.org_role = 'org_user' AND m.is_active = 1
+            ) AS coordinator_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.is_active = 1
+            ) AS member_count,
             (
                 SELECT COUNT(*)
                 FROM memberships m
