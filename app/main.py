@@ -723,7 +723,9 @@ def init_db() -> None:
                 created_at TEXT NOT NULL,
                 modified_at TEXT,
                 first_name TEXT,
-                surname TEXT
+                surname TEXT,
+                role TEXT,
+                radiologist_name TEXT
             )
             """
         )
@@ -1261,6 +1263,8 @@ def ensure_users_schema() -> None:
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT")
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS surname TEXT")
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT")
+        conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT")
+        conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS radiologist_name TEXT")
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled INTEGER NOT NULL DEFAULT 0")
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_required INTEGER NOT NULL DEFAULT 0")
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret TEXT")
@@ -1285,6 +1289,10 @@ def ensure_users_schema() -> None:
         cur.execute("ALTER TABLE users ADD COLUMN surname TEXT")
     if "email" not in cols:
         cur.execute("ALTER TABLE users ADD COLUMN email TEXT")
+    if "role" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN role TEXT")
+    if "radiologist_name" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN radiologist_name TEXT")
     if "mfa_enabled" not in cols:
         cur.execute("ALTER TABLE users ADD COLUMN mfa_enabled INTEGER NOT NULL DEFAULT 0")
     if "mfa_required" not in cols:
@@ -3687,6 +3695,8 @@ def owner_add_organisation_user(
     now = utc_now_iso()
     email_val = email or None
     org_role = "org_admin" if role == "admin" else "radiologist" if role == "radiologist" else "org_user"
+    has_role_column = table_has_column("users", "role")
+    has_radiologist_name_column = table_has_column("users", "radiologist_name")
 
     conn = get_db()
     try:
@@ -3695,23 +3705,41 @@ def owner_add_organisation_user(
         if email_val and conn.execute("SELECT 1 FROM users WHERE email = ?", (email_val,)).fetchone():
             raise HTTPException(status_code=400, detail="That email address is already in use.")
 
+        user_columns = [
+            "username",
+            "email",
+            "password_hash",
+            "salt_hex",
+            "is_superuser",
+            "is_active",
+            "created_at",
+            "modified_at",
+            "first_name",
+            "surname",
+        ]
+        user_values = ["?", "?", "?", "?", "0", "1", "?", "?", "?", "?"]
+        user_params: list = [
+            username,
+            email_val,
+            pw_hash.hex(),
+            salt.hex(),
+            now,
+            now,
+            first_name,
+            surname,
+        ]
+        if has_role_column:
+            user_columns.append("role")
+            user_values.append("?")
+            user_params.append("admin" if role == "admin" else role)
+        if has_radiologist_name_column:
+            user_columns.append("radiologist_name")
+            user_values.append("?")
+            user_params.append(None if role != "radiologist" else (f"{first_name} {surname}".strip() or username))
+
         conn.execute(
-            """
-            INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname, role, radiologist_name)
-            VALUES (?, ?, ?, ?, 0, 1, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                username,
-                email_val,
-                pw_hash.hex(),
-                salt.hex(),
-                now,
-                now,
-                first_name,
-                surname,
-                "admin" if role == "admin" else role,
-                None if role != "radiologist" else (f"{first_name} {surname}".strip() or username),
-            ),
+            f"INSERT INTO users({', '.join(user_columns)}) VALUES ({', '.join(user_values)})",
+            tuple(user_params),
         )
         conn.execute(
             "UPDATE users SET mfa_required = ? WHERE username = ?",
@@ -3837,23 +3865,28 @@ def owner_edit_organisation_user(
     org_role = "org_admin" if role == "admin" else "radiologist" if role == "radiologist" else "org_user"
     display_name = f"{first_name.strip()} {surname.strip()}".strip() or (row["username"] if isinstance(row, dict) else row[1])
 
-    conn.execute(
-        """
+    has_role_column = table_has_column("users", "role")
+    has_radiologist_name_column = table_has_column("users", "radiologist_name")
+    update_sql = """
         UPDATE users
-        SET first_name = ?, surname = ?, email = ?, role = ?, is_active = ?, radiologist_name = ?, modified_at = ?
-        WHERE id = ?
-        """,
-        (
-            first_name.strip(),
-            surname.strip(),
-            clean_email or None,
-            "admin" if role == "admin" else role,
-            active_value,
-            display_name if role == "radiologist" else None,
-            now,
-            user_id,
-        ),
-    )
+        SET first_name = ?, surname = ?, email = ?, is_active = ?, modified_at = ?
+    """
+    update_params: list = [
+        first_name.strip(),
+        surname.strip(),
+        clean_email or None,
+        active_value,
+        now,
+    ]
+    if has_role_column:
+        update_sql += ", role = ?"
+        update_params.append("admin" if role == "admin" else role)
+    if has_radiologist_name_column:
+        update_sql += ", radiologist_name = ?"
+        update_params.append(display_name if role == "radiologist" else None)
+    update_sql += " WHERE id = ?"
+    update_params.append(user_id)
+    conn.execute(update_sql, tuple(update_params))
     if mfa_required_value:
         conn.execute(
             "UPDATE users SET mfa_required = ?, modified_at = ? WHERE id = ?",
