@@ -283,7 +283,7 @@
                 </p>
             </div>
             <div class="owner-actions">
-                <a class="btn secondary" href="/admin">Open Admin Workspace</a>
+                <a class="btn secondary" href="/admin">Open Global Admin View</a>
                 <a class="btn secondary" href="/logout">Logout</a>
             </div>
         </div>
@@ -305,7 +305,7 @@
                 <div class="notice error">{{ error }}</div>
                 {% endif %}
 
-                <form method="post" action="/owner/organisations" class="form-stack">
+                <form method="post" action="/owner/organisations" class="form-stack" id="create-organisation-form">
                     <p class="section-label">Organisation</p>
                     <div class="section-rule"></div>
                     <div class="form-row single">
@@ -420,5 +420,39 @@
             </section>
         </div>
     </div>
+    <script>
+        (() => {
+            const orgNameInput = document.getElementById('org_name');
+            const orgSlugInput = document.getElementById('org_slug');
+            if (!orgNameInput || !orgSlugInput) return;
+
+            const slugify = (value) => {
+                return String(value || '')
+                    .toLowerCase()
+                    .trim()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '');
+            };
+
+            const hasInitialSlug = orgSlugInput.value.trim().length > 0;
+            let slugManuallyEdited = hasInitialSlug;
+
+            orgSlugInput.addEventListener('input', () => {
+                slugManuallyEdited = orgSlugInput.value.trim().length > 0;
+            });
+
+            orgSlugInput.addEventListener('blur', () => {
+                if (!orgSlugInput.value.trim()) {
+                    slugManuallyEdited = false;
+                    orgSlugInput.value = slugify(orgNameInput.value);
+                }
+            });
+
+            orgNameInput.addEventListener('input', () => {
+                if (slugManuallyEdited) return;
+                orgSlugInput.value = slugify(orgNameInput.value);
+            });
+        })();
+    </script>
 </body>
 </html>
