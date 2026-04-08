@@ -16,11 +16,15 @@
     .filters label { font-size: 12px; color: rgba(255,255,255,0.6); display: block; margin-bottom: 4px; }
     .filters input, .filters select { padding: 8px; min-width: 180px; background: rgba(255,255,255,0.07); color: #fff; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; }
     .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-    .btn { display: inline-block; padding: 10px 14px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; }
+    .btn { display: inline-block; padding: 10px 14px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
     .btn.secondary { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.8); }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .small { font-size: 12px; color: rgba(255,255,255,0.5); }
     .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 20px; }
+    .info-banner { margin: 14px 0 0; padding: 10px 12px; border-radius: 8px; background: rgba(16,185,129,0.14); border: 1px solid rgba(16,185,129,0.28); color: #bbf7d0; font-size: 13px; }
+    .sent-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; background: rgba(14,165,233,0.16); color: #bae6fd; border: 1px solid rgba(14,165,233,0.3); }
+    .button-stack { display: flex; gap: 8px; flex-wrap: wrap; }
+    .button-stack form { margin: 0; }
 
     .header-with-logo { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
     .logo-text h2 { margin: 0; font-size: 18px; color: rgba(255,255,255,0.9); }
@@ -41,7 +45,6 @@
     .preview-body { flex: 1; min-height: 70vh; }
     .preview-frame { width: 100%; height: 100%; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; background: #fff; }
 
-    /* Timeline */
     .timeline-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
     .timeline-header h3 { margin: 0; color: rgba(255,255,255,0.9); font-size: 16px; }
     .timeline-buttons { display: flex; gap: 8px; }
@@ -61,12 +64,13 @@
     .timeline-table tbody td:nth-child(4) { width: auto; }
     .timeline-table .ts { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; font-family: 'Courier New', monospace; }
     .ev-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; }
-    .ev-SUBMITTED  { background: rgba(31,111,235,0.18);  color: #93c5fd; border: 1px solid rgba(31,111,235,0.35); }
-    .ev-ASSIGNED   { background: rgba(139,92,246,0.18);  color: #c4b5fd; border: 1px solid rgba(139,92,246,0.35); }
-    .ev-VETTED     { background: rgba(16,185,129,0.18);  color: #6ee7b7; border: 1px solid rgba(16,185,129,0.35); }
-    .ev-REJECTED   { background: rgba(239,68,68,0.18);   color: #fca5a5; border: 1px solid rgba(239,68,68,0.35); }
-    .ev-REOPENED   { background: rgba(234,179,8,0.18);   color: #fde68a; border: 1px solid rgba(234,179,8,0.35); }
-    .ev-EDITED     { background: rgba(234,88,12,0.18);   color: #fdba74; border: 1px solid rgba(234,88,12,0.35); }
+    .ev-SUBMITTED  { background: rgba(31,111,235,0.18); color: #93c5fd; border: 1px solid rgba(31,111,235,0.35); }
+    .ev-ASSIGNED   { background: rgba(139,92,246,0.18); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.35); }
+    .ev-VETTED     { background: rgba(16,185,129,0.18); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.35); }
+    .ev-REJECTED   { background: rgba(239,68,68,0.18); color: #fca5a5; border: 1px solid rgba(239,68,68,0.35); }
+    .ev-REOPENED   { background: rgba(234,179,8,0.18); color: #fde68a; border: 1px solid rgba(234,179,8,0.35); }
+    .ev-REPORT_SENT { background: rgba(14,165,233,0.18); color: #bae6fd; border: 1px solid rgba(14,165,233,0.35); }
+    .ev-EDITED     { background: rgba(234,88,12,0.18); color: #fdba74; border: 1px solid rgba(234,88,12,0.35); }
     .ev-OTHER      { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.15); }
     .detail-row { margin: 3px 0; font-size: 12px; line-height: 1.5; color: rgba(255,255,255,0.65); }
     .detail-row span { color: rgba(255,255,255,0.45); font-weight: 500; }
@@ -85,16 +89,20 @@
       .topbar { flex-direction: column; align-items: flex-start; }
       .actions { width: 100%; }
       .btn { width: 100%; text-align: center; }
+      .button-stack { width: 100%; }
     }
   </style>
 </head>
 <body>
-  <div id="session-expiry-warning">⚠️ Your session will expire in 5 minutes due to inactivity. <a href="/login" style="color:#fde68a;font-weight:400;">Sign in again</a> to continue.</div>
+  <div id="session-expiry-warning">Your session will expire in 5 minutes due to inactivity. <a href="/login" style="color:#fde68a;font-weight:400;">Sign in again</a> to continue.</div>
   <div class="wrapper">
     <div class="main-content container">
     <div class="topbar">
       <div>
         <h1 style="margin:0;">Case details</h1>
+        {% if report_sent_notice %}
+          <div class="info-banner">Decision report marked as sent.</div>
+        {% endif %}
       </div>
       <div class="actions">
         <a class="btn" href="/admin/case/{{ case['id'] }}/edit">Edit Case</a>
@@ -115,8 +123,8 @@
         {% endif %}
         <p><b>Status:</b> {{ "Justified" if case["status"] == "vetted" else case["status"] }}</p>
         <p><b>Created:</b> {{ case["created_at"] | display_datetime }}</p>
-        <p><b>Patient ID:</b> {{ case["patient_referral_id"] or "—" }}</p>
-        <p><b>Patient DOB:</b> {{ case["patient_dob"] or "—" }}</p>
+        <p><b>Patient ID:</b> {{ case["patient_referral_id"] or "-" }}</p>
+        <p><b>Patient DOB:</b> {{ case["patient_dob"] or "-" }}</p>
         <p><b>Study:</b> {{ case["study_description"] }}</p>
         <p><b>Practitioner:</b> {{ case["radiologist"] }}</p>
         <p><b>Admin notes:</b><br>{{ case["admin_notes"] or "" }}</p>
@@ -124,19 +132,34 @@
         {% if case.get("contrast_required") %}
           <p><b>Contrast Required:</b> {{ case["contrast_required"] }}
             {% if case["contrast_required"] == "Yes" and case.get("contrast_details") %}
-              — {{ case["contrast_details"] }}
+              - {{ case["contrast_details"] }}
             {% endif %}
           </p>
         {% endif %}
         <p><b>Decision:</b> {{ case["decision"] or "" }}</p>
         <p><b>Comment:</b><br>{{ case["decision_comment"] or "" }}</p>
+        <p>
+          <b>Report sent:</b>
+          {% if case.get("report_sent_at") %}
+            <span class="sent-badge">Sent</span><br>
+            {{ case["report_sent_at"] | display_datetime }}
+            {% if case.get("report_sent_by") %} by {{ case["report_sent_by"] }}{% endif %}
+          {% else %}
+            Not yet marked as sent
+          {% endif %}
+        </p>
+        {% if case["status"] in ["vetted", "rejected"] %}
+          <form method="POST" action="/admin/case/{{ case['id'] }}/mark-report-sent">
+            <button class="btn" type="submit">{% if case.get("report_sent_at") %}Update sent timestamp{% else %}Mark report sent{% endif %}</button>
+          </form>
+        {% endif %}
       </div>
 
       <div class="card preview-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
           <h3 style="margin: 0;">Referral Preview</h3>
           {% if case["uploaded_filename"] and case["stored_filepath"] %}
-            <a href="/case/{{ case['id'] }}/attachment" class="btn" style="padding:6px 12px;font-size:12px;">⬇ Download Referral</a>
+            <a href="/case/{{ case['id'] }}/attachment" class="btn" style="padding:6px 12px;font-size:12px;">Download Referral</a>
           {% elif case["uploaded_filename"] %}
             <span style="font-size:12px;color:rgba(255,255,255,0.4);">File expired</span>
           {% endif %}
@@ -147,8 +170,7 @@
               <iframe src="/case/{{ case['id'] }}/attachment/preview" class="preview-frame"></iframe>
             {% else %}
               <div style="display:flex;align-items:center;justify-content:center;height:200px;color:rgba(255,255,255,0.4);font-size:0.95em;flex-direction:column;gap:8px;">
-                <span style="font-size:1.8em;">🗂️</span>
-                <span>Referral file expired — no longer available</span>
+                <span>Referral file expired - no longer available</span>
                 <span style="font-size:0.85em;">(Referral attachments are retained for 7 days)</span>
               </div>
             {% endif %}
@@ -162,7 +184,10 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
           <h3 style="margin: 0;">Decision Report Preview</h3>
           {% if case["status"] in ["vetted", "rejected"] %}
-            <a href="/case/{{ case['id'] }}/pdf" target="_blank" class="btn" style="padding:6px 12px;font-size:12px;">⬇ Download Decision Report</a>
+            <div class="button-stack">
+              <a href="/case/{{ case['id'] }}/pdf" target="_blank" class="btn" style="padding:6px 12px;font-size:12px;">Download Report</a>
+              <a href="/case/{{ case['id'] }}/pdf?include_timeline=1" target="_blank" class="btn secondary" style="padding:6px 12px;font-size:12px;">Download Report + Timeline</a>
+            </div>
           {% endif %}
         </div>
         {% if case["status"] == "vetted" or case["status"] == "rejected" %}
@@ -178,8 +203,8 @@
         <div class="timeline-header">
           <h3>Case Timeline</h3>
           <div class="timeline-buttons">
-            <a href="/admin/case/{{ case['id'] }}/timeline.pdf" class="btn" style="padding:6px 12px;font-size:12px;">⬇ Download (PDF)</a>
-            <a href="/admin/case/{{ case['id'] }}/timeline.csv" class="btn" style="padding:6px 12px;font-size:12px;">⬇ Download (Excel)</a>
+            <a href="/admin/case/{{ case['id'] }}/timeline.pdf" class="btn" style="padding:6px 12px;font-size:12px;">Download (PDF)</a>
+            <a href="/admin/case/{{ case['id'] }}/timeline.csv" class="btn" style="padding:6px 12px;font-size:12px;">Download (Excel)</a>
           </div>
         </div>
         {% if events and events|length > 0 %}
@@ -198,7 +223,7 @@
                 <tr>
                   <td class="ts">{{ e["created_at"] | display_datetime }}</td>
                   <td>
-                    <span class="ev-badge ev-{% if ev in ['SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','EDITED'] %}{{ ev }}{% else %}OTHER{% endif %}">
+                    <span class="ev-badge ev-{% if ev in ['SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','REPORT_SENT','EDITED'] %}{{ ev }}{% else %}OTHER{% endif %}">
                       {{ ev }}
                     </span>
                   </td>
@@ -224,6 +249,8 @@
                         <div class="detail-row"><span>Details: </span>Case rejected.</div>
                       {% elif ev == "REOPENED" %}
                         <div class="detail-row"><span>Details: </span>Case reopened.</div>
+                      {% elif ev == "REPORT_SENT" %}
+                        <div class="detail-row"><span>Details: </span>Decision report marked as sent.</div>
                       {% elif ev == "EDITED" %}
                         <div class="detail-row"><span>Details: </span>Case details updated.</div>
                       {% else %}
@@ -249,4 +276,3 @@
   <script src="/static/js/session.js"></script>
 </body>
 </html>
-
