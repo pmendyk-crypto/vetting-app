@@ -523,11 +523,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         path = request.url.path.rstrip("/")
-        allow_same_origin_frame = (
-            path.endswith("/attachment/preview")
-            or path.endswith("/attachment/inline")
-            or (path.endswith("/pdf") and request.query_params.get("inline") == "1")
-        )
+        allow_same_origin_frame = should_allow_same_origin_frame(path, request.query_params.get("inline"))
         response.headers["X-Frame-Options"] = "SAMEORIGIN" if allow_same_origin_frame else "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         if IS_PRODUCTION:
@@ -536,6 +532,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+
+def should_allow_same_origin_frame(path: str | None, inline_query_value: str | None = None) -> bool:
+    clean_path = str(path or "").rstrip("/")
+    if not clean_path:
+        return False
+    if clean_path.endswith("/pdf") and str(inline_query_value or "").strip() == "1":
+        return True
+    if clean_path.startswith("/submit/referral-trial/attachment/") and (
+        clean_path.endswith("/preview") or clean_path.endswith("/inline")
+    ):
+        return True
+    if clean_path.startswith("/case/") and (clean_path.endswith("/preview") or clean_path.endswith("/inline")):
+        return True
+    return False
 
 
 # Global 401/403 handler — redirect to login instead of showing a raw error
@@ -2121,6 +2132,54 @@ def get_study_description_preset(preset_id: int, org_id: int | None = None) -> d
     conn.close()
     return dict(row) if row else None
 
+
+def normalize_exam_match_value(value: str | None) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
+
+
+def find_matching_exam_catalogue_item(
+    *,
+    org_id: int | None,
+    study_description: str | None,
+    modality: str | None = None,
+    study_code: str | None = None,
+) -> dict | None:
+    available_exams = list_exam_catalogue(active_only=True, org_id=org_id)
+    if not available_exams:
+        return None
+
+    normalized_code = normalize_exam_match_value(study_code)
+    normalized_description = normalize_exam_match_value(study_description)
+    normalized_modality = str(modality or "").strip().upper()
+
+    def _prefer_modality(items: list[dict]) -> list[dict]:
+        if not normalized_modality:
+            return items
+        exact = [item for item in items if str(item.get("modality") or "").strip().upper() == normalized_modality]
+        return exact or items
+
+    if normalized_code:
+        code_matches = [
+            item
+            for item in available_exams
+            if normalize_exam_match_value(item.get("study_code")) == normalized_code
+        ]
+        code_matches = _prefer_modality(code_matches)
+        if code_matches:
+            return code_matches[0]
+
+    if normalized_description:
+        desc_matches = [
+            item
+            for item in available_exams
+            if normalize_exam_match_value(item.get("description")) == normalized_description
+        ]
+        desc_matches = _prefer_modality(desc_matches)
+        if desc_matches:
+            return desc_matches[0]
+
+    return None
+
     conn = get_db()
     row = conn.execute("SELECT COUNT(*) AS c FROM study_description_presets").fetchone()
     if row and row["c"]:
@@ -2242,6 +2301,102 @@ def list_protocol_rows_for_study(
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def list_protocol_rows_for_case(case_row: dict, org_id: int | None = None) -> tuple[list[dict], int | None]:
+    institution_id = case_row.get("institution_id")
+    if not institution_id:
+        return [], None
+
+    preset_id = case_row.get("study_description_preset_id")
+    try:
+        preset_id = int(preset_id) if preset_id is not None else None
+    except (TypeError, ValueError):
+        preset_id = None
+
+    if preset_id:
+        rows = list_protocol_rows_for_study(
+            preset_id,
+            institution_id=institution_id,
+            org_id=org_id,
+            active_only=True,
+        )
+        if rows:
+            return rows, preset_id
+
+    matched_exam = find_matching_exam_catalogue_item(
+        org_id=org_id,
+        study_description=case_row.get("study_description"),
+        modality=case_row.get("modality"),
+        study_code=case_row.get("study_code"),
+    )
+    if matched_exam:
+        matched_preset_id = int(matched_exam["id"])
+        rows = list_protocol_rows_for_study(
+            matched_preset_id,
+            institution_id=institution_id,
+            org_id=org_id,
+            active_only=True,
+        )
+        if rows:
+            return rows, matched_preset_id
+
+    conn = get_db()
+    clauses = [
+        "p.institution_id = ?",
+        "p.is_active = 1",
+    ]
+    params: list = [institution_id]
+    if org_id and table_has_column("protocols", "org_id"):
+        clauses.append("p.org_id = ?")
+        params.append(org_id)
+
+    normalized_code = normalize_exam_match_value(case_row.get("study_code"))
+    if normalized_code:
+        row = conn.execute(
+            f"""
+            SELECT p.id, p.name, p.instructions, p.institution_id, p.study_description_preset_id
+            FROM protocols p
+            JOIN study_description_presets s ON s.id = p.study_description_preset_id
+            WHERE {' AND '.join(clauses)}
+              AND COALESCE(TRIM(s.study_code), '') <> ''
+              AND LOWER(TRIM(s.study_code)) = LOWER(TRIM(?))
+            ORDER BY p.name
+            """,
+            params + [str(case_row.get("study_code") or "").strip()],
+        ).fetchall()
+        if row:
+            rows = [dict(r) for r in row]
+            conn.close()
+            return rows, rows[0].get("study_description_preset_id")
+
+    normalized_description = normalize_exam_match_value(case_row.get("study_description"))
+    normalized_modality = str(case_row.get("modality") or "").strip().upper()
+    if normalized_description:
+        extra_clauses = [
+            "LOWER(TRIM(s.description)) = LOWER(TRIM(?))",
+        ]
+        extra_params = [str(case_row.get("study_description") or "").strip()]
+        if normalized_modality:
+            extra_clauses.append("UPPER(TRIM(COALESCE(s.modality, ''))) = ?")
+            extra_params.append(normalized_modality)
+        row = conn.execute(
+            f"""
+            SELECT p.id, p.name, p.instructions, p.institution_id, p.study_description_preset_id
+            FROM protocols p
+            JOIN study_description_presets s ON s.id = p.study_description_preset_id
+            WHERE {' AND '.join(clauses + extra_clauses)}
+            ORDER BY p.name
+            """,
+            params + extra_params,
+        ).fetchall()
+        if row:
+            rows = [dict(r) for r in row]
+            conn.close()
+            return rows, rows[0].get("study_description_preset_id")
+
+    conn.close()
+    return [], preset_id
 
 
 def get_protocol_row(protocol_id: int, institution_id: int | None = None, org_id: int | None = None) -> dict | None:
@@ -9337,28 +9492,9 @@ def vet_form(request: Request, case_id: str):
                 comment="Case opened by practitioner",
             )
 
-    preset_id = case.get("study_description_preset_id")
-    try:
-        preset_id = int(preset_id) if preset_id is not None else None
-    except (TypeError, ValueError):
-        preset_id = None
-    if not preset_id and case.get("study_description") and case.get("modality"):
-        available_exams = [
-            item for item in list_exam_catalogue(active_only=True, org_id=org_id)
-            if str(item.get("modality") or "").upper() == str(case.get("modality") or "").strip().upper()
-            and str(item.get("description") or "").strip() == str(case.get("study_description") or "").strip()
-        ]
-        if available_exams:
-            preset_id = available_exams[0]["id"]
-
-    protocols: list[dict] = []
-    if preset_id and case.get("institution_id"):
-        protocols = list_protocol_rows_for_study(
-            preset_id,
-            institution_id=case.get("institution_id"),
-            org_id=org_id,
-            active_only=True,
-        )
+    protocols, resolved_preset_id = list_protocol_rows_for_case(case, org_id=org_id)
+    if resolved_preset_id and not case.get("study_description_preset_id"):
+        case["study_description_preset_id"] = resolved_preset_id
 
     if org_id:
         conn = get_db()

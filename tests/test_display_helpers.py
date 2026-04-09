@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from app.main import (
     build_case_preview_context,
@@ -7,10 +8,12 @@ from app.main import (
     display_case_status,
     display_decision_label,
     format_exam_label,
+    find_matching_exam_catalogue_item,
     get_exam_catalogue_review_summary,
     get_report_sent_summary,
     normalize_decision_label,
     resolve_case_exam_selection,
+    should_allow_same_origin_frame,
 )
 
 
@@ -107,6 +110,28 @@ class DisplayHelperTests(unittest.TestCase):
         self.assertEqual(preview["preview_source"], "attachment")
         self.assertTrue(preview["preview_available"])
         self.assertIn("/attachments/att-1/preview", preview["preview_url"])
+
+    def test_same_origin_frame_allows_case_attachment_preview_routes(self):
+        self.assertTrue(should_allow_same_origin_frame("/case/ABC/attachments/1/preview"))
+        self.assertTrue(should_allow_same_origin_frame("/case/ABC/attachments/1/inline"))
+        self.assertTrue(should_allow_same_origin_frame("/submit/referral-trial/attachment/token/preview"))
+        self.assertTrue(should_allow_same_origin_frame("/case/ABC/pdf", "1"))
+        self.assertFalse(should_allow_same_origin_frame("/owner/exam-catalogue"))
+
+    @patch("app.main.list_exam_catalogue")
+    def test_find_matching_exam_catalogue_item_prefers_study_code_then_modality(self, mock_list_exam_catalogue):
+        mock_list_exam_catalogue.return_value = [
+            {"id": 10, "modality": "XR", "description": "CT Abdomen", "study_code": "CABDO"},
+            {"id": 11, "modality": "CT", "description": "CT Abdomen", "study_code": "CABDO"},
+        ]
+        match = find_matching_exam_catalogue_item(
+            org_id=2,
+            study_description="CT Abdomen",
+            modality="CT",
+            study_code="cabdo",
+        )
+        self.assertIsNotNone(match)
+        self.assertEqual(match["id"], 11)
 
 
 if __name__ == "__main__":
