@@ -44,9 +44,16 @@
     .logo-text p { margin: 2px 0 0 0; font-size: 12px; color: #666; }
     
     .main-content { flex: 1; }
-    .case-edit-grid { display: grid; grid-template-columns: minmax(340px, 0.95fr) minmax(0, 1.3fr); gap: 20px; align-items: start; }
-    .preview-panel { order: 1; }
-    .edit-panel { order: 2; }
+    .case-edit-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.9fr); gap: 20px; align-items: stretch; }
+    .preview-panel { order: 2; display:flex; flex-direction:column; }
+    .edit-panel { order: 1; display:flex; flex-direction:column; }
+    .attachment-list { display:flex; flex-direction:column; gap:10px; margin:12px 0 0; }
+    .attachment-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); }
+    .attachment-item-meta { min-width:0; }
+    .attachment-item-name { color:#f8fbff; font-weight:500; word-break:break-word; }
+    .attachment-item-sub { margin-top:4px; color:rgba(255,255,255,0.58); font-size:12px; }
+    .attachment-item-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    .attachment-primary { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:11px; background:rgba(31,111,235,0.18); color:#93c5fd; border:1px solid rgba(31,111,235,0.32); }
     .page-footer { text-align: center; padding: 30px 20px; border-top: 1px solid #ddd; margin-top: 50px; color: #666; font-size: 13px; }
     .page-footer p { margin: 0; }
     
@@ -180,7 +187,7 @@
       </div>
       <div class="actions">
         <a class="btn secondary" href="/admin/case/{{ case['id'] }}">View Case</a>
-        <a class="btn secondary" href="/admin">Back</a>
+        <a class="btn secondary" href="{{ return_to if return_to else '/admin' }}">Back</a>
       </div>
     </div>
 
@@ -193,6 +200,7 @@
       {% endif %}
       <form method="POST" enctype="multipart/form-data">
         <input type="hidden" id="org_id_hidden" value="{{ case.get('org_id') or user_org_id or '' }}">
+        <input type="hidden" name="return_to" value="{{ return_to or '' }}">
         <div class="form-row">
           <div class="form-group">
             <label>First Name</label>
@@ -276,22 +284,44 @@
 
         <div class="form-row full">
           <div class="form-group">
-            <label>Reattach Referral File (optional)</label>
-            <input type="file" name="attachment">
-            <p class="small" style="margin-top:6px;">
-              {% if case['uploaded_filename'] %}
-                Current file: <strong>{{ case['uploaded_filename'] }}</strong>
-                {% if not case['stored_filepath'] %}(expired){% endif %}
-              {% else %}
-                No referral file currently attached.
-              {% endif %}
-            </p>
+            <label>Add Referral / Supporting Documents</label>
+            <input type="file" name="attachments" multiple>
+            <p class="small" style="margin-top:6px;">You can attach multiple documents. Existing files stay attached unless you remove them below.</p>
+            {% if attachments %}
+            <div class="attachment-list">
+              {% for attachment in attachments %}
+              <div class="attachment-item">
+                <div class="attachment-item-meta">
+                  <div class="attachment-item-name">
+                    {{ attachment.uploaded_filename }}
+                    {% if attachment.is_primary %}<span class="attachment-primary">Primary preview</span>{% endif %}
+                  </div>
+                  <div class="attachment-item-sub">
+                    Added {{ attachment.created_at_display or 'recently' }}
+                    {% if not attachment.available %} · File expired{% endif %}
+                  </div>
+                </div>
+                <div class="attachment-item-actions">
+                  {% if attachment.available %}
+                  <a class="btn secondary" href="/case/{{ case['id'] }}/attachments/{{ attachment.id }}" style="padding:8px 12px;">Download</a>
+                  {% endif %}
+                  <label style="display:flex;align-items:center;gap:8px;color:rgba(255,255,255,0.85);font-size:13px;">
+                    <input type="checkbox" name="remove_attachment_ids" value="{{ attachment.id }}">
+                    Remove
+                  </label>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <p class="small" style="margin-top:6px;">No referral files currently attached.</p>
+            {% endif %}
           </div>
         </div>
 
         <div class="actions">
           <button type="submit" class="btn">Save Changes</button>
-          <a class="btn secondary" href="/admin/case/{{ case['id'] }}">Cancel</a>
+          <a class="btn secondary" href="{{ return_to if return_to else ('/admin/case/' ~ case['id']) }}">Cancel</a>
         </div>
       </form>
     </div>

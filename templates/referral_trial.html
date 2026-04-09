@@ -6,9 +6,11 @@
   <title>Referral Intake Assistant</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    .trial-wrap { max-width: 980px; margin: 20px auto; padding: 12px; }
+    .trial-wrap { max-width: 1520px; margin: 20px auto; padding: 12px 20px 24px; }
     .card { border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .trial-review-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.85fr); gap: 16px; align-items: stretch; }
+    .trial-review-grid .card { margin-bottom: 0; }
     .form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
     .form-row.full { grid-column: 1 / -1; }
     input, select, textarea { padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: inherit; }
@@ -68,6 +70,7 @@
     .protocol-empty { padding: 14px 12px; text-align: center; color: rgba(148, 163, 184, 0.9); font-size: 12px; font-style: italic; }
     @media (max-width: 760px) {
       .trial-wrap { padding: 10px; }
+      .trial-review-grid { grid-template-columns: 1fr; }
       .form-grid { grid-template-columns: 1fr; }
       .actions { flex-direction: column; }
       .actions .btn { width: 100%; text-align: center; }
@@ -89,12 +92,15 @@
         <div class="form-grid">
           <div class="form-row">
             <label>Institution</label>
-            <select name="institution_id" required>
-              <option value="">Select institution</option>
+            <select name="institution_id">
+              <option value="">Use default institution</option>
               {% for inst in institutions %}
                 <option value="{{ inst.id }}" {% if draft and draft.institution_id == (inst.id | string) %}selected{% endif %}>{{ inst.name }}</option>
               {% endfor %}
             </select>
+            {% if default_institution %}
+            <div class="info">Default: {{ default_institution.name }}</div>
+            {% endif %}
           </div>
           <div class="form-row">
             <label>Referral file</label>
@@ -110,6 +116,7 @@
     </div>
 
     {% if parse_confidence is not none %}
+    <div class="trial-review-grid">
     <div class="card">
       <h3>2) Review and confirm case details</h3>
       <p class="meta">Parser confidence: {{ (parse_confidence * 100) | round(0) }}%</p>
@@ -142,12 +149,15 @@
           </div>
           <div class="form-row">
             <label>Institution</label>
-            <select name="institution_id" required>
-              <option value="">Select institution</option>
+            <select name="institution_id">
+              <option value="">Use default institution</option>
               {% for inst in institutions %}
                 <option value="{{ inst.id }}" {% if draft and draft.institution_id == (inst.id | string) %}selected{% endif %}>{{ inst.name }}</option>
               {% endfor %}
             </select>
+            {% if default_institution %}
+            <div class="info">Default: {{ default_institution.name }}</div>
+            {% endif %}
           </div>
           <div class="form-row">
             <label>Modality</label>
@@ -191,6 +201,11 @@
             <label>Admin notes</label>
             <textarea name="admin_notes">{{ draft.admin_notes }}</textarea>
           </div>
+          <div class="form-row full">
+            <label>Additional supporting documents</label>
+            <input type="file" name="supporting_attachments" multiple>
+            <div class="info">Optional. Existing referral file remains the primary referral preview.</div>
+          </div>
           <div class="form-row">
             <label>Practitioner (optional)</label>
             <select name="radiologist">
@@ -210,7 +225,9 @@
 
     <div class="card">
       <h3>Extracted text preview</h3>
+      <p class="meta" style="margin-top:0;">Review the parsed referral content alongside the form before creating the case.</p>
       <pre>{{ parse_preview }}</pre>
+    </div>
     </div>
     {% endif %}
   </div>

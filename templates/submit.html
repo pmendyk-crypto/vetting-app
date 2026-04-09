@@ -18,7 +18,7 @@
     }
 
     .page-wrapper {
-      --content-width: min(70vw, 1100px);
+      --content-width: min(94vw, 1480px);
       height: 100vh;
       display: flex;
       flex-direction: column;
@@ -788,13 +788,16 @@
                 <input name="patient_dob" type="date">
               </div>
               <div class="form-row" style="margin-top: 10px;">
-                <label class="required">Institution</label>
-                <select name="institution_id" id="institution_id" required onchange="updateOrgContext()">
-                  <option value="">-- Select --</option>
+                <label>Institution</label>
+                <select name="institution_id" id="institution_id" onchange="updateOrgContext()">
+                  <option value="">Use organisation default institution</option>
                   {% for inst in institutions %}
-                    <option value="{{ inst.id }}" data-org-id="{{ inst.org_id or inst.organization_id or user_org_id or 1 }}">{{ inst.name }}</option>
+                    <option value="{{ inst.id }}" data-org-id="{{ inst.org_id or inst.organization_id or user_org_id or 1 }}" {% if default_institution and default_institution.id == inst.id %}selected{% endif %}>{{ inst.name }}</option>
                   {% endfor %}
                 </select>
+                {% if default_institution %}
+                <p class="info-text">If left unchanged, cases will use <strong>{{ default_institution.name }}</strong>.</p>
+                {% endif %}
                 <input type="hidden" id="org_id_hidden" name="org_id" value="{{ user_org_id or '' }}">
               </div>
             </div>
@@ -868,9 +871,9 @@
               </div>
 
               <div class="form-row">
-                <label class="required">Referral File</label>
-                <input name="attachment" type="file" required>
-                <p class="info-text">Upload imaging referral (PDF, image, etc.)</p>
+                <label class="required">Referral and supporting documents</label>
+                <input name="attachments" type="file" multiple required>
+                <p class="info-text">Upload one or more referral/supporting files. The first file becomes the primary referral preview.</p>
               </div>
             </div>
 

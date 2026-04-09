@@ -31,12 +31,15 @@
         </div>
         <div class="form-row">
           <label>Institution</label>
-          <select name="institution_id" required>
-            <option value="">Select</option>
+          <select name="institution_id">
+            <option value="">Use default institution</option>
             {% for inst in institutions %}
-              <option value="{{ inst.id }}">{{ inst.name }}</option>
+              <option value="{{ inst.id }}" {% if default_institution and default_institution.id == inst.id %}selected{% endif %}>{{ inst.name }}</option>
             {% endfor %}
           </select>
+          {% if default_institution %}
+          <div class="small">Default: {{ default_institution.name }}</div>
+          {% endif %}
         </div>
       </div>
 
@@ -51,8 +54,8 @@
       </div>
 
       <div class="form-row">
-        <label>Referral attachment</label>
-        <input type="file" name="attachment" required>
+        <label>Referral attachments</label>
+        <input type="file" name="attachments" multiple required>
       </div>
 
       <button type="submit" class="btn">Submit case</button>

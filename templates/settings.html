@@ -558,15 +558,15 @@
                 
                 <div class="form-card">
                     <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Add New User</h3>
-                    <form id="addUserForm" method="POST" action="/settings/user/add">
+                    <form id="addUserForm" method="POST" action="/settings/user/add" autocomplete="off">
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Username</label>
-                                <input type="text" name="username" required placeholder="e.g., john_doe">
+                                <input type="text" name="username" required placeholder="e.g., john_doe" autocomplete="off" data-lpignore="true">
                             </div>
                             <div class="form-group">
                                 <label>Password</label>
-                                <input type="password" name="password" required placeholder="Enter password">
+                                <input type="password" name="password" required placeholder="Enter password" autocomplete="new-password" data-lpignore="true">
                             </div>
                         </div>
                         <div class="form-row">
@@ -781,8 +781,9 @@
                                 <td>{% if proto.last_modified %}{{ proto.last_modified | display_datetime }}{% else %}N/A{% endif %}</td>
                                 <td>
                                     <div class="action-buttons">
-                                        <button class="btn btn-secondary btn-small" onclick='editProtocol({{ proto.id }}, {{ proto.name|tojson }}, {{ proto.institution_id }}, {{ proto.study_description_preset_id or "null" }}, {{ proto.instructions|tojson if proto.instructions else "\"\"" }})'>Edit</button>
-                                        <form style="display: inline;" method="POST" action="/settings/protocol/delete/{{ proto.id }}" onsubmit="return confirm('Delete protocol?');">
+                                        <button class="btn btn-secondary btn-small" type="button" onclick='viewProtocol({{ proto.name|tojson }}, {{ (proto.study_modality or "Unlinked")|tojson }}, {{ (proto.institution_name or "Unassigned")|tojson }}, {{ (proto.instructions or "")|tojson }}, {{ ("Active" if proto.is_active else "Inactive")|tojson }})'>View</button>
+                                        <button class="btn btn-secondary btn-small" type="button" onclick='editProtocol({{ proto.id }}, {{ proto.name|tojson }}, {{ proto.institution_id }}, {{ proto.study_description_preset_id or "null" }}, {{ proto.instructions|tojson if proto.instructions else "\"\"" }})'>Edit</button>
+                                        <form style="display: inline;" method="POST" action="/settings/protocol/delete/{{ proto.id }}" onsubmit="return confirm('Are you sure you want to delete this protocol?');">
                                             <button type="submit" class="btn btn-danger btn-small">Delete</button>
                                         </form>
                                     </div>
@@ -975,12 +976,12 @@
     <div id="editUserModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">Edit User</div>
-            <form id="editUserForm" method="POST" action="/settings/user/edit">
+            <form id="editUserForm" method="POST" action="/settings/user/edit" autocomplete="off">
                 <input type="hidden" id="editUserUsername" name="username">
                 <div class="form-row">
                     <div class="form-group">
                         <label>Username</label>
-                        <input type="text" id="editUserUsernameDisplay" disabled style="background: rgba(255,255,255,0.03); cursor: not-allowed;">
+                        <input type="text" id="editUserUsernameDisplay" disabled style="background: rgba(255,255,255,0.03); cursor: not-allowed;" autocomplete="off" data-lpignore="true">
                     </div>
                     <div class="form-group">
                         <label>Role</label>
@@ -1018,7 +1019,7 @@
                 <div class="form-row full">
                     <div class="form-group">
                         <label>New Password (leave blank to keep current)</label>
-                        <input type="password" id="editUserPassword" name="password" placeholder="Leave blank if no change">
+                        <input type="password" id="editUserPassword" name="password" placeholder="Leave blank if no change" autocomplete="new-password" data-lpignore="true">
                     </div>
                 </div>
                 <div class="form-row full">
@@ -1085,6 +1086,43 @@
                     <button type="submit" class="btn btn-primary">Save Changes</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div id="viewProtocolModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Protocol Details</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Protocol Name</label>
+                    <input type="text" id="viewProtoName" readonly>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Modality</label>
+                    <input type="text" id="viewProtoModality" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Institution</label>
+                    <input type="text" id="viewProtoInstitution" readonly>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Status</label>
+                    <input type="text" id="viewProtoStatus" readonly>
+                </div>
+            </div>
+            <div class="form-row full">
+                <div class="form-group">
+                    <label>Instructions</label>
+                    <textarea id="viewProtoInstructions" rows="6" readonly></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('viewProtocolModal')">Close</button>
+            </div>
         </div>
     </div>
 
@@ -1249,6 +1287,15 @@
             document.getElementById('editProtoInstructions').value = instructions || '';
             document.getElementById('editProtocolForm').action = `/settings/protocol/edit/${id}`;
             document.getElementById('editProtocolModal').classList.add('active');
+        }
+
+        function viewProtocol(name, modality, institution, instructions, status) {
+            document.getElementById('viewProtoName').value = name || '';
+            document.getElementById('viewProtoModality').value = modality || '';
+            document.getElementById('viewProtoInstitution').value = institution || '';
+            document.getElementById('viewProtoStatus').value = status || '';
+            document.getElementById('viewProtoInstructions').value = instructions || 'No instructions recorded.';
+            document.getElementById('viewProtocolModal').classList.add('active');
         }
 
         function editStudyPreset(id, modality, description) {

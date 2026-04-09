@@ -175,6 +175,32 @@ def normalize_case_attachment(case_dict: dict) -> dict:
     return case_dict
 
 
+def normalize_decision_label(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    mapping = {
+        "approve": "Approved",
+        "approved": "Approved",
+        "approve with comment": "Approved with Comment",
+        "approved with comment": "Approved with Comment",
+        "reject": "Rejected",
+        "rejected": "Rejected",
+    }
+    return mapping.get(normalized, "")
+
+
+def make_attachment_storage_key(
+    case_id: str,
+    original_filename: str,
+    org_id: int | None = None,
+    attachment_tag: str | None = None,
+) -> str:
+    ext = Path(original_filename or "").suffix or ".bin"
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", Path(original_filename or "attachment").stem).strip("-") or "attachment"
+    tag = attachment_tag or uuid4().hex[:10]
+    org_prefix = f"org_{int(org_id)}/" if org_id else ""
+    return f"{org_prefix}{case_id}/{tag}_{stem}{ext}"
+
+
 def is_inline_previewable(filename: str | None) -> bool:
     name = str(filename or "").strip().lower()
     if not name:
@@ -211,7 +237,12 @@ def get_blob_service_client():
         return None
 
 
-def upload_to_blob(case_id: str, file_bytes: bytes, original_filename: str) -> str | None:
+def upload_to_blob(
+    case_id: str,
+    file_bytes: bytes,
+    original_filename: str,
+    blob_name: str | None = None,
+) -> str | None:
     """
     Upload file to Azure Blob Storage.
     Returns the blob name (stored in DB as stored_filepath), or None if upload fails.
@@ -220,9 +251,9 @@ def upload_to_blob(case_id: str, file_bytes: bytes, original_filename: str) -> s
         return None
     
     try:
-        # Use short blob name: case_id.ext (blob names have length limits)
-        ext = Path(original_filename).suffix or ".bin"
-        blob_name = f"{case_id}{ext}"
+        if not blob_name:
+            ext = Path(original_filename).suffix or ".bin"
+            blob_name = f"{case_id}{ext}"
         client = get_blob_service_client()
         if not client:
             return None
@@ -234,6 +265,21 @@ def upload_to_blob(case_id: str, file_bytes: bytes, original_filename: str) -> s
     except Exception as e:
         print(f"[BLOB] Upload failed for {case_id}: {e}")
         return None
+
+
+def delete_blob(blob_name: str | None) -> None:
+    if not BLOB_STORAGE_ENABLED or not blob_name:
+        return
+
+    try:
+        client = get_blob_service_client()
+        if not client:
+            return
+
+        container_client = client.get_container_client(REFERRAL_BLOB_CONTAINER)
+        container_client.delete_blob(blob_name, delete_snapshots="include")
+    except Exception as exc:
+        print(f"[BLOB] Delete failed for {blob_name}: {exc}")
 
 
 def download_from_blob(blob_name: str) -> bytes | None:
@@ -275,6 +321,43 @@ def blob_exists(blob_name: str) -> bool:
     except Exception as e:
         print(f"[BLOB] exists() check failed for {blob_name}: {e}")
         return False
+
+
+def delete_stored_attachment_file(stored_path: str | None) -> None:
+    if not stored_path:
+        return
+    if BLOB_STORAGE_ENABLED and not str(stored_path).startswith("/"):
+        delete_blob(str(stored_path))
+        return
+    try:
+        path_obj = Path(str(stored_path))
+        if path_obj.exists():
+            path_obj.unlink()
+    except Exception as exc:
+        print(f"[ATTACHMENT] Failed to delete {stored_path}: {exc}")
+
+
+def store_case_attachment_file(
+    case_id: str,
+    original_filename: str,
+    file_bytes: bytes,
+    org_id: int | None = None,
+    attachment_tag: str | None = None,
+) -> str | None:
+    storage_key = make_attachment_storage_key(case_id, original_filename, org_id=org_id, attachment_tag=attachment_tag)
+    stored_path = None
+
+    if BLOB_STORAGE_ENABLED:
+        stored_path = upload_to_blob(case_id, file_bytes, original_filename, blob_name=storage_key)
+
+    if not stored_path:
+        local_path = UPLOAD_DIR / storage_key.replace("/", os.sep)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(local_path, "wb") as f:
+            f.write(file_bytes)
+        stored_path = str(local_path)
+
+    return stored_path
 
 app = FastAPI(title="RadFlow")
 
@@ -509,7 +592,7 @@ Disallow: /"""
     )
 
 
-DECISIONS = ["Approve", "Reject", "Approve with comment"]
+DECISIONS = ["Approved", "Approved with Comment", "Rejected"]
 
 STATUS_PENDING = "pending"
 STATUS_VETTED = "vetted"
@@ -2355,6 +2438,79 @@ def get_institution(inst_id: int, org_id: int | None = None) -> dict | None:
     return dict(row) if row else None
 
 
+def ensure_default_institution(org_id: int | None) -> dict | None:
+    if not org_id:
+        return None
+
+    institutions = list_institutions(org_id)
+    if institutions:
+        return institutions[0]
+
+    conn = get_db()
+    org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
+    if not org_row:
+        conn.close()
+        return None
+
+    org_name = (org_row.get("name") if isinstance(org_row, dict) else org_row[0]) or "Default Institution"
+    now = utc_now_iso()
+    if table_has_column("institutions", "org_id"):
+        conn.execute(
+            """
+            INSERT INTO institutions (name, sla_hours, org_id, created_at, modified_at)
+            VALUES (?, 48, ?, ?, ?)
+            """,
+            (org_name, org_id, now, now),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO institutions (name, sla_hours, created_at, modified_at) VALUES (?, 48, ?, ?)",
+            (org_name, now, now),
+        )
+    conn.commit()
+    conn.close()
+
+
+def ensure_case_attachments_schema() -> None:
+    conn = get_db()
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS case_attachments (
+            id TEXT PRIMARY KEY,
+            case_id TEXT NOT NULL,
+            org_id INTEGER,
+            uploaded_filename TEXT NOT NULL,
+            stored_filepath TEXT,
+            uploaded_by TEXT,
+            created_at TEXT NOT NULL,
+            is_primary INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_case_attachments_case ON case_attachments(case_id, created_at)")
+    conn.commit()
+    conn.close()
+
+
+def get_default_institution(org_id: int | None) -> dict | None:
+    if not org_id:
+        return None
+
+    institutions = list_institutions(org_id)
+    if not institutions:
+        return ensure_default_institution(org_id)
+
+    conn = get_db()
+    org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
+    conn.close()
+    org_name = ((org_row.get("name") if isinstance(org_row, dict) else org_row[0]) if org_row else "") or ""
+    if org_name:
+        for institution in institutions:
+            if str(institution.get("name") or "").strip().lower() == org_name.strip().lower():
+                return institution
+    return institutions[0]
+
+
 def upsert_institution(name: str, sla_hours: int, org_id: int | None = None) -> int:
     conn = get_db()
     if org_id and table_has_column("institutions", "org_id"):
@@ -2912,6 +3068,211 @@ def insert_case_event(
     conn.close()
 
 
+def ensure_primary_case_attachment_record(case_dict: dict | None) -> None:
+    if not case_dict or not table_exists("case_attachments"):
+        return
+    if not case_dict.get("uploaded_filename"):
+        return
+
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT id FROM case_attachments WHERE case_id = ? LIMIT 1",
+        (case_dict.get("id"),),
+    ).fetchone()
+    if existing:
+        conn.close()
+        return
+
+    conn.execute(
+        """
+        INSERT INTO case_attachments (id, case_id, org_id, uploaded_filename, stored_filepath, uploaded_by, created_at, is_primary)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        """,
+        (
+            uuid4().hex,
+            case_dict.get("id"),
+            case_dict.get("org_id"),
+            case_dict.get("uploaded_filename"),
+            case_dict.get("stored_filepath"),
+            None,
+            case_dict.get("created_at") or utc_now_iso(),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_case_attachments(case_id: str, case_dict: dict | None = None) -> list[dict]:
+    if not table_exists("case_attachments"):
+        return []
+
+    if case_dict:
+        ensure_primary_case_attachment_record(case_dict)
+
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT id, case_id, org_id, uploaded_filename, stored_filepath, uploaded_by, created_at, is_primary
+        FROM case_attachments
+        WHERE case_id = ?
+        ORDER BY is_primary DESC, created_at ASC
+        """,
+        (case_id,),
+    ).fetchall()
+    conn.close()
+
+    attachments: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        stored_path = item.get("stored_filepath")
+        available = bool(stored_path)
+        if stored_path:
+            if BLOB_STORAGE_ENABLED and not str(stored_path).startswith("/"):
+                available = blob_exists(str(stored_path))
+            else:
+                available = Path(str(stored_path)).exists()
+        item["stored_filepath"] = stored_path if available else None
+        item["available"] = available
+        item["previewable"] = is_inline_previewable(item.get("uploaded_filename"))
+        item["created_at_display"] = format_display_datetime(item.get("created_at"), item.get("created_at") or "")
+        attachments.append(item)
+    return attachments
+
+
+def add_case_attachment_record(
+    case_id: str,
+    org_id: int | None,
+    uploaded_filename: str,
+    stored_filepath: str | None,
+    uploaded_by: str | None = None,
+    is_primary: bool = False,
+) -> str:
+    attachment_id = uuid4().hex
+    conn = get_db()
+    if is_primary:
+        conn.execute("UPDATE case_attachments SET is_primary = 0 WHERE case_id = ?", (case_id,))
+    conn.execute(
+        """
+        INSERT INTO case_attachments (id, case_id, org_id, uploaded_filename, stored_filepath, uploaded_by, created_at, is_primary)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (attachment_id, case_id, org_id, uploaded_filename, stored_filepath, uploaded_by, utc_now_iso(), 1 if is_primary else 0),
+    )
+    conn.commit()
+    conn.close()
+    return attachment_id
+
+
+def sync_case_primary_attachment(case_id: str) -> None:
+    if not table_exists("case_attachments"):
+        return
+
+    conn = get_db()
+    primary = conn.execute(
+        """
+        SELECT uploaded_filename, stored_filepath
+        FROM case_attachments
+        WHERE case_id = ?
+        ORDER BY is_primary DESC, created_at ASC
+        LIMIT 1
+        """,
+        (case_id,),
+    ).fetchone()
+    if primary:
+        conn.execute(
+            "UPDATE cases SET uploaded_filename = ?, stored_filepath = ? WHERE id = ?",
+            (primary["uploaded_filename"], primary["stored_filepath"], case_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE cases SET uploaded_filename = NULL, stored_filepath = NULL WHERE id = ?",
+            (case_id,),
+        )
+    conn.commit()
+    conn.close()
+
+
+def remove_case_attachment(case_id: str, attachment_id: str) -> None:
+    if not table_exists("case_attachments"):
+        return
+
+    conn = get_db()
+    row = conn.execute(
+        """
+        SELECT id, stored_filepath, is_primary
+        FROM case_attachments
+        WHERE id = ? AND case_id = ?
+        """,
+        (attachment_id, case_id),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return
+
+    conn.execute("DELETE FROM case_attachments WHERE id = ? AND case_id = ?", (attachment_id, case_id))
+    if row.get("is_primary"):
+        replacement = conn.execute(
+            """
+            SELECT id
+            FROM case_attachments
+            WHERE case_id = ?
+            ORDER BY created_at ASC
+            LIMIT 1
+            """,
+            (case_id,),
+        ).fetchone()
+        if replacement:
+            conn.execute("UPDATE case_attachments SET is_primary = 1 WHERE id = ?", (replacement["id"],))
+    conn.commit()
+    conn.close()
+
+    delete_stored_attachment_file(row.get("stored_filepath"))
+    sync_case_primary_attachment(case_id)
+
+
+def save_case_attachments(
+    case_id: str,
+    org_id: int | None,
+    files: list[UploadFile],
+    uploaded_by: str | None,
+    primary_when_empty: bool = False,
+) -> list[str]:
+    saved_names: list[str] = []
+    if not files:
+        return saved_names
+
+    existing = list_case_attachments(case_id)
+    should_make_primary = primary_when_empty and not existing
+
+    for upload in files:
+        if not upload or not upload.filename:
+            continue
+        file_bytes = upload.file.read()
+        if not file_bytes:
+            continue
+        stored_path = store_case_attachment_file(
+            case_id,
+            upload.filename,
+            file_bytes,
+            org_id=org_id,
+            attachment_tag=uuid4().hex[:10],
+        )
+        add_case_attachment_record(
+            case_id,
+            org_id,
+            upload.filename,
+            stored_path,
+            uploaded_by=uploaded_by,
+            is_primary=should_make_primary,
+        )
+        should_make_primary = False
+        saved_names.append(upload.filename)
+
+    if saved_names:
+        sync_case_primary_attachment(case_id)
+    return saved_names
+
+
 # -------------------------
 # Init DB on startup
 # -------------------------
@@ -2927,6 +3288,7 @@ try:
     ensure_study_description_presets_schema()
     ensure_notify_events_schema()
     ensure_case_events_schema()
+    ensure_case_attachments_schema()
     ensure_seed_data()
     ensure_local_owner_account()
     ensure_default_protocols()
@@ -4694,7 +5056,7 @@ def admin_dashboard_csv(
             latest_protocol_at = ""
 
             if events:
-                submitted = next((e for e in events if e.get("event_type") == "SUBMITTED"), None)
+                submitted = next((e for e in events if str(e.get("event_type") or "").upper() in {"SUBMITTED", "CREATED"}), None)
                 if submitted:
                     submitted_at = submitted.get("created_at") or ""
 
@@ -5239,6 +5601,9 @@ def admin_case_view(request: Request, case_id: str):
     if case_dict:
         case_dict = normalize_case_attachment(case_dict)
         case_dict["attachment_previewable"] = is_inline_previewable(case_dict.get("uploaded_filename"))
+        attachments = list_case_attachments(case_id, case_dict=case_dict)
+    else:
+        attachments = []
 
     if case_dict and case_dict.get("org_id"):
         org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (case_dict.get("org_id"),)).fetchone()
@@ -5274,7 +5639,14 @@ def admin_case_view(request: Request, case_id: str):
 
     return templates.TemplateResponse(
         "admin_case.html",
-        {"request": request, "case": case_dict, "org_name": org_name, "events": events},
+        {
+            "request": request,
+            "case": case_dict,
+            "org_name": org_name,
+            "events": events,
+            "attachments": attachments,
+            "return_to": (request.query_params.get("return_to") or "").strip(),
+        },
     )
 
 
@@ -5471,6 +5843,7 @@ def admin_case_timeline_csv(request: Request, case_id: str):
 @app.get("/admin/case/{case_id}/edit", response_class=HTMLResponse)
 def admin_case_edit_view(request: Request, case_id: str):
     saved = request.query_params.get("saved", "")
+    return_to = (request.query_params.get("return_to") or request.headers.get("referer") or "").strip()
     try:
         user = require_admin(request)
     except HTTPException as e:
@@ -5493,6 +5866,7 @@ def admin_case_edit_view(request: Request, case_id: str):
     case_dict = dict(case)
     case_dict = normalize_case_attachment(case_dict)
     case_dict["attachment_previewable"] = is_inline_previewable(case_dict.get("uploaded_filename"))
+    attachments = list_case_attachments(case_id, case_dict=case_dict)
     
     return templates.TemplateResponse(
         "case_edit.html",
@@ -5504,6 +5878,8 @@ def admin_case_edit_view(request: Request, case_id: str):
             "protocols": [p["protocol"] for p in protocols] if protocols else [],
             "user_org_id": org_id,
             "saved": saved == "1",
+            "attachments": attachments,
+            "return_to": return_to,
         }
     )
 
@@ -5521,7 +5897,9 @@ async def admin_case_edit_save(
     radiologist: str = Form(""),
     modality: str = Form(""),
     protocol: str = Form(""),
-    attachment: UploadFile | None = File(None),
+    attachments: list[UploadFile] = File([]),
+    remove_attachment_ids: list[str] = Form([]),
+    return_to: str = Form(""),
 ):
     try:
         user = require_admin(request)
@@ -5556,32 +5934,6 @@ async def admin_case_edit_save(
     # Empty string is allowed by current app flow; avoid writing NULL.
     cleaned_radiologist = radiologist.strip() or (case_dict.get("radiologist") or "")
 
-    replacement_uploaded_filename: str | None = None
-    replacement_stored_path: str | None = None
-    old_stored_path = case_dict.get("stored_filepath")
-    if attachment and attachment.filename:
-        replacement_uploaded_filename = attachment.filename
-        replacement_bytes = await attachment.read()
-        if replacement_bytes:
-            if BLOB_STORAGE_ENABLED:
-                blob_name = upload_to_blob(case_id, replacement_bytes, replacement_uploaded_filename)
-                if blob_name:
-                    replacement_stored_path = blob_name
-
-            if not replacement_stored_path:
-                safe_name = f"{case_id}_{Path(replacement_uploaded_filename).name}"
-                replacement_stored_path = str(UPLOAD_DIR / safe_name)
-                with open(replacement_stored_path, "wb") as f:
-                    f.write(replacement_bytes)
-
-            if old_stored_path and old_stored_path != replacement_stored_path and str(old_stored_path).startswith(str(UPLOAD_DIR)):
-                try:
-                    old_path_obj = Path(str(old_stored_path))
-                    if old_path_obj.exists():
-                        old_path_obj.unlink()
-                except Exception:
-                    pass
-
     def _clean(value: str | None) -> str:
         return (value or "").strip()
 
@@ -5601,13 +5953,8 @@ async def admin_case_edit_save(
     add_field_if_exists("radiologist", cleaned_radiologist)
     add_field_if_exists("protocol", cleaned_protocol)
     add_field_if_exists("modality", cleaned_modality)
-    if replacement_uploaded_filename is not None:
-        add_field_if_exists("uploaded_filename", replacement_uploaded_filename)
-        add_field_if_exists("stored_filepath", replacement_stored_path)
-
     if not update_fields:
-        conn.close()
-        raise HTTPException(status_code=400, detail="No editable fields available for this case")
+        update_fields = []
 
     changes: list[str] = []
     old_case = dict(case)
@@ -5623,16 +5970,30 @@ async def admin_case_edit_save(
     update_sql = "UPDATE cases SET " + ", ".join([f"{col} = ?" for col, _ in update_fields]) + " WHERE id = ?"
     update_params = [value for _, value in update_fields] + [case_id]
     try:
-        conn.execute(update_sql, update_params)
-        conn.commit()
+        if update_fields:
+            conn.execute(update_sql, update_params)
+            conn.commit()
     except Exception as exc:
         conn.close()
         print(f"[ERROR] Failed to save case edits for case {case_id}: {exc}")
         raise HTTPException(status_code=400, detail="Unable to save case changes")
     conn.close()
-
-    if replacement_uploaded_filename is not None:
-        changes.append(f"attachment: replaced with {replacement_uploaded_filename}")
+    removed_attachment_count = 0
+    for attachment_id in remove_attachment_ids:
+        if attachment_id:
+            remove_case_attachment(case_id, attachment_id)
+            removed_attachment_count += 1
+    uploaded_attachment_names = save_case_attachments(
+        case_id,
+        org_id or case_dict.get("org_id"),
+        attachments,
+        uploaded_by=user.get("username"),
+        primary_when_empty=True,
+    )
+    if uploaded_attachment_names:
+        changes.append("attachments added: " + ", ".join(uploaded_attachment_names))
+    if removed_attachment_count:
+        changes.append(f"attachments removed: {removed_attachment_count}")
 
     change_summary = "; ".join(changes) if changes else "No field changes"
     note_text = cleaned_admin_notes
@@ -5651,8 +6012,11 @@ async def admin_case_edit_save(
         )
     except Exception as exc:
         print(f"[WARN] Saved case {case_id} but failed to write edit event: {exc}")
-
-    return RedirectResponse(url=f"/admin/case/{case_id}/edit?saved=1", status_code=303)
+    safe_return_to = (return_to or "").strip()
+    if safe_return_to.startswith("/admin"):
+        separator = "&" if "?" in safe_return_to else "?"
+        return RedirectResponse(url=f"{safe_return_to}{separator}case_saved=1", status_code=303)
+    return RedirectResponse(url="/admin", status_code=303)
 
 
 @app.post("/admin/case/{case_id}/assign-radiologist")
@@ -6261,33 +6625,16 @@ def settings_page(request: Request, error: str = ""):
     org_id = get_request_org_id(request)
     org_name = ""
     
-    # Ensure default institution exists for this org
     if org_id:
+        default_institution = ensure_default_institution(org_id)
         institutions = list_institutions(org_id)
         conn = get_db()
         org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
         conn.close()
         if org_row:
             org_name = org_row["name"] or ""
-        if not institutions:
-            # Create default institution with org name
-            conn = get_db()
-            org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
-            if org_row:
-                org_name = org_row["name"]
-                now = utc_now_iso()
-                if table_has_column("institutions", "org_id"):
-                    conn.execute(
-                        """
-                        INSERT INTO institutions (name, sla_hours, org_id, created_at, modified_at)
-                        VALUES (?, 48, ?, ?, ?)
-                        """,
-                        (org_name, org_id, now, now)
-                    )
-                    conn.commit()
-            conn.close()
-            # Refresh institutions list
-            institutions = list_institutions(org_id)
+        if not institutions and default_institution:
+            institutions = [default_institution]
     else:
         institutions = list_institutions(org_id)
     
@@ -6350,26 +6697,30 @@ def preview_report_settings(request: Request):
   <title>Report Preview</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    body {{ margin: 0; background: #eef3f8; color: #102033; font-family: Arial, sans-serif; }}
-    .page {{ max-width: 900px; margin: 32px auto; background: white; border: 1px solid #d6e0eb; box-shadow: 0 18px 40px rgba(16,32,51,0.08); }}
-    .toolbar {{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding: 16px 20px; border-bottom: 1px solid #e5edf5; background: #f8fbff; }}
-    .btn {{ display:inline-flex; align-items:center; justify-content:center; padding: 10px 14px; border-radius: 8px; text-decoration:none; background:#1f6feb; color:white; }}
-    .page-inner {{ padding: 28px 36px 32px; }}
-    .header-rule {{ height: 8px; border-radius: 999px; background: linear-gradient(90deg, #1f6feb, #6ea8ff); margin-bottom: 20px; }}
-    .report-header {{ font-size: 28px; font-weight: 700; margin: 0 0 4px; }}
-    .report-sub {{ color: #526274; font-size: 13px; margin-bottom: 24px; }}
-    .status {{ display:inline-block; padding: 6px 12px; border-radius: 999px; background:#dcfce7; color:#166534; font-size: 12px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; }}
+    body {{ margin: 0; min-height: 100vh; background: linear-gradient(180deg, #08101d 0%, #0e1a2c 100%); color: rgba(241, 245, 249, 0.92); font-family: Inter, system-ui, sans-serif; }}
+    .shell {{ max-width: 1180px; margin: 0 auto; padding: 24px; }}
+    .page {{ max-width: 960px; margin: 0 auto; background: rgba(10, 18, 34, 0.96); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 18px; box-shadow: 0 28px 60px rgba(4, 10, 22, 0.55); overflow: hidden; }}
+    .toolbar {{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding: 18px 22px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); background: rgba(255,255,255,0.03); }}
+    .toolbar strong {{ color: #f8fbff; }}
+    .toolbar span {{ color: rgba(203, 213, 225, 0.78) !important; }}
+    .btn {{ display:inline-flex; align-items:center; justify-content:center; padding: 10px 14px; border-radius: 10px; text-decoration:none; background:#1f6feb; color:white; }}
+    .page-inner {{ padding: 30px 38px 34px; }}
+    .header-rule {{ height: 8px; border-radius: 999px; background: linear-gradient(90deg, #1f6feb, #60a5fa); margin-bottom: 20px; }}
+    .report-header {{ font-size: 28px; font-weight: 700; margin: 0 0 4px; color: #ffffff; }}
+    .report-sub {{ color: rgba(191, 219, 254, 0.82); font-size: 13px; margin-bottom: 24px; }}
+    .status {{ display:inline-block; padding: 6px 12px; border-radius: 999px; background: rgba(16,185,129,0.18); border: 1px solid rgba(16,185,129,0.3); color:#86efac; font-size: 12px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; }}
     .section {{ margin-top: 24px; }}
-    .section h2 {{ font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #526274; margin: 0 0 12px; }}
+    .section h2 {{ font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(191, 219, 254, 0.8); margin: 0 0 12px; }}
     .grid {{ display:grid; grid-template-columns: 180px 1fr; gap: 10px 18px; }}
-    .label {{ color:#526274; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; }}
-    .value {{ color:#102033; font-size:14px; }}
-    .card {{ border: 1px solid #dbe7f3; border-radius: 12px; padding: 16px 18px; background: #fbfdff; }}
-    .footer {{ margin-top: 28px; padding-top: 16px; border-top: 1px solid #dbe7f3; color:#526274; font-size:12px; line-height:1.6; white-space:pre-wrap; }}
-    @media (max-width: 760px) {{ .page {{ margin: 0; border: 0; box-shadow:none; }} .page-inner {{ padding: 22px 18px 28px; }} .grid {{ grid-template-columns: 1fr; gap: 6px; }} .toolbar {{ flex-direction:column; align-items:flex-start; }} }}
+    .label {{ color: rgba(148, 163, 184, 0.92); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; }}
+    .value {{ color:#f8fbff; font-size:14px; }}
+    .card {{ border: 1px solid rgba(148, 163, 184, 0.14); border-radius: 14px; padding: 16px 18px; background: rgba(255,255,255,0.03); }}
+    .footer {{ margin-top: 28px; padding-top: 16px; border-top: 1px solid rgba(148, 163, 184, 0.14); color:rgba(203, 213, 225, 0.86); font-size:12px; line-height:1.6; white-space:pre-wrap; }}
+    @media (max-width: 760px) {{ .shell {{ padding: 0; }} .page {{ margin: 0; border-radius: 0; border: 0; box-shadow:none; }} .page-inner {{ padding: 22px 18px 28px; }} .grid {{ grid-template-columns: 1fr; gap: 6px; }} .toolbar {{ flex-direction:column; align-items:flex-start; }} }}
   </style>
 </head>
 <body>
+  <div class="shell">
   <div class="page">
     <div class="toolbar">
       <div>
@@ -6382,7 +6733,7 @@ def preview_report_settings(request: Request):
       <div class="header-rule"></div>
       <div class="report-header">{html.escape(header_text)}</div>
       <div class="report-sub">Preview generated {html.escape(sample_now)}</div>
-      <span class="status">Justified With Comment</span>
+      <span class="status">Approved with Comment</span>
 
       <div class="section">
         <h2>Case Summary</h2>
@@ -6403,7 +6754,7 @@ def preview_report_settings(request: Request):
         <h2>Decision</h2>
         <div class="card">
           <div class="grid">
-            <div class="label">Decision</div><div class="value">Approve with comment</div>
+            <div class="label">Decision</div><div class="value">Approved with Comment</div>
             <div class="label">Protocol</div><div class="value">MRI Brain with contrast protocol</div>
             <div class="label">Comment</div><div class="value">Clinical details support the request. Please correlate with prior imaging and proceed with contrast if renal function is satisfactory.</div>
           </div>
@@ -6419,6 +6770,7 @@ def preview_report_settings(request: Request):
 
       <div class="footer">{html.escape(footer_text)}</div>
     </div>
+  </div>
   </div>
 </body>
 </html>"""
@@ -7230,10 +7582,15 @@ def intake_form(request: Request, org_id: int, token: str = ""):
     if not expected or token != expected:
         raise HTTPException(status_code=403, detail="Invalid intake token")
 
+    ensure_default_institution(org_id)
     institutions = list_institutions(org_id)
     return templates.TemplateResponse(
         "intake_submit.html",
-        {"request": request, "institutions": institutions},
+        {
+            "request": request,
+            "institutions": institutions,
+            "default_institution": get_default_institution(org_id),
+        },
     )
 
 
@@ -7246,45 +7603,40 @@ async def intake_submit(
     patient_surname: str = Form(...),
     patient_referral_id: str = Form(...),
     patient_dob: str = Form(""),
-    institution_id: str = Form(...),
+    institution_id: str = Form(""),
     study_description: str = Form(...),
     admin_notes: str = Form(""),
-    attachment: UploadFile | None = File(...),
+    attachments: list[UploadFile] = File(...),
 ):
     token = (token or request.query_params.get("token") or "").strip()
     expected = get_setting(f"intake_token:{org_id}", "")
     if not expected or token != expected:
         raise HTTPException(status_code=403, detail="Invalid intake token")
 
-    try:
-        inst_id = int(institution_id)
-        inst = get_institution(inst_id, org_id)
+    institution_value = (institution_id or "").strip()
+    if institution_value:
+        try:
+            inst_id = int(institution_value)
+            inst = get_institution(inst_id, org_id)
+            if not inst:
+                raise HTTPException(status_code=400, detail="Invalid institution selection")
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid institution ID")
+    else:
+        inst = get_default_institution(org_id)
         if not inst:
-            raise HTTPException(status_code=400, detail="Invalid institution selection")
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Invalid institution ID")
+            raise HTTPException(status_code=400, detail="No default institution available")
+        inst_id = int(inst["id"])
 
-    if not attachment or not attachment.filename:
-        raise HTTPException(status_code=400, detail="Attachment is required")
+    valid_attachments = [file for file in attachments if file and file.filename]
+    if not valid_attachments:
+        raise HTTPException(status_code=400, detail="At least one attachment is required")
 
     case_id = generate_case_id(inst_id)
-    original_name = attachment.filename
-    
-    file_bytes = await attachment.read()
-    
-    # Try blob storage first, fallback to local
-    stored_path = None
-    if BLOB_STORAGE_ENABLED:
-        blob_name = upload_to_blob(case_id, file_bytes, original_name)
-        if blob_name:
-            stored_path = blob_name
-    
-    # Fallback: store locally if blob upload failed or disabled
-    if not stored_path:
-        safe_name = f"{case_id}_{Path(original_name).name}"
-        stored_path = str(UPLOAD_DIR / safe_name)
-        with open(stored_path, "wb") as f:
-            f.write(file_bytes)
+    primary_attachment = valid_attachments[0]
+    original_name = primary_attachment.filename
+    file_bytes = await primary_attachment.read()
+    stored_path = store_case_attachment_file(case_id, original_name, file_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
 
     created_at = utc_now_iso()
     conn = get_db()
@@ -7305,10 +7657,31 @@ async def intake_submit(
     conn.commit()
     conn.close()
 
+    add_case_attachment_record(
+        case_id,
+        org_id,
+        original_name,
+        stored_path,
+        uploaded_by="external",
+        is_primary=True,
+    )
+    for extra_file in valid_attachments[1:]:
+        extra_bytes = await extra_file.read()
+        extra_path = store_case_attachment_file(case_id, extra_file.filename, extra_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
+        add_case_attachment_record(
+            case_id,
+            org_id,
+            extra_file.filename,
+            extra_path,
+            uploaded_by="external",
+            is_primary=False,
+        )
+    sync_case_primary_attachment(case_id)
+
     insert_case_event(
         case_id=case_id,
         org_id=org_id,
-        event_type="SUBMITTED",
+        event_type="CREATED",
         user={"username": "external"},
         comment=admin_notes.strip() or None,
     )
@@ -7320,8 +7693,10 @@ async def intake_submit(
 def referral_trial_form(request: Request):
     user = require_admin(request)
     org_id = user.get("org_id")
+    ensure_default_institution(org_id)
     institutions = list_institutions(org_id)
     radiologists = list_radiologists(org_id)
+    default_institution = get_default_institution(org_id)
 
     return templates.TemplateResponse(
         "referral_trial.html",
@@ -7339,7 +7714,7 @@ def referral_trial_form(request: Request):
                 "modality": "",
                 "admin_notes": "",
                 "radiologist": "",
-                "institution_id": "",
+                "institution_id": str(default_institution["id"]) if default_institution else "",
                 "attachment_token": "",
                 "attachment_original_name": "",
             },
@@ -7347,6 +7722,7 @@ def referral_trial_form(request: Request):
             "parse_confidence": None,
             "parse_preview": "",
             "error": "",
+            "default_institution": default_institution,
         },
     )
 
@@ -7361,6 +7737,7 @@ async def referral_trial_parse(
     org_id = user.get("org_id")
     institutions = list_institutions(org_id)
     radiologists = list_radiologists(org_id)
+    default_institution = get_default_institution(org_id)
 
     if not attachment or not attachment.filename:
         return templates.TemplateResponse(
@@ -7374,6 +7751,7 @@ async def referral_trial_parse(
                 "parse_confidence": None,
                 "parse_preview": "",
                 "error": "Please select a referral file to parse.",
+                "default_institution": default_institution,
             },
         )
 
@@ -7403,6 +7781,7 @@ async def referral_trial_parse(
             "parse_confidence": parsed.get("confidence"),
             "parse_preview": parsed.get("text_preview", ""),
             "error": "",
+            "default_institution": default_institution,
         },
     )
 
@@ -7414,13 +7793,14 @@ def referral_trial_create(
     patient_surname: str = Form(""),
     patient_referral_id: str = Form(""),
     patient_dob: str = Form(""),
-    institution_id: str = Form(...),
+    institution_id: str = Form(""),
     modality: str = Form(""),
     study_description: str = Form(...),
     admin_notes: str = Form(""),
     radiologist: str = Form(""),
     attachment_token: str = Form(...),
     attachment_original_name: str = Form("referral_upload"),
+    supporting_attachments: list[UploadFile] = File([]),
 ):
     user = require_admin(request)
     org_id = user.get("org_id")
@@ -7428,13 +7808,20 @@ def referral_trial_create(
     if not patient_first_name.strip() or not patient_surname.strip() or not patient_referral_id.strip() or not study_description.strip():
         raise HTTPException(status_code=400, detail="Patient name, referral ID, and study description are required")
 
-    try:
-        inst_id = int(institution_id)
-        inst = get_institution(inst_id, org_id)
+    institution_value = (institution_id or "").strip()
+    if institution_value:
+        try:
+            inst_id = int(institution_value)
+            inst = get_institution(inst_id, org_id)
+            if not inst:
+                raise HTTPException(status_code=400, detail="Invalid institution selection")
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid institution ID")
+    else:
+        inst = get_default_institution(org_id)
         if not inst:
-            raise HTTPException(status_code=400, detail="Invalid institution selection")
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Invalid institution ID")
+            raise HTTPException(status_code=400, detail="No default institution available")
+        inst_id = int(inst["id"])
 
     radiologist = radiologist.strip() if radiologist else ""
     if radiologist:
@@ -7456,17 +7843,7 @@ def referral_trial_create(
     case_id = generate_case_id()
     original_name = (attachment_original_name or "referral_upload").strip() or "referral_upload"
 
-    stored_path = None
-    if BLOB_STORAGE_ENABLED:
-        blob_name = upload_to_blob(case_id, file_bytes, original_name)
-        if blob_name:
-            stored_path = blob_name
-
-    if not stored_path:
-        safe_name = f"{case_id}_{Path(original_name).name}"
-        stored_path = str(UPLOAD_DIR / safe_name)
-        with open(stored_path, "wb") as f:
-            f.write(file_bytes)
+    stored_path = store_case_attachment_file(case_id, original_name, file_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
 
     try:
         temp_path.unlink(missing_ok=True)
@@ -7504,10 +7881,35 @@ def referral_trial_create(
     conn.commit()
     conn.close()
 
+    add_case_attachment_record(
+        case_id,
+        org_id,
+        original_name,
+        stored_path,
+        uploaded_by=user.get("username") or "admin",
+        is_primary=True,
+    )
+    for upload in supporting_attachments:
+        if not upload or not upload.filename:
+            continue
+        upload_bytes = upload.file.read()
+        if not upload_bytes:
+            continue
+        extra_path = store_case_attachment_file(case_id, upload.filename, upload_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
+        add_case_attachment_record(
+            case_id,
+            org_id,
+            upload.filename,
+            extra_path,
+            uploaded_by=user.get("username") or "admin",
+            is_primary=False,
+        )
+    sync_case_primary_attachment(case_id)
+
     insert_case_event(
         case_id=case_id,
         org_id=org_id,
-        event_type="SUBMITTED",
+        event_type="CREATED",
         user={"username": user.get("username") or "admin"},
         comment="Created via referral trial parser",
     )
@@ -7523,8 +7925,10 @@ def submit_form(request: Request):
         return redirect_to_login("admin", "/submit")
 
     org_id = user.get("org_id")
+    ensure_default_institution(org_id)
     institutions = list_institutions(org_id)
     radiologists = list_radiologists(org_id)
+    default_institution = get_default_institution(org_id)
     
     # Keep institution org_id available for existing study description filtering
     for inst in institutions:
@@ -7538,6 +7942,7 @@ def submit_form(request: Request):
             "institutions": institutions,
             "radiologists": radiologists,
             "user_org_id": org_id,
+            "default_institution": default_institution,
         },
     )
 
@@ -7549,13 +7954,13 @@ async def submit_case(
     patient_surname: str = Form(...),
     patient_referral_id: str = Form(...),
     patient_dob: str = Form(""),
-    institution_id: str = Form(...),
+    institution_id: str = Form(""),
     org_id_form: str = Form(""),
     modality: str = Form(""),
     study_description: str = Form(...),
     admin_notes: str = Form(""),
     radiologist: str = Form(""),
-    attachment: UploadFile | None = File(...),
+    attachments: list[UploadFile] = File(...),
     action: str = Form("submit"),
     extra_study_description: list[str] = Form([]),
     extra_modality: list[str] = Form([]),
@@ -7567,14 +7972,20 @@ async def submit_case(
     if table_exists("memberships") and not user.get("is_superuser") and not org_id:
         raise HTTPException(status_code=403, detail="Organisation access required")
 
-    # Validate institution
-    try:
-        inst_id = int(institution_id)
-        inst = get_institution(inst_id, org_id)
+    institution_value = (institution_id or "").strip()
+    if institution_value:
+        try:
+            inst_id = int(institution_value)
+            inst = get_institution(inst_id, org_id)
+            if not inst:
+                raise HTTPException(status_code=400, detail="Invalid institution selection")
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid institution ID")
+    else:
+        inst = get_default_institution(org_id)
         if not inst:
-            raise HTTPException(status_code=400, detail="Invalid institution selection")
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Invalid institution ID")
+            raise HTTPException(status_code=400, detail="No default institution available")
+        inst_id = int(inst["id"])
 
     if user.get("is_superuser"):
         inst_org_id = inst.get("org_id") if isinstance(inst, dict) else None
@@ -7593,9 +8004,16 @@ async def submit_case(
         if radiologist not in valid_rads:
             raise HTTPException(status_code=400, detail="Invalid radiologist selection")
 
-    # Validate attachment is provided
-    if not attachment or not attachment.filename:
-        raise HTTPException(status_code=400, detail="Attachment is required")
+    valid_attachments = [upload for upload in attachments if upload and upload.filename]
+    if not valid_attachments:
+        raise HTTPException(status_code=400, detail="At least one attachment is required")
+    prepared_attachments: list[tuple[str, bytes]] = []
+    for upload in valid_attachments:
+        file_payload = await upload.read()
+        if file_payload:
+            prepared_attachments.append((upload.filename, file_payload))
+    if not prepared_attachments:
+        raise HTTPException(status_code=400, detail="At least one attachment is required")
 
     cleaned_extra_cases: list[tuple[str, str | None, str]] = []
     if extra_study_description:
@@ -7616,23 +8034,8 @@ async def submit_case(
 
     generated_case_ids = generate_case_ids(1 + len(cleaned_extra_cases), institution_id=inst_id)
     case_id = generated_case_ids[0]
-    original_name = attachment.filename
-    
-    file_bytes = await attachment.read()
-    
-    # Try blob storage first, fallback to local
-    stored_path = None
-    if BLOB_STORAGE_ENABLED:
-        blob_name = upload_to_blob(case_id, file_bytes, original_name)
-        if blob_name:
-            stored_path = blob_name
-    
-    # Fallback: store locally if blob upload failed or disabled
-    if not stored_path:
-        safe_name = f"{case_id}_{Path(original_name).name}"
-        stored_path = str(UPLOAD_DIR / safe_name)
-        with open(stored_path, "wb") as f:
-            f.write(file_bytes)
+    original_name, file_bytes = prepared_attachments[0]
+    stored_path = store_case_attachment_file(case_id, original_name, file_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
 
     created_at = utc_now_iso()
 
@@ -7665,25 +8068,42 @@ async def submit_case(
     conn.commit()
     conn.close()
 
+    add_case_attachment_record(
+        case_id,
+        org_id,
+        original_name,
+        stored_path,
+        uploaded_by=user.get("username") or "admin",
+        is_primary=True,
+    )
+    for upload_name, extra_bytes in prepared_attachments[1:]:
+        extra_path = store_case_attachment_file(case_id, upload_name, extra_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
+        add_case_attachment_record(
+            case_id,
+            org_id,
+            upload_name,
+            extra_path,
+            uploaded_by=user.get("username") or "admin",
+            is_primary=False,
+        )
+    sync_case_primary_attachment(case_id)
+
+    insert_case_event(
+        case_id=case_id,
+        org_id=org_id,
+        event_type="CREATED",
+        user=user,
+        comment=admin_notes.strip() or None,
+    )
+
     # Create additional cases for extra studies (same patient/institution/attachment)
     if cleaned_extra_cases:
         for idx, (extra_desc, extra_modality_value, extra_rad) in enumerate(cleaned_extra_cases, start=1):
             extra_case_id = generated_case_ids[idx]
             # Copy attachment for the extra case
-            extra_stored_path = stored_path
-            if stored_path and original_name:
-                if BLOB_STORAGE_ENABLED and not stored_path.startswith("/"):
-                    # Blob storage: copy blob
-                    blob_bytes = download_from_blob(stored_path)
-                    if blob_bytes:
-                        extra_blob_name = upload_to_blob(extra_case_id, blob_bytes, original_name)
-                        if extra_blob_name:
-                            extra_stored_path = extra_blob_name
-                else:
-                    # Local fallback: copy file
-                    extra_safe_name = f"{extra_case_id}_{Path(original_name).name}"
-                    extra_stored_path = str(UPLOAD_DIR / extra_safe_name)
-                    shutil.copy2(stored_path, extra_stored_path)
+            extra_stored_path = None
+            if file_bytes and original_name:
+                extra_stored_path = store_case_attachment_file(extra_case_id, original_name, file_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
             conn2 = get_db()
             
             # Build insert conditionally based on columns that exist
@@ -7709,6 +8129,32 @@ async def submit_case(
                 )
             conn2.commit()
             conn2.close()
+            add_case_attachment_record(
+                extra_case_id,
+                org_id,
+                original_name,
+                extra_stored_path,
+                uploaded_by=user.get("username") or "admin",
+                is_primary=True,
+            )
+            for upload_name, extra_bytes in prepared_attachments[1:]:
+                copied_path = store_case_attachment_file(extra_case_id, upload_name, extra_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
+                add_case_attachment_record(
+                    extra_case_id,
+                    org_id,
+                    upload_name,
+                    copied_path,
+                    uploaded_by=user.get("username") or "admin",
+                    is_primary=False,
+                )
+            sync_case_primary_attachment(extra_case_id)
+            insert_case_event(
+                case_id=extra_case_id,
+                org_id=org_id,
+                event_type="CREATED",
+                user=user,
+                comment=admin_notes.strip() or None,
+            )
 
     # Redirect to admin dashboard
     return RedirectResponse(url="/admin", status_code=303)
@@ -7817,6 +8263,7 @@ def vet_form(request: Request, case_id: str):
 
     case = dict(row)
     case = normalize_case_attachment(case)
+    attachments = list_case_attachments(case_id, case_dict=case)
     base_admin_notes, reopened_admin_notes = partition_admin_notes(case.get("admin_notes"))
     case["admin_note_blocks"] = base_admin_notes
     case["reopened_note_blocks"] = reopened_admin_notes
@@ -7846,7 +8293,18 @@ def vet_form(request: Request, case_id: str):
                 comment="Case opened by practitioner",
             )
 
-    protocols = []
+    protocol_map: dict[str, dict] = {}
+
+    def _add_protocol_rows(rows: list[dict]) -> None:
+        for row_item in rows or []:
+            name = str(row_item.get("name") or "").strip()
+            if not name or name in protocol_map:
+                continue
+            protocol_map[name] = {
+                "name": name,
+                "instructions": row_item.get("instructions") or "",
+            }
+
     preset_id = None
     if case.get("study_description") and case.get("modality"):
         conn = get_db()
@@ -7874,14 +8332,14 @@ def vet_form(request: Request, case_id: str):
             preset_id = preset_row["id"] if isinstance(preset_row, dict) else preset_row[0]
 
     if preset_id:
-        protocols = list_protocol_rows_for_study(
+        _add_protocol_rows(list_protocol_rows_for_study(
             preset_id,
             institution_id=case.get("institution_id"),
             org_id=org_id,
             active_only=True,
-        )
+        ))
 
-    if not protocols and case.get("institution_id"):
+    if case.get("institution_id"):
         conn = get_db()
         if org_id and table_has_column("protocols", "org_id"):
             proto_rows = conn.execute(
@@ -7894,9 +8352,11 @@ def vet_form(request: Request, case_id: str):
                 (case.get("institution_id"),)
             ).fetchall()
         conn.close()
-        protocols = [dict(p) for p in proto_rows]
-    elif not protocols:
-        protocols = [{"name": p, "instructions": ""} for p in list_protocols(active_only=True, org_id=org_id)]
+        _add_protocol_rows([dict(p) for p in proto_rows])
+
+    if not protocol_map:
+        _add_protocol_rows([{"name": p, "instructions": ""} for p in list_protocols(active_only=True, org_id=org_id)])
+    protocols = list(protocol_map.values())
 
     if org_id:
         conn = get_db()
@@ -7913,6 +8373,7 @@ def vet_form(request: Request, case_id: str):
             "decisions": DECISIONS,
             "protocols": protocols,
             "org_name": org_name,
+            "attachments": attachments,
         },
     )
 
@@ -7930,7 +8391,7 @@ def vet_submit(
     user = require_radiologist(request)
     rad_name = user.get("radiologist_name")
     org_id = user.get("org_id")
-    decision = (decision or "").strip()
+    decision = normalize_decision_label(decision)
     decision_comment = (decision_comment or "").strip()
     protocol = (protocol or "").strip()
     contrast_required = (contrast_required or "").strip()
@@ -7939,7 +8400,7 @@ def vet_submit(
     if decision not in DECISIONS:
         raise HTTPException(status_code=400, detail="Invalid decision")
 
-    if decision == "Reject":
+    if decision == "Rejected":
         if not decision_comment:
             raise HTTPException(status_code=400, detail="Comment is required when rejecting a case")
         protocol = ""
@@ -7948,7 +8409,7 @@ def vet_submit(
     else:
         if not protocol:
             raise HTTPException(status_code=400, detail="Protocol is required for approved cases")
-        if decision == "Approve with comment" and not decision_comment:
+        if decision == "Approved with Comment" and not decision_comment:
             raise HTTPException(status_code=400, detail="Comment is required when approving with comment")
         if contrast_required not in {"Yes", "No"}:
             raise HTTPException(status_code=400, detail="Please specify whether contrast is required")
@@ -7968,7 +8429,7 @@ def vet_submit(
         raise HTTPException(status_code=403, detail="Not your case")
 
     # Determine status based on decision
-    if decision == "Reject":
+    if decision == "Rejected":
         case_status = "rejected"
     else:
         case_status = "vetted"
@@ -8002,7 +8463,7 @@ def vet_submit(
     insert_case_event(
         case_id=case_id,
         org_id=org_id,
-        event_type="VETTED",
+        event_type="REJECTED" if decision == "Rejected" else "VETTED",
         user=user,
         decision=decision,
         protocol=protocol or None,
@@ -8015,6 +8476,37 @@ def vet_submit(
 # -------------------------
 # Attachments + PDF
 # -------------------------
+def get_case_attachment_for_user(request: Request, case_id: str, attachment_id: str) -> dict:
+    user = require_login(request)
+    if user["role"] == "radiologist":
+        raise HTTPException(status_code=403, detail="Radiologists are not allowed to download attachments")
+
+    conn = get_db()
+    case_row = conn.execute(
+        "SELECT id, radiologist, org_id, uploaded_filename, stored_filepath, created_at FROM cases WHERE id = ?",
+        (case_id,),
+    ).fetchone()
+    conn.close()
+    if not case_row:
+        raise HTTPException(status_code=404, detail="No attachment found")
+
+    case_data = case_row if isinstance(case_row, dict) else dict(case_row)
+    if user.get("role") == "radiologist" and case_data.get("radiologist") != user.get("radiologist_name"):
+        raise HTTPException(status_code=403, detail="Not your case")
+
+    org_id = user.get("org_id")
+    if org_id and not user.get("is_superuser") and case_data.get("org_id") and case_data.get("org_id") != org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    attachments = list_case_attachments(case_id, case_dict=case_data)
+    attachment = next((item for item in attachments if item.get("id") == attachment_id), None)
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    if not attachment.get("stored_filepath"):
+        raise HTTPException(status_code=410, detail="Attachment has expired and is no longer available.")
+    return attachment
+
+
 @app.get("/case/{case_id}/attachment")
 def download_attachment(request: Request, case_id: str):
     user = require_login(request)
@@ -8066,6 +8558,28 @@ def download_attachment(request: Request, case_id: str):
     # File not found
     clear_case_stored_filepath(case_id)
     raise HTTPException(status_code=410, detail="Referral file missing or expired")
+
+
+@app.get("/case/{case_id}/attachments/{attachment_id}")
+def download_specific_attachment(request: Request, case_id: str, attachment_id: str):
+    attachment = get_case_attachment_for_user(request, case_id, attachment_id)
+    stored_path = attachment.get("stored_filepath")
+    filename = (attachment.get("uploaded_filename") or Path(str(stored_path)).name).replace('"', "")
+    media_type, _ = mimetypes.guess_type(filename)
+
+    if BLOB_STORAGE_ENABLED and stored_path and not str(stored_path).startswith("/"):
+        file_bytes = download_from_blob(str(stored_path))
+        if file_bytes:
+            return StreamingResponse(
+                io.BytesIO(file_bytes),
+                media_type=media_type or "application/octet-stream",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+
+    if stored_path and os.path.exists(str(stored_path)):
+        return FileResponse(str(stored_path), filename=filename)
+
+    raise HTTPException(status_code=410, detail="Attachment missing or expired")
 
 
 @app.get("/case/{case_id}/attachment/inline")
@@ -8322,12 +8836,12 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
 
         def decision_label(case_row: dict) -> str:
             status = str(case_row.get("status") or "").lower()
-            decision = str(case_row.get("decision") or "").strip()
-            if status == "rejected" or decision == "Reject":
+            decision = normalize_decision_label(case_row.get("decision"))
+            if status == "rejected" or decision == "Rejected":
                 return "Rejected"
-            if decision == "Approve with comment":
+            if decision == "Approved with Comment":
                 return "Justified with comment"
-            if decision == "Approve":
+            if decision == "Approved":
                 return "Justified"
             if decision:
                 return decision
@@ -8343,8 +8857,8 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
 
         def event_label(event: dict) -> str:
             event_type = str(event.get("event_type") or "").upper()
-            if event_type == "SUBMITTED":
-                return "Case submitted"
+            if event_type in {"SUBMITTED", "CREATED"}:
+                return "Case created"
             if event_type == "ASSIGNED":
                 return "Assigned to practitioner"
             if event_type == "OPENED":
@@ -8364,7 +8878,7 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
                 comment = str(event.get("comment") or "").strip()
                 if not comment:
                     continue
-                if event_type == "SUBMITTED":
+                if event_type in {"SUBMITTED", "CREATED"}:
                     entries.append({
                         "kind": "Admin note",
                         "created_at": event.get("created_at"),
@@ -8388,7 +8902,7 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
 
         protocol_notes = ""
         protocol_name = case_data.get("protocol")
-        if case_data.get("decision") != "Reject" and protocol_name:
+        if normalize_decision_label(case_data.get("decision")) != "Rejected" and protocol_name:
             try:
                 conn = get_db()
                 if case_data.get("org_id"):
@@ -8698,7 +9212,7 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
         if events:
             for event in events:
                 event_details = ""
-                if str(event.get("event_type") or "").upper() == "SUBMITTED":
+                if str(event.get("event_type") or "").upper() in {"SUBMITTED", "CREATED"}:
                     event_details = ""
                 elif event.get("comment"):
                     event_details = str(event.get("comment") or "").strip()
@@ -8710,7 +9224,7 @@ def case_pdf(request: Request, case_id: str, inline: bool = False):
                     event_details,
                 )
         else:
-            draw_timeline_row(format_datetime(case_data.get("created_at")), "Case submitted", "")
+            draw_timeline_row(format_datetime(case_data.get("created_at")), "Case created", "")
 
         footer_lines = wrap_lines(report_footer_text, int((right - left) * 0.52), font_name="Helvetica", font_size=8) or ["Confidential workflow document"]
         footer_height = max(16, len(footer_lines) * 10)

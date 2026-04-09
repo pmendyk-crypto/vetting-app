@@ -40,6 +40,11 @@
     .preview-card { display: flex; flex-direction: column; }
     .preview-body { flex: 1; min-height: 70vh; }
     .preview-frame { width: 100%; height: 100%; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; background: #fff; }
+    .attachment-list { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
+    .attachment-item { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); }
+    .attachment-name { color:#f8fbff; font-weight:500; word-break:break-word; }
+    .attachment-meta { color:rgba(255,255,255,0.55); font-size:12px; margin-top:4px; }
+    .attachment-primary { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:11px; background:rgba(31,111,235,0.18); color:#93c5fd; border:1px solid rgba(31,111,235,0.35); }
 
     /* Timeline */
     .timeline-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -62,6 +67,7 @@
     .timeline-table .ts { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; font-family: 'Courier New', monospace; }
     .ev-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; }
     .ev-SUBMITTED  { background: rgba(31,111,235,0.18);  color: #93c5fd; border: 1px solid rgba(31,111,235,0.35); }
+    .ev-CREATED    { background: rgba(31,111,235,0.18);  color: #93c5fd; border: 1px solid rgba(31,111,235,0.35); }
     .ev-ASSIGNED   { background: rgba(139,92,246,0.18);  color: #c4b5fd; border: 1px solid rgba(139,92,246,0.35); }
     .ev-VETTED     { background: rgba(16,185,129,0.18);  color: #6ee7b7; border: 1px solid rgba(16,185,129,0.35); }
     .ev-REJECTED   { background: rgba(239,68,68,0.18);   color: #fca5a5; border: 1px solid rgba(239,68,68,0.35); }
@@ -97,11 +103,11 @@
         <h1 style="margin:0;">Case details</h1>
       </div>
       <div class="actions">
-        <a class="btn" href="/admin/case/{{ case['id'] }}/edit">Edit Case</a>
+        <a class="btn" href="/admin/case/{{ case['id'] }}/edit{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">Edit Case</a>
         {% if case['status'] == 'vetted' or case['status'] == 'rejected' %}
           <a class="btn" style="background: #f39c12;" href="/admin/case/{{ case['id'] }}/reopen">Reopen Case</a>
         {% endif %}
-        <a class="btn secondary" href="/admin">Back</a>
+        <a class="btn secondary" href="{{ return_to if return_to else '/admin' }}">Back</a>
       </div>
     </div>
 
@@ -155,6 +161,27 @@
         {% else %}
           <p class="small">No referral attachment uploaded.</p>
         {% endif %}
+        {% if attachments %}
+          <div class="attachment-list">
+            {% for attachment in attachments %}
+            <div class="attachment-item">
+              <div style="min-width:0;">
+                <div class="attachment-name">
+                  {{ attachment.uploaded_filename }}
+                  {% if attachment.is_primary %}<span class="attachment-primary">Primary preview</span>{% endif %}
+                </div>
+                <div class="attachment-meta">
+                  Added {{ attachment.created_at_display or 'recently' }}
+                  {% if not attachment.available %} · File expired{% endif %}
+                </div>
+              </div>
+              {% if attachment.available %}
+                <a href="/case/{{ case['id'] }}/attachments/{{ attachment.id }}" class="btn secondary" style="padding:6px 12px;font-size:12px;">Download</a>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        {% endif %}
       </div>
 
       <div class="card preview-card">
@@ -197,7 +224,7 @@
                 <tr>
                   <td class="ts">{{ e["created_at"] | display_datetime }}</td>
                   <td>
-                    <span class="ev-badge ev-{% if ev in ['SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','EDITED'] %}{{ ev }}{% else %}OTHER{% endif %}">
+                    <span class="ev-badge ev-{% if ev in ['CREATED','SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','EDITED'] %}{{ ev }}{% else %}OTHER{% endif %}">
                       {{ ev }}
                     </span>
                   </td>
@@ -213,8 +240,8 @@
                       <div class="detail-row"><span>Note: </span>{{ e["comment"] }}</div>
                     {% endif %}
                     {% if not e["decision"] and not e["protocol"] and not e["comment"] %}
-                      {% if ev == "SUBMITTED" %}
-                        <div class="detail-row"><span>Details: </span>Case submitted.</div>
+                      {% if ev == "CREATED" or ev == "SUBMITTED" %}
+                        <div class="detail-row"><span>Details: </span>Case created.</div>
                       {% elif ev == "ASSIGNED" %}
                         <div class="detail-row"><span>Details: </span>Practitioner assignment updated.</div>
                       {% elif ev == "VETTED" %}
