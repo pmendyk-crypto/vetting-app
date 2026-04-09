@@ -6,7 +6,7 @@
   <title>Vetting App | Admin</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    body { margin: 24px; display: flex; flex-direction: column; min-height: 100vh; }
+    body { margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
     table { border-collapse: collapse; width: 100%; }
     th, td { border-bottom: 1px solid rgba(255,255,255,0.08); padding: 10px; vertical-align: top; color: rgba(255,255,255,0.85); }
     th { text-align: left; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.6); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -31,7 +31,7 @@
     .page-footer p { margin: 0; }
 
     .wrapper { display: flex; flex-direction: column; min-height: 100vh; }
-    .container { flex: 1; width: 100%; max-width: 100%; padding: 0 16px; box-sizing: border-box; }
+    .container { flex: 1; width: min(1560px, calc(100vw - 40px)); max-width: none; padding: 22px 0 0; box-sizing: border-box; margin: 0 auto; }
 
     .case-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; width: 100%; }
     .case-grid .card { margin: 0; }
@@ -73,6 +73,9 @@
     .ev-REJECTED   { background: rgba(239,68,68,0.18);   color: #fca5a5; border: 1px solid rgba(239,68,68,0.35); }
     .ev-REOPENED   { background: rgba(234,179,8,0.18);   color: #fde68a; border: 1px solid rgba(234,179,8,0.35); }
     .ev-EDITED     { background: rgba(234,88,12,0.18);   color: #fdba74; border: 1px solid rgba(234,88,12,0.35); }
+    .ev-REPORT_SENT { background: rgba(37, 99, 235, 0.18); color: #bfdbfe; border: 1px solid rgba(37, 99, 235, 0.35); }
+    .ev-REPORT_SENT_RESET { background: rgba(148,163,184,0.18); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.32); }
+    .ev-EXAM_CATALOGUE_EXCEPTION { background: rgba(245,158,11,0.18); color: #fcd34d; border: 1px solid rgba(245,158,11,0.35); }
     .ev-OTHER      { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.15); }
     .detail-row { margin: 3px 0; font-size: 12px; line-height: 1.5; color: rgba(255,255,255,0.65); }
     .detail-row span { color: rgba(255,255,255,0.45); font-weight: 500; }
@@ -84,7 +87,8 @@
       .case-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 700px) {
-      body { margin: 14px; font-size: 16px; }
+      body { font-size: 16px; }
+      .container { width: calc(100vw - 24px); padding-top: 16px; }
       table { display: block; overflow-x: auto; white-space: nowrap; }
       .filters { flex-direction: column; gap: 10px; }
       .filters input, .filters select { width: 100%; min-width: 0; }
@@ -98,11 +102,12 @@
   <div id="session-expiry-warning">⚠️ Your session will expire in 5 minutes due to inactivity. <a href="/login" style="color:#fde68a;font-weight:400;">Sign in again</a> to continue.</div>
   <div class="wrapper">
     <div class="main-content container">
-    <div class="topbar">
+    <div class="topbar internal-page-header">
       <div>
-        <h1 style="margin:0;">Case details</h1>
+        <h1 class="internal-page-title" style="font-size:28px;margin:0;">Case Details</h1>
+        <p class="internal-page-subtitle" style="margin-top:6px;">Review attachments, decision details, report state, and the full case timeline in one place.</p>
       </div>
-      <div class="actions">
+      <div class="actions internal-page-actions">
         <a class="btn" href="/admin/case/{{ case['id'] }}/edit{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">Edit Case</a>
         {% if case['status'] == 'vetted' or case['status'] == 'rejected' %}
           <a class="btn" style="background: #f39c12;" href="/admin/case/{{ case['id'] }}/reopen">Reopen Case</a>
@@ -118,11 +123,11 @@
         {% if org_name %}
           <p><b>Organisation:</b> {{ org_name }}</p>
         {% endif %}
-        <p><b>Status:</b> {{ "Justified" if case["status"] == "vetted" else case["status"] }}</p>
+        <p><b>Status:</b> {{ case["status_display"] }}</p>
         <p><b>Created:</b> {{ case["created_at"] | display_datetime }}</p>
         <p><b>Patient ID:</b> {{ case["patient_referral_id"] or "—" }}</p>
         <p><b>Patient DOB:</b> {{ case["patient_dob"] or "—" }}</p>
-        <p><b>Study:</b> {{ case["study_description"] }}</p>
+        <p><b>Study:</b> {{ case["study_description"] }}{% if case.get("study_code") %} ({{ case["study_code"] }}){% endif %}</p>
         <p><b>Practitioner:</b> {{ case["radiologist"] }}</p>
         <p><b>Admin notes:</b><br>{{ case["admin_notes"] or "" }}</p>
         <p><b>Protocol:</b> {{ case["protocol"] or "" }}</p>
@@ -133,15 +138,32 @@
             {% endif %}
           </p>
         {% endif %}
-        <p><b>Decision:</b> {{ case["decision"] or "" }}</p>
+        <p><b>Decision:</b> {{ case["decision_display"] or "" }}</p>
         <p><b>Comment:</b><br>{{ case["decision_comment"] or "" }}</p>
+        <p><b>Justification Sent:</b> {% if case["report_sent"] %}{{ case["report_sent_display"] }} by {{ case["report_sent_by"] or "Unknown" }}{% else %}Not sent{% endif %}</p>
+        {% if case["catalogue_review_required"] %}
+        <p><b>Catalogue Review:</b> Required{% if case["catalogue_review_display"] %} ({{ case["catalogue_review_display"] }}){% endif %}</p>
+        {% endif %}
+        {% if case["status"] in ["vetted", "rejected"] %}
+        <div class="actions" style="margin-top:14px;">
+          {% if case["report_sent"] %}
+          <form method="post" action="/admin/case/{{ case['id'] }}/report-sent/reset" style="display:inline;">
+            <button type="submit" class="btn secondary">Reset Justification Sent</button>
+          </form>
+          {% else %}
+          <form method="post" action="/admin/case/{{ case['id'] }}/report-sent" style="display:inline;">
+            <button type="submit" class="btn">Mark Justification Sent</button>
+          </form>
+          {% endif %}
+        </div>
+        {% endif %}
       </div>
 
       <div class="card preview-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
           <h3 style="margin: 0;">Referral Preview</h3>
           {% if case["uploaded_filename"] and case["stored_filepath"] %}
-            <a href="/case/{{ case['id'] }}/attachment" class="btn" style="padding:6px 12px;font-size:12px;">⬇ Download Referral</a>
+            <a href="/case/{{ case['id'] }}/attachment/inline" target="_blank" rel="noopener" class="btn" style="padding:6px 12px;font-size:12px;">Open Referral</a>
           {% elif case["uploaded_filename"] %}
             <span style="font-size:12px;color:rgba(255,255,255,0.4);">File expired</span>
           {% endif %}
@@ -176,7 +198,7 @@
                 </div>
               </div>
               {% if attachment.available %}
-                <a href="/case/{{ case['id'] }}/attachments/{{ attachment.id }}" class="btn secondary" style="padding:6px 12px;font-size:12px;">Download</a>
+                <a href="/case/{{ case['id'] }}/attachments/{{ attachment.id }}/inline" target="_blank" rel="noopener" class="btn secondary" style="padding:6px 12px;font-size:12px;">Open</a>
               {% endif %}
             </div>
             {% endfor %}
@@ -188,7 +210,10 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
           <h3 style="margin: 0;">Decision Report Preview</h3>
           {% if case["status"] in ["vetted", "rejected"] %}
-            <a href="/case/{{ case['id'] }}/pdf" target="_blank" class="btn" style="padding:6px 12px;font-size:12px;">⬇ Download Decision Report</a>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <a href="/case/{{ case['id'] }}/pdf" target="_blank" class="btn" style="padding:6px 12px;font-size:12px;">Download Report</a>
+              <a href="/case/{{ case['id'] }}/pdf?include_timeline=1" target="_blank" class="btn secondary" style="padding:6px 12px;font-size:12px;">Download Report with Timeline</a>
+            </div>
           {% endif %}
         </div>
         {% if case["status"] == "vetted" or case["status"] == "rejected" %}
@@ -196,7 +221,7 @@
             <iframe src="/case/{{ case['id'] }}/pdf?inline=1#view=FitH" class="preview-frame"></iframe>
           </div>
         {% else %}
-          <p class="small">Decision report will appear once the case is justified.</p>
+          <p class="small">Report preview will appear once the decision has been recorded.</p>
         {% endif %}
       </div>
 
@@ -224,7 +249,7 @@
                 <tr>
                   <td class="ts">{{ e["created_at"] | display_datetime }}</td>
                   <td>
-                    <span class="ev-badge ev-{% if ev in ['CREATED','SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','EDITED'] %}{{ ev }}{% else %}OTHER{% endif %}">
+                    <span class="ev-badge ev-{% if ev in ['CREATED','SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','EDITED','REPORT_SENT','REPORT_SENT_RESET','EXAM_CATALOGUE_EXCEPTION'] %}{{ ev }}{% else %}OTHER{% endif %}">
                       {{ ev }}
                     </span>
                   </td>
@@ -245,7 +270,13 @@
                       {% elif ev == "ASSIGNED" %}
                         <div class="detail-row"><span>Details: </span>Practitioner assignment updated.</div>
                       {% elif ev == "VETTED" %}
-                        <div class="detail-row"><span>Details: </span>Case justified.</div>
+                        <div class="detail-row"><span>Details: </span>Decision recorded.</div>
+                      {% elif ev == "REPORT_SENT" %}
+                        <div class="detail-row"><span>Details: </span>Justification marked as sent.</div>
+                      {% elif ev == "REPORT_SENT_RESET" %}
+                        <div class="detail-row"><span>Details: </span>Justification sent status reset.</div>
+                      {% elif ev == "EXAM_CATALOGUE_EXCEPTION" %}
+                        <div class="detail-row"><span>Details: </span>Temporary uncatalogued exam recorded for later review.</div>
                       {% elif ev == "REJECTED" %}
                         <div class="detail-row"><span>Details: </span>Case rejected.</div>
                       {% elif ev == "REOPENED" %}

@@ -173,6 +173,8 @@
           <div class="form-row full">
             <label>Study description</label>
             <div class="study-picker">
+              <input type="hidden" name="study_description_preset_id" id="study_description_preset_id" value="{{ draft.study_description_preset_id or '' }}">
+              <input type="hidden" name="study_code" id="study_code" value="{{ draft.study_code or '' }}">
               <input
                 name="study_description"
                 id="study_description"
@@ -183,19 +185,35 @@
                 autocomplete="off"
                 oninput="filterDescriptions()"
                 onfocus="showAllDescriptions()"
+                readonly
               >
+              <div class="info" id="studyCodeHint">{% if draft.study_code %}Exam code: {{ draft.study_code }}{% else %}Exam code will appear automatically when you select an exam.{% endif %}</div>
+              {% if can_create_uncatalogued_exam %}
+              <div style="margin-top:10px; padding:10px 12px; border:1px solid rgba(245,158,11,0.28); border-radius:10px; background:rgba(245,158,11,0.08);">
+                <label style="display:flex; align-items:flex-start; gap:10px; margin:0;">
+                  <input type="checkbox" id="uncatalogued_exam_requested" name="uncatalogued_exam_requested" value="1" onchange="toggleUncataloguedExamMode()">
+                  <span>
+                    <strong>Create Temporary Uncatalogued Exam</strong><br>
+                    <small style="color:rgba(255,255,255,0.72);">Owner/super-admin only. Requires a reason and flags the case for later catalogue review.</small>
+                  </span>
+                </label>
+                <div id="uncatalogued_exam_reason_wrap" style="display:none; margin-top:10px;">
+                  <textarea name="uncatalogued_exam_reason" id="uncatalogued_exam_reason" placeholder="Reason for using a temporary uncatalogued exam..." rows="2"></textarea>
+                </div>
+              </div>
+              {% endif %}
               <div id="descriptionList" class="description-dropdown">
                 <div class="protocol-panel-header">
-                  <span class="protocol-title">Available Protocols</span>
+                  <span class="protocol-title">Available Exams</span>
                   <span class="protocol-meta" data-meta>Modality: --</span>
                 </div>
                 <div class="protocol-panel-search">
-                  <input class="protocol-search-input" type="text" placeholder="Search protocols" oninput="filterDescriptions()">
+                  <input class="protocol-search-input" type="text" placeholder="Search exams" oninput="filterDescriptions()">
                 </div>
                 <div class="protocol-panel-list" data-list></div>
               </div>
             </div>
-            <div class="info">This uses the same study-description preset source as manual case submission.</div>
+            <div class="info">This uses the same owner-managed master exam catalogue as manual case submission.</div>
           </div>
           <div class="form-row full">
             <label>Admin notes</label>
@@ -244,6 +262,9 @@
       const dropdown = document.getElementById('descriptionList');
       const meta = dropdown.querySelector('[data-meta]');
       const orgId = resolveOrgId();
+      document.getElementById('study_description_preset_id').value = '';
+      document.getElementById('study_code').value = '';
+      document.getElementById('studyCodeHint').textContent = 'Exam code will appear automatically when you select an exam.';
 
       if (!modality) {
         allDescriptions = [];
@@ -298,7 +319,7 @@
         list.innerHTML = '<div class="protocol-empty">No matching study descriptions.</div>';
       } else {
         list.innerHTML = filtered.map(item =>
-          `<div class="protocol-item" onclick="selectDescription('${item.description.replace(/'/g, "\\'")}')">${item.description}</div>`
+          `<div class="protocol-item" onclick="selectDescription(${item.id}, '${item.description.replace(/'/g, "\\'")}', '${(item.study_code || '').replace(/'/g, "\\'")}')">${item.label || item.description}</div>`
         ).join('');
       }
       dropdown.style.display = 'block';
@@ -311,10 +332,41 @@
       filterDescriptions();
     }
 
-    function selectDescription(description) {
+    function selectDescription(presetId, description, studyCode) {
       document.getElementById('study_description').value = description;
+      document.getElementById('study_description_preset_id').value = presetId || '';
+      document.getElementById('study_code').value = studyCode || '';
+      document.getElementById('studyCodeHint').textContent = studyCode ? `Exam code: ${studyCode}` : 'Exam code will appear automatically when you select an exam.';
       document.getElementById('descriptionList').style.display = 'none';
     }
+
+    function toggleUncataloguedExamMode() {
+      const enabled = !!document.getElementById('uncatalogued_exam_requested')?.checked;
+      const studyInput = document.getElementById('study_description');
+      const reasonWrap = document.getElementById('uncatalogued_exam_reason_wrap');
+      const reasonField = document.getElementById('uncatalogued_exam_reason');
+      if (reasonWrap) {
+        reasonWrap.style.display = enabled ? 'block' : 'none';
+      }
+      if (reasonField) {
+        reasonField.required = enabled;
+      }
+      if (studyInput) {
+        if (enabled) {
+          studyInput.removeAttribute('readonly');
+          studyInput.placeholder = 'Enter a temporary uncatalogued exam description';
+        } else {
+          studyInput.setAttribute('readonly', 'readonly');
+          studyInput.placeholder = 'Select modality, then choose or search the approved study descriptions';
+        }
+      }
+      if (enabled) {
+        document.getElementById('study_description_preset_id').value = '';
+        document.getElementById('study_code').value = '';
+      }
+    }
+
+    toggleUncataloguedExamMode();
 
     document.addEventListener('click', function (event) {
       const picker = document.querySelector('.study-picker');

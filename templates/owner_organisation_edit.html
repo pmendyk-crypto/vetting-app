@@ -85,7 +85,6 @@
             </div>
             <div class="button-group">
                 <a class="btn secondary" href="/owner">Back to Owner Portal</a>
-                <a class="btn secondary" href="/logout">Logout</a>
             </div>
         </div>
 
@@ -358,7 +357,7 @@
                 <button type="button" class="btn secondary modal-close" onclick="closeUserEditor()">Close</button>
             </div>
 
-            <form id="userEditForm" method="post" class="form-stack">
+            <form id="userEditForm" method="post" class="form-stack" autocomplete="off">
                 <div class="form-row">
                     <div class="field">
                         <label>First Name</label>
@@ -421,11 +420,11 @@
 
             <div class="divider" style="margin: 20px 0;"></div>
 
-            <form id="userResetForm" method="post" class="form-stack">
+            <form id="userResetForm" method="post" class="form-stack" autocomplete="off">
                 <div class="form-row">
                     <div class="field">
                         <label>Reset Password</label>
-                        <input name="password" type="password" placeholder="Enter a new password" required>
+                        <input name="password" type="password" placeholder="Enter a new password" required autocomplete="new-password">
                     </div>
                 </div>
                 <div class="inline-actions">

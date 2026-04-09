@@ -833,24 +833,42 @@
               <div class="form-row full" style="margin-top: 10px;">
                 <label class="required">Study Description</label>
                 <div style="position: relative;">
+                  <input type="hidden" name="study_description_preset_id" id="study_description_preset_id">
+                  <input type="hidden" name="study_code" id="study_code">
                   <input 
                     name="study_description" 
                     id="study_description"
                     type="text" 
-                    placeholder="Select modality first, then type to search or select from list"
+                    placeholder="Select modality first, then choose an exam from the master catalogue"
                     required
                     oninput="filterDescriptions()"
                     onfocus="openProtocolModal('study_description')"
                     autocomplete="off"
+                    readonly
                     style="width: 100%;"
                   >
+                  <p class="info-text" id="studyCodeHint" style="margin-top:6px;">Exam code will appear automatically when you select an exam.</p>
+                  {% if can_create_uncatalogued_exam %}
+                  <div style="margin-top:10px; padding:10px 12px; border:1px solid rgba(245,158,11,0.28); border-radius:10px; background:rgba(245,158,11,0.08);">
+                    <label style="display:flex; align-items:flex-start; gap:10px; margin:0;">
+                      <input type="checkbox" id="uncatalogued_exam_requested" name="uncatalogued_exam_requested" value="1" onchange="toggleUncataloguedExamMode('study_description')">
+                      <span>
+                        <strong>Create Temporary Uncatalogued Exam</strong><br>
+                        <small style="color:rgba(255,255,255,0.72);">Owner/super-admin only. Requires a reason and flags the case for later catalogue review.</small>
+                      </span>
+                    </label>
+                    <div id="uncatalogued_exam_reason_wrap" style="display:none; margin-top:10px;">
+                      <textarea name="uncatalogued_exam_reason" id="uncatalogued_exam_reason" placeholder="Reason for using a temporary uncatalogued exam..." rows="2"></textarea>
+                    </div>
+                  </div>
+                  {% endif %}
                   <div id="descriptionList" class="description-dropdown" style="display: none; position: absolute; top: 100%; left: 0; width: min(520px, 100%); border-top: none; border-radius: 12px; z-index: 100;">
                     <div class="protocol-panel-header">
-                      <span class="protocol-title">Available Protocols</span>
+                      <span class="protocol-title">Available Exams</span>
                       <span class="protocol-meta" data-meta>Modality: --</span>
                     </div>
                     <div class="protocol-panel-search">
-                      <input class="protocol-search-input" type="text" placeholder="Search protocols" oninput="filterDescriptions()">
+                      <input class="protocol-search-input" type="text" placeholder="Search exams" oninput="filterDescriptions()">
                     </div>
                     <div class="protocol-panel-list" data-list></div>
                   </div>
@@ -971,11 +989,23 @@
       const studyWrapper = document.createElement('div');
       studyWrapper.style.position = 'relative';
       const studyInput = document.createElement('input');
+      const presetInput = document.createElement('input');
+      const studyCodeInput = document.createElement('input');
       const studyInputId = `extra_study_description_${rowCount}`;
+      const presetInputId = `extra_study_description_preset_id_${rowCount}`;
+      const studyCodeInputId = `extra_study_code_${rowCount}`;
       const dropdownId = `descriptionList_${rowCount}`;
+      presetInput.type = 'hidden';
+      presetInput.name = 'extra_study_description_preset_id';
+      presetInput.id = presetInputId;
+      presetInput.value = values.presetId || '';
+      studyCodeInput.type = 'hidden';
+      studyCodeInput.name = 'extra_study_code';
+      studyCodeInput.id = studyCodeInputId;
+      studyCodeInput.value = values.studyCode || '';
       studyInput.type = 'text';
       studyInput.id = studyInputId;
-      studyInput.placeholder = 'Select modality to see protocols';
+      studyInput.placeholder = 'Select modality to see exams';
       studyInput.name = 'extra_study_description';
       studyInput.autocomplete = 'off';
       if (values.description) {
@@ -994,24 +1024,32 @@
       dropdown.style.zIndex = '100';
       dropdown.innerHTML = `
         <div class="protocol-panel-header">
-          <span class="protocol-title">Available Protocols</span>
+          <span class="protocol-title">Available Exams</span>
           <span class="protocol-meta" data-meta>Modality: --</span>
         </div>
         <div class="protocol-panel-search">
-          <input class="protocol-search-input" type="text" placeholder="Search protocols" />
+          <input class="protocol-search-input" type="text" placeholder="Search exams" />
         </div>
         <div class="protocol-panel-list" data-list></div>
       `;
       const searchInput = dropdown.querySelector('.protocol-search-input');
       searchInput.oninput = () => filterDescriptionsFor(studyInputId, dropdownId);
-      studyInput.oninput = () => filterDescriptionsFor(studyInputId, dropdownId);
+      studyInput.oninput = () => {
+        document.getElementById(presetInputId).value = '';
+        document.getElementById(studyCodeInputId).value = '';
+        filterDescriptionsFor(studyInputId, dropdownId);
+      };
       studyInput.onfocus = () => showAllDescriptionsFor(studyInputId, dropdownId);
       modalitySelect.onchange = () => {
+        document.getElementById(presetInputId).value = '';
+        document.getElementById(studyCodeInputId).value = '';
         loadStudyDescriptionsFor(studyInputId, dropdownId, modalitySelect.value).then(() => {
           openProtocolModal(studyInputId);
         });
       };
       studyWrapper.appendChild(studyInput);
+      studyWrapper.appendChild(presetInput);
+      studyWrapper.appendChild(studyCodeInput);
       studyWrapper.appendChild(dropdown);
       studyCol.appendChild(studyLabel);
       studyCol.appendChild(studyWrapper);
@@ -1125,12 +1163,12 @@
 
       const descriptions = descriptionCache[cacheKey] || [];
       if (descriptions.length === 0) {
-        descriptionSelect.innerHTML = '<option value="">No protocols available</option>';
+        descriptionSelect.innerHTML = '<option value="">No exams available</option>';
         return;
       }
 
       descriptionSelect.innerHTML = descriptions.map(item =>
-        `<option value="${item.description}">${item.description}</option>`
+        `<option value="${item.id}" data-description="${item.description.replace(/"/g, '&quot;')}" data-study-code="${(item.study_code || '').replace(/"/g, '&quot;')}">${item.label || item.description}</option>`
       ).join('');
     }
 
@@ -1139,12 +1177,19 @@
       const modality = modal.querySelector('[data-add-modality]').value;
       const description = modal.querySelector('[data-add-description]').value;
       const radiologist = modal.querySelector('[data-add-radiologist]').value;
+      const selectedOption = modal.querySelector('[data-add-description]').selectedOptions[0];
 
       if (!modality || !description) {
         return;
       }
 
-      addStudyRow({ modality, description, radiologist });
+      addStudyRow({
+        modality,
+        description: selectedOption ? selectedOption.getAttribute('data-description') || description : description,
+        presetId: selectedOption ? selectedOption.value || '' : '',
+        studyCode: selectedOption ? selectedOption.getAttribute('data-study-code') || '' : '',
+        radiologist
+      });
       closeAddStudyModal();
     }
     
@@ -1177,6 +1222,12 @@
       const orgId = resolveOrgId();
       const dropdown = document.getElementById(dropdownId);
       const cacheKey = `${orgId}_${modality}`;
+
+      if (inputId === 'study_description') {
+        document.getElementById('study_description_preset_id').value = '';
+        document.getElementById('study_code').value = '';
+        document.getElementById('studyCodeHint').textContent = 'Exam code will appear automatically when you select an exam.';
+      }
 
       if (!modality) {
         dropdown.style.display = 'none';
@@ -1274,13 +1325,24 @@
         meta.textContent = metaText;
       }
       list.innerHTML = items.map(item =>
-        `<div class="protocol-item" onclick="selectDescriptionFor('${inputId}', '${dropdownId}', '${item.description.replace(/'/g, "\\'")}')">${item.description}</div>`
+        `<div class="protocol-item" onclick="selectDescriptionFor('${inputId}', '${dropdownId}', ${item.id}, '${item.description.replace(/'/g, "\\'")}', '${(item.study_code || '').replace(/'/g, "\\'")}')">${item.label || item.description}</div>`
       ).join('');
       dropdown.style.display = 'block';
     }
 
-    function selectDescriptionFor(inputId, dropdownId, description) {
+    function selectDescriptionFor(inputId, dropdownId, presetId, description, studyCode) {
       document.getElementById(inputId).value = description;
+      if (inputId === 'study_description') {
+        document.getElementById('study_description_preset_id').value = presetId || '';
+        document.getElementById('study_code').value = studyCode || '';
+        document.getElementById('studyCodeHint').textContent = studyCode ? `Exam code: ${studyCode}` : 'Exam code will appear automatically when you select an exam.';
+      } else {
+        const suffix = inputId.replace('extra_study_description_', '');
+        const presetField = document.getElementById(`extra_study_description_preset_id_${suffix}`);
+        const studyCodeField = document.getElementById(`extra_study_code_${suffix}`);
+        if (presetField) presetField.value = presetId || '';
+        if (studyCodeField) studyCodeField.value = studyCode || '';
+      }
       document.getElementById(dropdownId).style.display = 'none';
     }
 
@@ -1310,14 +1372,14 @@
       const search = modal.querySelector('[data-modal-search]');
 
       if (!modality) {
-        meta.textContent = 'Select a modality to load protocols.';
+        meta.textContent = 'Select a modality to load exams.';
         list.innerHTML = '<div class="protocol-modal-empty">No modality selected.</div>';
         modal.classList.add('open');
         return;
       }
 
       const descriptions = getCachedDescriptionsForInput(inputId);
-      title.textContent = 'Study Description Protocols';
+      title.textContent = 'Available Exams';
       meta.textContent = `Modality: ${modality} | ${descriptions.length}`;
       search.value = '';
       renderProtocolModalList(inputId, descriptions);
@@ -1335,7 +1397,7 @@
       const modal = document.getElementById('protocolModal');
       const list = modal.querySelector('[data-modal-list]');
       if (!items || items.length === 0) {
-        list.innerHTML = '<div class="protocol-modal-empty">No protocols found for this modality.</div>';
+        list.innerHTML = '<div class="protocol-modal-empty">No exams found for this modality.</div>';
         return;
       }
       list.innerHTML = items.map(item =>
@@ -1358,6 +1420,37 @@
       document.getElementById(inputId).value = description;
       closeProtocolModal();
     }
+
+    function toggleUncataloguedExamMode(inputId) {
+      const checkbox = document.getElementById('uncatalogued_exam_requested');
+      const reasonWrap = document.getElementById('uncatalogued_exam_reason_wrap');
+      const reasonField = document.getElementById('uncatalogued_exam_reason');
+      const presetField = document.getElementById('study_description_preset_id');
+      const studyCodeField = document.getElementById('study_code');
+      const input = document.getElementById(inputId);
+      const enabled = !!(checkbox && checkbox.checked);
+      if (reasonWrap) {
+        reasonWrap.style.display = enabled ? 'block' : 'none';
+      }
+      if (reasonField) {
+        reasonField.required = enabled;
+      }
+      if (input) {
+        if (enabled) {
+          input.removeAttribute('readonly');
+          input.placeholder = 'Enter a temporary uncatalogued exam description';
+        } else {
+          input.setAttribute('readonly', 'readonly');
+          input.placeholder = 'Select modality first, then choose an exam from the master catalogue';
+        }
+      }
+      if (enabled) {
+        if (presetField) presetField.value = '';
+        if (studyCodeField) studyCodeField.value = '';
+      }
+    }
+
+    toggleUncataloguedExamMode('study_description');
     
     // Hide dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -1411,12 +1504,12 @@
     <div class="protocol-modal-card">
       <div class="protocol-modal-header">
         <div>
-          <div class="protocol-modal-title" data-modal-title>Study Description Protocols</div>
+          <div class="protocol-modal-title" data-modal-title>Available Exams</div>
           <div class="protocol-modal-meta" data-modal-meta></div>
         </div>
         <button class="protocol-modal-close" type="button" onclick="closeProtocolModal()">Close</button>
       </div>
-      <input class="protocol-modal-search" type="text" data-modal-search placeholder="Search protocols" oninput="filterProtocolModal()">
+      <input class="protocol-modal-search" type="text" data-modal-search placeholder="Search exams" oninput="filterProtocolModal()">
       <div class="protocol-modal-list" data-modal-list></div>
     </div>
   </div>

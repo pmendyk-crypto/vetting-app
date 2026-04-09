@@ -477,7 +477,6 @@
             <button class="tab-btn active" data-tab="institutions" onclick="switchTab('institutions', this)">Institutions</button>
             <button class="tab-btn" data-tab="users" onclick="switchTab('users', this)">Users</button>
             <button class="tab-btn" data-tab="protocols" onclick="switchTab('protocols', this)">Protocols</button>
-            <button class="tab-btn" data-tab="study-presets" onclick="switchTab('study-presets', this)">Study Presets</button>
             <button class="tab-btn" data-tab="report" onclick="switchTab('report', this)">Justification Report</button>
         </div>
 
@@ -692,6 +691,7 @@
                 
                 <div class="form-card">
                     <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Add New Protocol</h3>
+                    <p style="margin-top:0; color:rgba(255,255,255,0.68); font-size:13px;">Available exams come from the owner-managed master exam catalogue.</p>
                     <form method="POST" action="/settings/protocol/add">
                         <div class="form-row">
                             <div class="form-group">
@@ -718,9 +718,9 @@
                                 <label>Protocol Name</label>
                                 <select id="addProtoPreset" name="study_description_preset_id" required>
                                     <option value="">Select Modality First</option>
-                                    {% for preset in study_description_presets %}
+                                    {% for preset in available_exams %}
                                     <option value="{{ preset.id }}" data-modality="{{ preset.modality }}" hidden>
-                                        {{ preset.description }}
+                                        {{ preset.description }}{% if preset.study_code %} ({{ preset.study_code }}){% endif %}
                                     </option>
                                     {% endfor %}
                                 </select>
@@ -794,86 +794,6 @@
                     </table>
                     {% else %}
                     <div class="empty-message">No protocols configured yet</div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <div id="study-presets" class="tab-content">
-            <div class="settings-section">
-                <div class="section-title">Study Presets</div>
-
-                <div class="form-card">
-                    <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Add New Study Preset</h3>
-                    <form method="POST" action="/settings/study-descriptions/add">
-                        <input type="hidden" name="org_id" value="{{ current_user.org_id or 1 }}">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Modality</label>
-                                <select name="modality" required>
-                                    <option value="">Select Modality</option>
-                                    <option value="MRI">MRI</option>
-                                    <option value="CT">CT</option>
-                                    <option value="XR">XR</option>
-                                    <option value="PET">PET</option>
-                                    <option value="DEXA">DEXA</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Description</label>
-                                <input type="text" name="description" required placeholder="e.g., MRI Brain">
-                            </div>
-                        </div>
-                        <div class="button-group">
-                            <button type="submit" class="btn btn-primary">Add Study Preset</button>
-                        </div>
-                    </form>
-                </div>
-
-                <div class="form-card">
-                    <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Current Study Presets</h3>
-                    {% if study_description_presets %}
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Modality</th>
-                                <th>Description</th>
-                                <th>Status</th>
-                                <th>Updated</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for preset in study_description_presets %}
-                            <tr>
-                                <td><span class="badge badge-institution">{{ preset.modality }}</span></td>
-                                <td>{{ preset.description }}</td>
-                                <td>
-                                    <span style="color: {% if preset.is_active %}#4ade80{% else %}rgba(255,255,255,0.5){% endif %}; font-weight: 400;">
-                                        {{ 'Active' if preset.is_active else 'Archived' }}
-                                    </span>
-                                </td>
-                                <td>{{ preset.updated_at | display_datetime if preset.updated_at else 'N/A' }}</td>
-                                <td>
-                                    <div class="action-buttons">
-                                        <button class="btn btn-secondary btn-small" onclick='editStudyPreset({{ preset.id }}, {{ preset.modality|tojson }}, {{ preset.description|tojson }})'>Edit</button>
-                                        {% if preset.is_active %}
-                                        <form style="display:inline;" method="POST" action="/settings/study-descriptions/archive/{{ preset.id }}" onsubmit="return confirm('Archive this study preset?');">
-                                            <button type="submit" class="btn btn-danger btn-small">Archive</button>
-                                        </form>
-                                        {% else %}
-                                        <form style="display:inline;" method="POST" action="/settings/study-descriptions/restore/{{ preset.id }}">
-                                            <button type="submit" class="btn btn-secondary btn-small">Restore</button>
-                                        </form>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}
-                    <div class="empty-message">No study presets configured yet</div>
                     {% endif %}
                 </div>
             </div>
@@ -1067,9 +987,9 @@
                         <label>Protocol Name</label>
                         <select id="editProtoStudyDescription" name="study_description_preset_id" required>
                             <option value="">Select Modality First</option>
-                            {% for preset in study_description_presets %}
+                            {% for preset in available_exams %}
                             <option value="{{ preset.id }}" data-modality="{{ preset.modality }}" hidden>
-                                {{ preset.description }}
+                                {{ preset.description }}{% if preset.study_code %} ({{ preset.study_code }}){% endif %}
                             </option>
                             {% endfor %}
                         </select>
@@ -1123,34 +1043,6 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeModal('viewProtocolModal')">Close</button>
             </div>
-        </div>
-    </div>
-
-    <div id="editStudyPresetModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">Edit Study Preset</div>
-            <form id="editStudyPresetForm" method="POST">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Modality</label>
-                        <select id="editStudyPresetModality" name="modality" required>
-                            <option value="MRI">MRI</option>
-                            <option value="CT">CT</option>
-                            <option value="XR">XR</option>
-                            <option value="PET">PET</option>
-                            <option value="DEXA">DEXA</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <input type="text" id="editStudyPresetDescription" name="description" required>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('editStudyPresetModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
-                </div>
-            </form>
         </div>
     </div>
 
@@ -1296,14 +1188,6 @@
             document.getElementById('viewProtoStatus').value = status || '';
             document.getElementById('viewProtoInstructions').value = instructions || 'No instructions recorded.';
             document.getElementById('viewProtocolModal').classList.add('active');
-        }
-
-        function editStudyPreset(id, modality, description) {
-            document.getElementById('editStudyPresetModality').value = modality || '';
-            document.getElementById('editStudyPresetDescription').value = description || '';
-            document.getElementById('editStudyPresetForm').action = `/settings/study-descriptions/edit/${id}`;
-            document.getElementById('editStudyPresetModal').classList.add('active');
-            localStorage.setItem('settingsActiveTab', 'study-presets');
         }
 
         function filterProtocols() {
