@@ -6,10 +6,10 @@
   <title>Referral Intake Assistant</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    .trial-wrap { max-width: 1520px; margin: 20px auto; padding: 12px 20px 24px; }
+    .trial-wrap { width: min(1560px, calc(100vw - 40px)); max-width: none; margin: 20px auto; padding: 12px 20px 24px; }
     .card { border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .trial-review-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.85fr); gap: 16px; align-items: stretch; }
+    .trial-review-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(420px, 0.95fr); gap: 16px; align-items: stretch; }
     .trial-review-grid .card { margin-bottom: 0; }
     .form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
     .form-row.full { grid-column: 1 / -1; }
@@ -23,6 +23,9 @@
     .btn-primary { background: #1f6feb; color: #fff; }
     .btn-secondary { background: #3a3a3a; color: #fff; text-decoration: none; }
     pre { white-space: pre-wrap; max-height: 180px; overflow: auto; background: rgba(0,0,0,0.25); padding: 10px; border-radius: 8px; }
+    .preview-panel { display:flex; flex-direction:column; min-height: 76vh; }
+    .preview-frame { width:100%; flex:1; min-height:66vh; border:1px solid rgba(255,255,255,0.12); border-radius:10px; background:#fff; }
+    .disclaimer { margin-top:12px; padding:12px 14px; border-radius:10px; border:1px solid rgba(245,158,11,0.32); background:rgba(245,158,11,0.1); color:#fde68a; font-size:13px; line-height:1.5; }
     .info { font-size: 11px; opacity: 0.72; margin-top: 2px; }
     .study-picker { position: relative; }
     .study-picker input { width: 100%; box-sizing: border-box; }
@@ -80,8 +83,6 @@
 <body>
   <div class="trial-wrap">
     <h1>Referral Intake Assistant</h1>
-    <p class="meta">Upload a referral file, review the extracted fields, then create a case.</p>
-
     {% if error %}
       <div class="err">{{ error }}</div>
     {% endif %}
@@ -98,9 +99,6 @@
                 <option value="{{ inst.id }}" {% if draft and draft.institution_id == (inst.id | string) %}selected{% endif %}>{{ inst.name }}</option>
               {% endfor %}
             </select>
-            {% if default_institution %}
-            <div class="info">Default: {{ default_institution.name }}</div>
-            {% endif %}
           </div>
           <div class="form-row">
             <label>Referral file</label>
@@ -155,9 +153,6 @@
                 <option value="{{ inst.id }}" {% if draft and draft.institution_id == (inst.id | string) %}selected{% endif %}>{{ inst.name }}</option>
               {% endfor %}
             </select>
-            {% if default_institution %}
-            <div class="info">Default: {{ default_institution.name }}</div>
-            {% endif %}
           </div>
           <div class="form-row">
             <label>Modality</label>
@@ -238,13 +233,20 @@
           <button type="submit" class="btn btn-primary">Create booking/case</button>
           <a class="btn btn-secondary" href="/admin">Cancel</a>
         </div>
+        <div class="disclaimer">The intake assistant may make errors. Please check the referral details carefully before submitting.</div>
       </form>
     </div>
 
-    <div class="card">
-      <h3>Extracted text preview</h3>
-      <p class="meta" style="margin-top:0;">Review the parsed referral content alongside the form before creating the case.</p>
-      <pre>{{ parse_preview }}</pre>
+    <div class="card preview-panel">
+      <h3>Referral document preview</h3>
+      <p class="meta" style="margin-top:0;">Review the actual uploaded referral alongside the extracted fields before creating the case.</p>
+      <iframe src="/submit/referral-trial/attachment/{{ draft.attachment_token }}/preview" class="preview-frame"></iframe>
+      {% if parse_preview %}
+      <details style="margin-top:12px;">
+        <summary style="cursor:pointer;color:rgba(255,255,255,0.78);">Show extracted text</summary>
+        <pre>{{ parse_preview }}</pre>
+      </details>
+      {% endif %}
     </div>
     </div>
     {% endif %}

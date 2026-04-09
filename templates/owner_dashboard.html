@@ -144,6 +144,28 @@
             text-transform: uppercase;
         }
 
+        .option-box {
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 13px 14px;
+            background: rgba(255,255,255,0.03);
+        }
+
+        .option-box label {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            color: rgba(255,255,255,0.88);
+            line-height: 1.4;
+        }
+
+        .option-help {
+            margin: 7px 0 0 28px;
+            color: rgba(255,255,255,0.58);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
         .org-list {
             display: grid;
             gap: 16px;
@@ -368,6 +390,15 @@
                             </label>
                         </div>
                     </div>
+                    <div class="form-row single">
+                        <div class="option-box">
+                            <label for="assign_full_catalogue">
+                                <input id="assign_full_catalogue" name="assign_full_catalogue" type="checkbox" value="1" {% if form_data.assign_full_catalogue %}checked{% endif %}>
+                                <span>Provide visibility to the full National Reference List</span>
+                            </label>
+                            <p class="option-help">Recommended default. This assigns the complete active master exam catalogue to the organisation in one step.</p>
+                        </div>
+                    </div>
 
                     <div class="button-group">
                         <button type="submit" class="btn primary">Create Organisation</button>
@@ -416,7 +447,13 @@
 
                         <div class="org-card-actions">
                             <a class="btn secondary" href="/owner/organisations/{{ org.id }}">Edit Organisation</a>
-                            <form method="post" action="/owner/organisations/{{ org.id }}/delete" onsubmit="return confirm('Delete this organisation and all of its users, institutions, cases, and protocols?');">
+                            <form
+                                method="post"
+                                action="/owner/organisations/{{ org.id }}/delete"
+                                data-confirm-message="Delete this organisation and all of its users, institutions, cases, and protocols?"
+                                data-confirm-title="Delete Organisation"
+                                data-confirm-label="Delete Organisation"
+                            >
                                 <button type="submit" class="btn secondary">Delete Organisation</button>
                             </form>
                         </div>
@@ -431,6 +468,7 @@
             </section>
         </div>
     </div>
+    <script src="/static/js/confirm-modal.js"></script>
     <script>
         (() => {
             const orgNameInput = document.getElementById('org_name');

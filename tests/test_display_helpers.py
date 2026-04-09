@@ -1,7 +1,9 @@
 import unittest
 
 from app.main import (
+    build_case_preview_context,
     can_use_uncatalogued_exam_exception,
+    display_case_event_label,
     display_case_status,
     display_decision_label,
     format_exam_label,
@@ -30,6 +32,10 @@ class DisplayHelperTests(unittest.TestCase):
     def test_display_case_status_standardizes_vetted(self):
         self.assertEqual(display_case_status("vetted"), "Approved")
         self.assertEqual(display_case_status("reopened"), "Reopened")
+
+    def test_display_case_event_label_humanizes_report_sent(self):
+        self.assertEqual(display_case_event_label("REPORT_SENT"), "Justification Sent")
+        self.assertEqual(display_case_event_label("REPORT_SENT_RESET"), "Justification Sent Reset")
 
     def test_format_exam_label_includes_study_code(self):
         self.assertEqual(format_exam_label("MRI Brain", "MRI001"), "MRI Brain (MRI001)")
@@ -81,6 +87,26 @@ class DisplayHelperTests(unittest.TestCase):
         self.assertEqual(resolved["study_description"], "Legacy MRI Study")
         self.assertEqual(resolved["study_code"], "LEG-01")
         self.assertEqual(resolved["modality"], "MRI")
+
+    def test_case_preview_context_uses_available_attachment_when_primary_missing(self):
+        preview = build_case_preview_context(
+            "CASE-1",
+            {
+                "uploaded_filename": "old.pdf",
+                "stored_filepath": None,
+                "attachment_previewable": False,
+            },
+            [
+                {
+                    "id": "att-1",
+                    "uploaded_filename": "new.pdf",
+                    "available": True,
+                }
+            ],
+        )
+        self.assertEqual(preview["preview_source"], "attachment")
+        self.assertTrue(preview["preview_available"])
+        self.assertIn("/attachments/att-1/preview", preview["preview_url"])
 
 
 if __name__ == "__main__":

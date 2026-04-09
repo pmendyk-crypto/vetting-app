@@ -215,6 +215,28 @@ def display_case_status(status_value: str | None) -> str:
     return mapping.get(status, status.title() if status else "")
 
 
+def display_case_event_label(event_type_value: str | None) -> str:
+    event_type = str(event_type_value or "").strip().upper()
+    mapping = {
+        "CREATED": "Case Created",
+        "SUBMITTED": "Case Created",
+        "ASSIGNED": "Practitioner Assignment Updated",
+        "OPENED": "Case Opened by Practitioner",
+        "VETTED": "Decision Recorded",
+        "REJECTED": "Case Rejected",
+        "REOPENED": "Case Reopened",
+        "EDITED": "Case Edited",
+        "REPORT_SENT": "Justification Sent",
+        "REPORT_SENT_RESET": "Justification Sent Reset",
+        "EXAM_CATALOGUE_EXCEPTION": "Temporary Uncatalogued Exam",
+    }
+    if event_type in mapping:
+        return mapping[event_type]
+    if not event_type:
+        return ""
+    return event_type.replace("_", " ").title()
+
+
 def format_exam_label(description: str | None, study_code: str | None = None) -> str:
     desc = str(description or "").strip()
     code = str(study_code or "").strip()
@@ -690,6 +712,7 @@ def format_display_datetime(value: str | None, fallback: str = "") -> str:
 
 
 templates.env.filters["display_datetime"] = format_display_datetime
+templates.env.filters["display_case_event_label"] = display_case_event_label
 
 
 def tat_seconds(created_at: str | None, vetted_at: str | None) -> int:
@@ -1830,9 +1853,21 @@ def _load_study_presets_from_migration() -> list[tuple[str, str, str]]:
             with full_csv_path.open("r", encoding="utf-8", errors="ignore", newline="") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    modality_clean = (row.get("modality") or "").strip().upper()
-                    description_clean = (row.get("description") or "").strip()
-                    study_code_clean = (row.get("study_code") or row.get("exam_code") or "").strip()
+                    normalized_row = {
+                        re.sub(r"[^a-z0-9]+", "_", str(key or "").strip().lower()).strip("_"): value
+                        for key, value in row.items()
+                    }
+                    modality_clean = (normalized_row.get("modality") or "").strip().upper()
+                    description_clean = (
+                        normalized_row.get("description")
+                        or normalized_row.get("study_description")
+                        or ""
+                    ).strip()
+                    study_code_clean = (
+                        normalized_row.get("study_code")
+                        or normalized_row.get("exam_code")
+                        or ""
+                    ).strip()
                     if not modality_clean or not description_clean:
                         continue
                     key = (modality_clean, description_clean, study_code_clean)
@@ -1924,6 +1959,30 @@ def assign_exam_catalogue_to_org(org_id: int, assigned_by: int | None = None, pr
     conn.close()
 
 
+def assign_full_exam_catalogue_to_all_orgs(assigned_by: int | None = None) -> None:
+    if not table_exists("organisations"):
+        return
+    conn = get_db()
+    org_rows = conn.execute(
+        """
+        SELECT id
+        FROM organisations
+        WHERE COALESCE(is_active, 1) = 1
+        ORDER BY id
+        """
+    ).fetchall()
+    conn.close()
+    for org_row in org_rows:
+        org_data = dict(org_row)
+        org_raw_id = org_data.get("id")
+        try:
+            org_id = int(org_raw_id) if org_raw_id is not None else None
+        except (TypeError, ValueError):
+            org_id = None
+        if org_id:
+            assign_exam_catalogue_to_org(org_id, assigned_by=assigned_by)
+
+
 def set_exam_catalogue_assignments(org_id: int, preset_ids: list[int], assigned_by: int | None = None) -> None:
     if not org_id:
         return
@@ -1993,71 +2052,6 @@ def ensure_default_study_description_presets() -> None:
                 (modality, description, study_code or None, now, now, 1),
             )
 
-    legacy_rows = conn.execute(
-        """
-        SELECT organization_id, modality, description, COALESCE(study_code, '') AS study_code, COALESCE(is_active, 1) AS is_active
-        FROM study_description_presets
-        WHERE organization_id <> 0
-        ORDER BY organization_id, modality, description
-        """
-    ).fetchall()
-    org_to_assignments: dict[int, set[int]] = {}
-    for legacy in legacy_rows:
-        item = dict(legacy)
-        modality = str(item.get("modality") or "").strip().upper()
-        description = str(item.get("description") or "").strip()
-        study_code = str(item.get("study_code") or "").strip()
-        if not modality or not description:
-            continue
-        if using_postgres():
-            central = conn.execute(
-                """
-                INSERT INTO study_description_presets (organization_id, modality, description, study_code, created_at, updated_at, created_by, is_active)
-                VALUES (0, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (organization_id, modality, description) DO UPDATE SET
-                    study_code = CASE
-                        WHEN COALESCE(study_description_presets.study_code, '') = '' AND COALESCE(EXCLUDED.study_code, '') <> '' THEN EXCLUDED.study_code
-                        ELSE study_description_presets.study_code
-                    END,
-                    is_active = CASE WHEN study_description_presets.is_active = 1 OR EXCLUDED.is_active = 1 THEN 1 ELSE 0 END,
-                    updated_at = EXCLUDED.updated_at
-                RETURNING id
-                """,
-                (modality, description, study_code or None, now, now, item.get("organization_id") or 1, item.get("is_active") or 1),
-            ).fetchone()
-        else:
-            conn.execute(
-                """
-                INSERT INTO study_description_presets (organization_id, modality, description, study_code, created_at, updated_at, created_by, is_active)
-                VALUES (0, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (organization_id, modality, description) DO UPDATE SET
-                    study_code = CASE
-                        WHEN COALESCE(study_description_presets.study_code, '') = '' AND COALESCE(excluded.study_code, '') <> '' THEN excluded.study_code
-                        ELSE study_description_presets.study_code
-                    END,
-                    is_active = CASE WHEN study_description_presets.is_active = 1 OR excluded.is_active = 1 THEN 1 ELSE 0 END,
-                    updated_at = excluded.updated_at
-                """,
-                (modality, description, study_code or None, now, now, item.get("organization_id") or 1, item.get("is_active") or 1),
-            )
-            central = conn.execute(
-                """
-                SELECT id
-                FROM study_description_presets
-                WHERE organization_id = 0 AND modality = ? AND description = ?
-                LIMIT 1
-                """,
-                (modality, description),
-            ).fetchone()
-        central_data = dict(central) if central else {}
-        central_raw_id = central_data.get("id")
-        try:
-            central_id = int(central_raw_id) if central_raw_id is not None else None
-        except (TypeError, ValueError):
-            central_id = None
-        if central_id and item.get("organization_id"):
-            org_to_assignments.setdefault(int(item["organization_id"]), set()).add(central_id)
-
     organisations = conn.execute("SELECT id FROM organisations ORDER BY id").fetchall()
     conn.commit()
     conn.close()
@@ -2065,8 +2059,7 @@ def ensure_default_study_description_presets() -> None:
     for org_row in organisations:
         org_data = dict(org_row)
         org_id = int(org_data["id"])
-        preset_ids = sorted(org_to_assignments.get(org_id, set())) or None
-        assign_exam_catalogue_to_org(org_id, assigned_by=1, preset_ids=preset_ids)
+        assign_exam_catalogue_to_org(org_id, assigned_by=1)
 
 
 def list_exam_catalogue(active_only: bool = True, org_id: int | None = None) -> list[dict]:
@@ -2079,10 +2072,13 @@ def list_exam_catalogue(active_only: bool = True, org_id: int | None = None) -> 
             "SELECT p.id, p.modality, p.description, COALESCE(p.study_code, '') AS study_code, "
             "COALESCE(p.is_active, 1) AS is_active "
             "FROM study_description_presets p "
-            "JOIN study_description_preset_assignments a ON a.preset_id = p.id "
-            "WHERE p.organization_id = 0 AND a.org_id = ? AND COALESCE(a.is_active, 1) = 1"
+            "LEFT JOIN study_description_preset_assignments a ON a.preset_id = p.id AND a.org_id = ? "
+            "WHERE ("
+            "  (p.organization_id = 0 AND a.org_id IS NOT NULL AND COALESCE(a.is_active, 1) = 1) "
+            "  OR p.organization_id = ?"
+            ")"
         )
-        params.append(org_id)
+        params.extend([org_id, org_id])
     else:
         sql = (
             "SELECT p.id, p.modality, p.description, COALESCE(p.study_code, '') AS study_code, "
@@ -2114,10 +2110,13 @@ def get_study_description_preset(preset_id: int, org_id: int | None = None) -> d
         sql = (
             "SELECT p.id, p.modality, p.description, COALESCE(p.study_code, '') AS study_code, COALESCE(p.is_active, 1) AS is_active "
             "FROM study_description_presets p "
-            "JOIN study_description_preset_assignments a ON a.preset_id = p.id "
-            "WHERE p.id = ? AND p.organization_id = 0 AND a.org_id = ? AND COALESCE(a.is_active, 1) = 1"
+            "LEFT JOIN study_description_preset_assignments a ON a.preset_id = p.id AND a.org_id = ? "
+            "WHERE p.id = ? AND ("
+            "  (p.organization_id = 0 AND a.org_id IS NOT NULL AND COALESCE(a.is_active, 1) = 1) "
+            "  OR p.organization_id = ?"
+            ")"
         )
-        params.append(org_id)
+        params = [org_id, preset_id, org_id]
     row = conn.execute(sql, params).fetchone()
     conn.close()
     return dict(row) if row else None
@@ -2285,6 +2284,37 @@ def get_exam_catalogue_review_summary(case_row: dict) -> tuple[bool, str]:
     if flagged_by:
         pieces.append(flagged_by)
     return True, " | ".join(pieces)
+
+
+def build_case_preview_context(case_id: str, case_row: dict, attachments: list[dict]) -> dict:
+    preview_attachment = next((item for item in attachments if item.get("available")), None)
+    preview_url = f"/case/{case_id}/attachment/preview"
+    inline_url = f"/case/{case_id}/attachment/inline"
+    preview_name = case_row.get("uploaded_filename") or "Referral attachment"
+    preview_from_attachment = False
+    preview_available = bool(case_row.get("stored_filepath"))
+    preview_source = "primary"
+
+    if preview_attachment and (
+        not preview_available
+        or not case_row.get("uploaded_filename")
+        or not case_row.get("attachment_previewable")
+    ):
+        preview_url = f"/case/{case_id}/attachments/{preview_attachment['id']}/preview"
+        inline_url = f"/case/{case_id}/attachments/{preview_attachment['id']}/inline"
+        preview_name = preview_attachment.get("uploaded_filename") or preview_name
+        preview_from_attachment = True
+        preview_available = True
+        preview_source = "attachment"
+
+    return {
+        "preview_url": preview_url,
+        "inline_url": inline_url,
+        "preview_name": preview_name,
+        "preview_available": preview_available,
+        "preview_source": preview_source,
+        "preview_from_attachment": preview_from_attachment,
+    }
 
 
 def can_use_uncatalogued_exam_exception(user: dict | None) -> bool:
@@ -4129,6 +4159,7 @@ def owner_dashboard(request: Request, created: str = "", error: str = ""):
                 "admin_email": "",
                 "admin_username": "",
                 "admin_mfa_required": 0,
+                "assign_full_catalogue": 1,
             },
         },
     )
@@ -4139,25 +4170,40 @@ def owner_exam_catalogue_page(request: Request, saved: str = "", error: str = ""
     user = require_superuser(request)
     organisations = list_organisations_summary()
     catalogue = list_owner_exam_catalogue()
-    assignment_map = {item["id"]: list_exam_catalogue_assignment_org_ids(item["id"]) for item in catalogue}
+    manual_catalogue = list_owner_manual_exam_catalogue()
+    active_org_count = sum(1 for org in organisations if org.get("is_active"))
     return templates.TemplateResponse(
         "owner_exam_catalogue.html",
         {
             "request": request,
             "user": user,
             "catalogue": catalogue,
+            "manual_catalogue": manual_catalogue,
             "organisations": organisations,
-            "assignment_map": assignment_map,
             "modalities": CONTROLLED_MODALITIES,
             "saved": saved,
             "error": error,
+            "active_org_count": active_org_count,
+            "catalogue_source_path": str(BASE_DIR / "database" / "migrations" / "004_study_description_presets_full.csv"),
         },
     )
+
+
+@app.post("/owner/exam-catalogue/refresh")
+def owner_exam_catalogue_refresh(request: Request):
+    user = require_superuser(request)
+    source_path = BASE_DIR / "database" / "migrations" / "004_study_description_presets_full.csv"
+    if not source_path.exists():
+        return RedirectResponse(url="/owner/exam-catalogue?error=missing_master_file", status_code=303)
+    ensure_default_study_description_presets()
+    assign_full_exam_catalogue_to_all_orgs(user.get("id") or 1)
+    return RedirectResponse(url="/owner/exam-catalogue?saved=refreshed", status_code=303)
 
 
 @app.post("/owner/exam-catalogue/add")
 def owner_exam_catalogue_add(
     request: Request,
+    org_id: int = Form(...),
     modality: str = Form(...),
     description: str = Form(...),
     study_code: str = Form(""),
@@ -4168,51 +4214,69 @@ def owner_exam_catalogue_add(
     description_value = (description or "").strip()
     study_code_value = (study_code or "").strip()
     active_value = 1 if str(is_active).strip() == "1" else 0
-    if modality_value not in CONTROLLED_MODALITIES or not description_value:
+    valid_org_ids = {int(org["id"]) for org in list_organisations_summary() if org.get("is_active")}
+    if modality_value not in CONTROLLED_MODALITIES or not description_value or org_id not in valid_org_ids:
         return RedirectResponse(url="/owner/exam-catalogue?error=invalid", status_code=303)
 
     conn = get_db()
     now = utc_now_iso()
     try:
+        duplicate = conn.execute(
+            """
+            SELECT id
+            FROM study_description_presets
+            WHERE COALESCE(is_active, 1) = 1
+              AND (organization_id = 0 OR organization_id = ?)
+              AND (
+                  LOWER(TRIM(description)) = LOWER(TRIM(?))
+                  OR (
+                      ? <> ''
+                      AND COALESCE(TRIM(study_code), '') <> ''
+                      AND LOWER(TRIM(study_code)) = LOWER(TRIM(?))
+                  )
+              )
+            LIMIT 1
+            """,
+            (org_id, description_value, study_code_value, study_code_value),
+        ).fetchone()
+        if duplicate:
+            conn.close()
+            return RedirectResponse(url="/owner/exam-catalogue?error=duplicate", status_code=303)
         if using_postgres():
             row = conn.execute(
                 """
                 INSERT INTO study_description_presets (organization_id, modality, description, study_code, is_active, created_at, updated_at, created_by)
-                VALUES (0, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (organization_id, modality, description) DO UPDATE SET
                     study_code = EXCLUDED.study_code,
                     is_active = EXCLUDED.is_active,
                     updated_at = EXCLUDED.updated_at
                 RETURNING id
                 """,
-                (modality_value, description_value, study_code_value or None, active_value, now, now, user.get("id") or 1),
+                (org_id, modality_value, description_value, study_code_value or None, active_value, now, now, user.get("id") or 1),
             ).fetchone()
             preset_id = int(dict(row)["id"]) if row else None
         else:
             conn.execute(
                 """
                 INSERT INTO study_description_presets (organization_id, modality, description, study_code, is_active, created_at, updated_at, created_by)
-                VALUES (0, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (organization_id, modality, description) DO UPDATE SET
                     study_code = excluded.study_code,
                     is_active = excluded.is_active,
                     updated_at = excluded.updated_at
                 """,
-                (modality_value, description_value, study_code_value or None, active_value, now, now, user.get("id") or 1),
+                (org_id, modality_value, description_value, study_code_value or None, active_value, now, now, user.get("id") or 1),
             )
             row = conn.execute(
-                "SELECT id FROM study_description_presets WHERE organization_id = 0 AND modality = ? AND description = ?",
-                (modality_value, description_value),
+                "SELECT id FROM study_description_presets WHERE organization_id = ? AND modality = ? AND description = ?",
+                (org_id, modality_value, description_value),
             ).fetchone()
             preset_id = int(dict(row)["id"]) if row else None
         conn.commit()
     finally:
         conn.close()
 
-    if preset_id:
-        assign_exam_catalogue_to_orgs = [org["id"] for org in list_organisations_summary() if org.get("is_active")]
-        for org_id in assign_exam_catalogue_to_orgs:
-            assign_exam_catalogue_to_org(org_id, assigned_by=user.get("id") or 1, preset_ids=[preset_id])
     return RedirectResponse(url="/owner/exam-catalogue?saved=1", status_code=303)
 
 
@@ -4220,30 +4284,68 @@ def owner_exam_catalogue_add(
 def owner_exam_catalogue_edit(
     request: Request,
     preset_id: int,
+    org_id: int = Form(...),
     modality: str = Form(...),
     description: str = Form(...),
     study_code: str = Form(""),
     is_active: str = Form("1"),
 ):
-    user = require_superuser(request)
+    require_superuser(request)
     modality_value = (modality or "").strip().upper()
     description_value = (description or "").strip()
     study_code_value = (study_code or "").strip()
     active_value = 1 if str(is_active).strip() == "1" else 0
-    if modality_value not in CONTROLLED_MODALITIES or not description_value:
+    valid_org_ids = {int(org["id"]) for org in list_organisations_summary() if org.get("is_active")}
+    if modality_value not in CONTROLLED_MODALITIES or not description_value or org_id not in valid_org_ids:
         return RedirectResponse(url="/owner/exam-catalogue?error=invalid", status_code=303)
 
     conn = get_db()
-    conn.execute(
-        """
-        UPDATE study_description_presets
-        SET modality = ?, description = ?, study_code = ?, is_active = ?, updated_at = ?
-        WHERE id = ? AND organization_id = 0
-        """,
-        (modality_value, description_value, study_code_value or None, active_value, utc_now_iso(), preset_id),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        existing = conn.execute(
+            "SELECT organization_id FROM study_description_presets WHERE id = ? LIMIT 1",
+            (preset_id,),
+        ).fetchone()
+        if not existing or int(dict(existing).get("organization_id") or 0) == 0:
+            conn.close()
+            return RedirectResponse(url="/owner/exam-catalogue?error=read_only", status_code=303)
+
+        duplicate = conn.execute(
+            """
+            SELECT id
+            FROM study_description_presets
+            WHERE id != ?
+              AND COALESCE(is_active, 1) = 1
+              AND (organization_id = 0 OR organization_id = ?)
+              AND (
+                  LOWER(TRIM(description)) = LOWER(TRIM(?))
+                  OR (
+                      ? <> ''
+                      AND COALESCE(TRIM(study_code), '') <> ''
+                      AND LOWER(TRIM(study_code)) = LOWER(TRIM(?))
+                  )
+              )
+            LIMIT 1
+            """,
+            (preset_id, org_id, description_value, study_code_value, study_code_value),
+        ).fetchone()
+        if duplicate:
+            conn.close()
+            return RedirectResponse(url="/owner/exam-catalogue?error=duplicate", status_code=303)
+
+        conn.execute(
+            """
+            UPDATE study_description_presets
+            SET organization_id = ?, modality = ?, description = ?, study_code = ?, is_active = ?, updated_at = ?
+            WHERE id = ? AND organization_id != 0
+            """,
+            (org_id, modality_value, description_value, study_code_value or None, active_value, utc_now_iso(), preset_id),
+        )
+        conn.commit()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
     return RedirectResponse(url="/owner/exam-catalogue?saved=1", status_code=303)
 
 
@@ -4253,26 +4355,29 @@ def owner_exam_catalogue_assignments(
     preset_id: int,
     org_ids: list[int] = Form([]),
 ):
-    user = require_superuser(request)
-    current_orgs = {org["id"] for org in list_organisations_summary()}
-    selected = sorted({int(org_id) for org_id in org_ids if int(org_id) in current_orgs})
-    conn = get_db()
-    conn.execute("UPDATE study_description_preset_assignments SET is_active = 0 WHERE preset_id = ?", (preset_id,))
-    conn.commit()
-    conn.close()
-    for org_id in selected:
-        assign_exam_catalogue_to_org(org_id, assigned_by=user.get("id") or 1, preset_ids=[preset_id])
-    return RedirectResponse(url="/owner/exam-catalogue?saved=1", status_code=303)
+    require_superuser(request)
+    return RedirectResponse(url="/owner/exam-catalogue?error=read_only", status_code=303)
 
 
 @app.post("/owner/exam-catalogue/{preset_id}/delete")
 def owner_exam_catalogue_delete(request: Request, preset_id: int):
     require_superuser(request)
     conn = get_db()
-    conn.execute("DELETE FROM study_description_preset_assignments WHERE preset_id = ?", (preset_id,))
-    conn.execute("DELETE FROM study_description_presets WHERE id = ? AND organization_id = 0", (preset_id,))
-    conn.commit()
-    conn.close()
+    try:
+        row = conn.execute(
+            "SELECT organization_id FROM study_description_presets WHERE id = ? LIMIT 1",
+            (preset_id,),
+        ).fetchone()
+        if not row or int(dict(row).get("organization_id") or 0) == 0:
+            conn.close()
+            return RedirectResponse(url="/owner/exam-catalogue?error=read_only", status_code=303)
+        conn.execute("DELETE FROM study_description_presets WHERE id = ? AND organization_id != 0", (preset_id,))
+        conn.commit()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
     return RedirectResponse(url="/owner/exam-catalogue?saved=1", status_code=303)
 
 
@@ -4287,6 +4392,7 @@ def owner_create_organisation(
     admin_username: str = Form(...),
     admin_password: str = Form(...),
     admin_mfa_required: str = Form("0"),
+    assign_full_catalogue: str = Form("0"),
 ):
     user = require_superuser(request)
 
@@ -4298,6 +4404,7 @@ def owner_create_organisation(
     admin_username = admin_username.strip()
     admin_password = admin_password.strip()
     admin_mfa_required_value = 1 if str(admin_mfa_required).strip().lower() in {"1", "true", "on", "yes"} else 0
+    assign_full_catalogue_value = 1 if str(assign_full_catalogue).strip().lower() in {"1", "true", "on", "yes"} else 0
 
     form_data = {
         "org_name": org_name,
@@ -4307,6 +4414,7 @@ def owner_create_organisation(
         "admin_email": admin_email,
         "admin_username": admin_username,
         "admin_mfa_required": admin_mfa_required_value,
+        "assign_full_catalogue": assign_full_catalogue_value,
     }
 
     if not org_name or not admin_first_name or not admin_username or not admin_password:
@@ -4451,7 +4559,8 @@ def owner_create_organisation(
     finally:
         conn.close()
 
-    assign_exam_catalogue_to_org(org_id, assigned_by=user.get("id") or user_id)
+    if assign_full_catalogue_value:
+        assign_exam_catalogue_to_org(org_id, assigned_by=user.get("id") or user_id)
 
     return RedirectResponse(url="/owner?created=1", status_code=303)
 
@@ -4470,11 +4579,22 @@ def owner_edit_organisation_page(request: Request, org_id: int, saved: str = "",
             "organisation": organisation,
             "org_users": list_organisation_users(org_id),
             "org_institutions": list_organisation_institutions(org_id),
+            "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
             "saved": saved,
             "notice": request.query_params.get("notice", ""),
             "error": error,
         },
     )
+
+
+@app.post("/owner/organisations/{org_id}/exam-catalogue/assign-full")
+def owner_assign_full_exam_catalogue_to_org(request: Request, org_id: int):
+    user = require_superuser(request)
+    organisation = get_organisation_summary(org_id)
+    if not organisation:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+    assign_exam_catalogue_to_org(org_id, assigned_by=user.get("id") or 1)
+    return RedirectResponse(url=f"/owner/organisations/{org_id}?notice=catalogue_assigned", status_code=303)
 
 
 @app.post("/owner/organisations/{org_id}")
@@ -4506,7 +4626,11 @@ def owner_edit_organisation_submit(
                     "slug": clean_slug,
                     "is_active": active_value,
                 },
+                "org_users": list_organisation_users(org_id),
+                "org_institutions": list_organisation_institutions(org_id),
+                "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
                 "saved": "",
+                "notice": "",
                 "error": "Organisation name is required.",
             },
             status_code=400,
@@ -4530,7 +4654,11 @@ def owner_edit_organisation_submit(
                         "slug": clean_slug,
                         "is_active": active_value,
                     },
+                    "org_users": list_organisation_users(org_id),
+                    "org_institutions": list_organisation_institutions(org_id),
+                    "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
                     "saved": "",
+                    "notice": "",
                     "error": "That organisation code is already in use.",
                 },
                 status_code=400,
@@ -4588,6 +4716,8 @@ def owner_add_organisation_user(
                 "user": get_session_user(request),
                 "organisation": organisation,
                 "org_users": list_organisation_users(org_id),
+                "org_institutions": list_organisation_institutions(org_id),
+                "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
                 "saved": "",
                 "notice": "",
                 "error": "Username, password, and a valid role are required.",
@@ -4603,6 +4733,8 @@ def owner_add_organisation_user(
                 "user": get_session_user(request),
                 "organisation": organisation,
                 "org_users": list_organisation_users(org_id),
+                "org_institutions": list_organisation_institutions(org_id),
+                "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
                 "saved": "",
                 "notice": "",
                 "error": "Practitioner accounts need at least a first name.",
@@ -4710,6 +4842,8 @@ def owner_add_organisation_user(
                 "user": get_session_user(request),
                 "organisation": organisation,
                 "org_users": list_organisation_users(org_id),
+                "org_institutions": list_organisation_institutions(org_id),
+                "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
                 "saved": "",
                 "notice": "",
                 "error": exc.detail,
@@ -4726,6 +4860,8 @@ def owner_add_organisation_user(
                 "user": get_session_user(request),
                 "organisation": organisation,
                 "org_users": list_organisation_users(org_id),
+                "org_institutions": list_organisation_institutions(org_id),
+                "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
                 "saved": "",
                 "notice": "",
                 "error": f"Unable to add user: {exc}",
@@ -6167,6 +6303,7 @@ def admin_case_view(request: Request, case_id: str):
         case_dict["report_sent"], case_dict["report_sent_display"] = get_report_sent_summary(case_dict)
         case_dict["catalogue_review_required"], case_dict["catalogue_review_display"] = get_exam_catalogue_review_summary(case_dict)
         attachments = list_case_attachments(case_id, case_dict=case_dict)
+        case_dict.update(build_case_preview_context(case_id, case_dict, attachments))
     else:
         attachments = []
 
@@ -6216,7 +6353,7 @@ def admin_case_view(request: Request, case_id: str):
 
 
 @app.post("/admin/case/{case_id}/report-sent")
-def admin_case_mark_report_sent(request: Request, case_id: str):
+def admin_case_mark_report_sent(request: Request, case_id: str, return_to: str = Form("")):
     user = require_admin(request)
     conn = get_db()
     org_id = user.get("org_id")
@@ -6241,11 +6378,14 @@ def admin_case_mark_report_sent(request: Request, case_id: str):
         user=user,
         comment="Justification sent",
     )
+    safe_return_to = (return_to or "").strip()
+    if safe_return_to.startswith("/admin"):
+        return RedirectResponse(url=safe_return_to, status_code=303)
     return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
 
 
 @app.post("/admin/case/{case_id}/report-sent/reset")
-def admin_case_reset_report_sent(request: Request, case_id: str):
+def admin_case_reset_report_sent(request: Request, case_id: str, return_to: str = Form("")):
     user = require_admin(request)
     conn = get_db()
     org_id = user.get("org_id")
@@ -6269,6 +6409,9 @@ def admin_case_reset_report_sent(request: Request, case_id: str):
         user=user,
         comment="Justification sent status reset",
     )
+    safe_return_to = (return_to or "").strip()
+    if safe_return_to.startswith("/admin"):
+        return RedirectResponse(url=safe_return_to, status_code=303)
     return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
 
 
@@ -6355,7 +6498,7 @@ def admin_case_timeline_pdf(request: Request, case_id: str):
     else:
         for event in events:
             ts = format_display_datetime(event.get("created_at"), event.get("created_at") or "")
-            event_type = str(event.get("event_type") or "-")
+            event_type = display_case_event_label(event.get("event_type")) or "-"
             username = str(event.get("username") or "-")
             details = str(event.get("comment") or "")
             detail_lines = wrap_text(details, 250)
@@ -6446,7 +6589,7 @@ def admin_case_timeline_csv(request: Request, case_id: str):
     else:
         for event in events:
             ts = format_display_datetime(event.get("created_at"), event.get("created_at") or "")
-            event_type = str(event.get("event_type") or "-")
+            event_type = display_case_event_label(event.get("event_type")) or "-"
             username = str(event.get("username") or "-")
             details = str(event.get("comment") or "")
             writer.writerow([ts, event_type, username, details])
@@ -6492,6 +6635,7 @@ def admin_case_edit_view(request: Request, case_id: str):
     case_dict["catalogue_review_required"], case_dict["catalogue_review_display"] = get_exam_catalogue_review_summary(case_dict)
     case_dict["attachment_previewable"] = is_inline_previewable(case_dict.get("uploaded_filename"))
     attachments = list_case_attachments(case_id, case_dict=case_dict)
+    case_dict.update(build_case_preview_context(case_id, case_dict, attachments))
     
     return templates.TemplateResponse(
         "case_edit.html",
@@ -6682,7 +6826,12 @@ async def admin_case_edit_save(
 
 
 @app.post("/admin/case/{case_id}/assign-radiologist")
-def assign_radiologist(request: Request, case_id: str, radiologist: str = Form("")):
+def assign_radiologist(
+    request: Request,
+    case_id: str,
+    radiologist: str = Form(""),
+    return_to: str = Form(""),
+):
     user = require_admin(request)
     org_id = user.get("org_id")
 
@@ -6706,7 +6855,7 @@ def assign_radiologist(request: Request, case_id: str, radiologist: str = Form("
     old_rad = case["radiologist"] if isinstance(case, dict) else case[1]
     conn.execute(
         "UPDATE cases SET radiologist = ? WHERE id = ?",
-        (radiologist or None, case_id),
+        (radiologist or "", case_id),
     )
     conn.commit()
     conn.close()
@@ -6720,6 +6869,9 @@ def assign_radiologist(request: Request, case_id: str, radiologist: str = Form("
         comment=comment,
     )
 
+    safe_return_to = (return_to or "").strip()
+    if safe_return_to.startswith("/admin"):
+        return RedirectResponse(url=safe_return_to, status_code=303)
     return RedirectResponse(url="/admin", status_code=303)
 
 
@@ -7133,6 +7285,44 @@ def list_owner_exam_catalogue() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def list_owner_manual_exam_catalogue() -> list[dict]:
+    if not table_exists("study_description_presets"):
+        return []
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT
+            p.id,
+            p.organization_id AS org_id,
+            COALESCE(o.name, 'Unknown organisation') AS org_name,
+            p.modality,
+            p.description,
+            COALESCE(p.study_code, '') AS study_code,
+            COALESCE(p.is_active, 1) AS is_active,
+            p.updated_at
+        FROM study_description_presets p
+        LEFT JOIN organisations o ON o.id = p.organization_id
+        WHERE p.organization_id IS NOT NULL AND p.organization_id != 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM study_description_presets n
+              WHERE n.organization_id = 0
+                AND (
+                    LOWER(TRIM(n.description)) = LOWER(TRIM(p.description))
+                    OR (
+                        COALESCE(TRIM(n.study_code), '') <> ''
+                        AND COALESCE(TRIM(p.study_code), '') <> ''
+                        AND LOWER(TRIM(n.study_code)) = LOWER(TRIM(p.study_code))
+                    )
+                )
+          )
+        ORDER BY o.name, p.modality, p.description
+        """
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
 def list_exam_catalogue_assignment_org_ids(preset_id: int) -> list[int]:
     if not table_exists("study_description_preset_assignments"):
         return []
@@ -7148,6 +7338,45 @@ def list_exam_catalogue_assignment_org_ids(preset_id: int) -> list[int]:
     ).fetchall()
     conn.close()
     return [int(dict(row)["org_id"]) for row in rows]
+
+
+def get_exam_catalogue_visibility_summary(org_id: int) -> dict:
+    summary = {
+        "active_catalogue_count": 0,
+        "assigned_count": 0,
+        "is_full_catalogue_visible": False,
+    }
+    if not table_exists("study_description_presets"):
+        return summary
+    conn = get_db()
+    active_row = conn.execute(
+        """
+        SELECT COUNT(*) AS c
+        FROM study_description_presets
+        WHERE organization_id = 0 AND COALESCE(is_active, 1) = 1
+        """
+    ).fetchone()
+    summary["active_catalogue_count"] = int(active_row["c"] if active_row else 0)
+    if table_exists("study_description_preset_assignments"):
+        assigned_row = conn.execute(
+            """
+            SELECT COUNT(DISTINCT a.preset_id) AS c
+            FROM study_description_preset_assignments a
+            JOIN study_description_presets p ON p.id = a.preset_id
+            WHERE a.org_id = ?
+              AND COALESCE(a.is_active, 1) = 1
+              AND p.organization_id = 0
+              AND COALESCE(p.is_active, 1) = 1
+            """,
+            (org_id,),
+        ).fetchone()
+        summary["assigned_count"] = int(assigned_row["c"] if assigned_row else 0)
+    conn.close()
+    summary["is_full_catalogue_visible"] = (
+        summary["active_catalogue_count"] > 0
+        and summary["assigned_count"] >= summary["active_catalogue_count"]
+    )
+    return summary
 
 
 def get_exam_catalogue_item(preset_id: int) -> dict | None:
@@ -8435,6 +8664,58 @@ async def referral_trial_parse(
     )
 
 
+def get_referral_trial_attachment_path(token: str) -> Path:
+    token_name = Path(token or "").name
+    if not token_name.startswith("trial_"):
+        raise HTTPException(status_code=400, detail="Invalid attachment token")
+    trial_path = UPLOAD_DIR / token_name
+    if not trial_path.exists():
+        raise HTTPException(status_code=404, detail="Referral trial attachment not found")
+    return trial_path
+
+
+@app.get("/submit/referral-trial/attachment/{attachment_token}/inline")
+def referral_trial_attachment_inline(request: Request, attachment_token: str):
+    require_admin(request)
+    trial_path = get_referral_trial_attachment_path(attachment_token)
+    filename = trial_path.name.split("_", 2)[-1] if "_" in trial_path.name else trial_path.name
+    media_type, _ = mimetypes.guess_type(filename)
+    return FileResponse(
+        str(trial_path),
+        media_type=media_type or "application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{filename.replace(chr(34), "")}"'},
+    )
+
+
+@app.get("/submit/referral-trial/attachment/{attachment_token}/preview", response_class=HTMLResponse)
+def referral_trial_attachment_preview(request: Request, attachment_token: str):
+    require_admin(request)
+    trial_path = get_referral_trial_attachment_path(attachment_token)
+    filename = trial_path.name.split("_", 2)[-1] if "_" in trial_path.name else trial_path.name
+    lower_name = str(filename).lower()
+    file_bytes = trial_path.read_bytes()
+
+    if lower_name.endswith(".pdf"):
+        return HTMLResponse(
+            f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}iframe{{width:100%;height:100%;border:0;background:#fff}}</style></head><body><iframe src="/submit/referral-trial/attachment/{html.escape(attachment_token)}/inline#view=FitH"></iframe></body></html>"""
+        )
+    if lower_name.endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")):
+        return HTMLResponse(
+            f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}body{{display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}}img{{max-width:100%;max-height:100%;object-fit:contain;background:#fff;border-radius:8px}}</style></head><body><img src="/submit/referral-trial/attachment/{html.escape(attachment_token)}/inline" alt="{html.escape(filename)}"></body></html>"""
+        )
+    if lower_name.endswith((".txt", ".csv", ".json", ".xml", ".html", ".htm")):
+        try:
+            text_content = file_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            text_content = file_bytes.decode("latin-1", errors="replace")
+        return HTMLResponse(
+            f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{margin:0;background:#fff;color:#0f172a;font-family:Segoe UI,Arial,sans-serif}}pre{{margin:0;padding:18px;white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.5}}</style></head><body><pre>{html.escape(text_content)}</pre></body></html>"""
+        )
+    return HTMLResponse(
+        f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220;color:#e2e8f0;font-family:Segoe UI,Arial,sans-serif}}body{{display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}}.card{{max-width:520px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.2);border-radius:14px;padding:24px;text-align:center}}.name{{font-weight:600;color:#fff;margin-bottom:10px}}.msg{{color:#cbd5e1;line-height:1.6;margin-bottom:16px}}.btn{{display:inline-block;padding:10px 14px;border-radius:8px;background:#1f6feb;color:#fff;text-decoration:none}}</style></head><body><div class="card"><div class="name">{html.escape(filename)}</div><div class="msg">Preview is not available for this file type in the current environment.</div><a class="btn" href="/submit/referral-trial/attachment/{html.escape(attachment_token)}/inline" target="_blank" rel="noopener">Open file</a></div></body></html>"""
+    )
+
+
 @app.post("/submit/referral-trial/create")
 def referral_trial_create(
     request: Request,
@@ -9024,7 +9305,9 @@ def vet_form(request: Request, case_id: str):
 
     case = dict(row)
     case = normalize_case_attachment(case)
+    case["attachment_previewable"] = is_inline_previewable(case.get("uploaded_filename"))
     attachments = list_case_attachments(case_id, case_dict=case)
+    case.update(build_case_preview_context(case_id, case, attachments))
     base_admin_notes, reopened_admin_notes = partition_admin_notes(case.get("admin_notes"))
     case["admin_note_blocks"] = base_admin_notes
     case["reopened_note_blocks"] = reopened_admin_notes
@@ -9054,8 +9337,12 @@ def vet_form(request: Request, case_id: str):
                 comment="Case opened by practitioner",
             )
 
-    preset_id = None
-    if case.get("study_description") and case.get("modality"):
+    preset_id = case.get("study_description_preset_id")
+    try:
+        preset_id = int(preset_id) if preset_id is not None else None
+    except (TypeError, ValueError):
+        preset_id = None
+    if not preset_id and case.get("study_description") and case.get("modality"):
         available_exams = [
             item for item in list_exam_catalogue(active_only=True, org_id=org_id)
             if str(item.get("modality") or "").upper() == str(case.get("modality") or "").strip().upper()

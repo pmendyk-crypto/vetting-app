@@ -10,33 +10,17 @@
     table { border-collapse: collapse; width: 100%; }
     th, td { border-bottom: 1px solid rgba(255,255,255,0.08); padding: 10px; vertical-align: top; color: rgba(255,255,255,0.85); }
     th { text-align: left; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.6); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,0.12); }
-    .row-actions a { margin-right: 10px; }
-    .filters { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0 18px; }
-    .filters label { font-size: 12px; color: rgba(255,255,255,0.6); display: block; margin-bottom: 4px; }
-    .filters input, .filters select { padding: 8px; min-width: 180px; background: rgba(255,255,255,0.07); color: #fff; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; }
-    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
     .btn { display: inline-block; padding: 10px 14px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; }
     .btn.secondary { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.8); }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .small { font-size: 12px; color: rgba(255,255,255,0.5); }
     .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 20px; }
-
-    .header-with-logo { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
-    .logo-text h2 { margin: 0; font-size: 18px; color: rgba(255,255,255,0.9); }
-    .logo-text p { margin: 2px 0 0 0; font-size: 12px; color: rgba(255,255,255,0.5); }
-
-    .main-content { flex: 1; }
-    .page-footer { text-align: center; padding: 30px 20px; border-top: 1px solid rgba(255,255,255,0.07); margin-top: 50px; color: rgba(255,255,255,0.4); font-size: 13px; }
-    .page-footer p { margin: 0; }
-
     .wrapper { display: flex; flex-direction: column; min-height: 100vh; }
+    .main-content { flex: 1; }
     .container { flex: 1; width: min(1560px, calc(100vw - 40px)); max-width: none; padding: 22px 0 0; box-sizing: border-box; margin: 0 auto; }
-
     .case-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; width: 100%; }
     .case-grid .card { margin: 0; }
     .card-full-width { grid-column: 1 / -1; }
-
     .preview-card { display: flex; flex-direction: column; }
     .preview-body { flex: 1; min-height: 70vh; }
     .preview-frame { width: 100%; height: 100%; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; background: #fff; }
@@ -45,145 +29,120 @@
     .attachment-name { color:#f8fbff; font-weight:500; word-break:break-word; }
     .attachment-meta { color:rgba(255,255,255,0.55); font-size:12px; margin-top:4px; }
     .attachment-primary { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:11px; background:rgba(31,111,235,0.18); color:#93c5fd; border:1px solid rgba(31,111,235,0.35); }
-
-    /* Timeline */
     .timeline-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
     .timeline-header h3 { margin: 0; color: rgba(255,255,255,0.9); font-size: 16px; }
     .timeline-buttons { display: flex; gap: 8px; }
     .timeline-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
     .timeline-table thead th { text-align: left; padding: 12px 12px; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.12); }
-    .timeline-table thead th:nth-child(1) { width: 160px; }
-    .timeline-table thead th:nth-child(2) { width: 130px; }
-    .timeline-table thead th:nth-child(3) { width: 140px; }
-    .timeline-table thead th:nth-child(4) { width: auto; }
     .timeline-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s; }
     .timeline-table tbody tr:hover { background: rgba(255,255,255,0.02); }
     .timeline-table tbody tr:last-child { border-bottom: none; }
     .timeline-table tbody td { padding: 12px 12px; font-size: 13px; vertical-align: top; color: rgba(255,255,255,0.82); }
-    .timeline-table tbody td:nth-child(1) { width: 160px; }
-    .timeline-table tbody td:nth-child(2) { width: 130px; }
-    .timeline-table tbody td:nth-child(3) { width: 140px; }
-    .timeline-table tbody td:nth-child(4) { width: auto; }
     .timeline-table .ts { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; font-family: 'Courier New', monospace; }
     .ev-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500; letter-spacing: 0.3px; white-space: nowrap; }
-    .ev-SUBMITTED  { background: rgba(31,111,235,0.18);  color: #93c5fd; border: 1px solid rgba(31,111,235,0.35); }
-    .ev-CREATED    { background: rgba(31,111,235,0.18);  color: #93c5fd; border: 1px solid rgba(31,111,235,0.35); }
-    .ev-ASSIGNED   { background: rgba(139,92,246,0.18);  color: #c4b5fd; border: 1px solid rgba(139,92,246,0.35); }
-    .ev-VETTED     { background: rgba(16,185,129,0.18);  color: #6ee7b7; border: 1px solid rgba(16,185,129,0.35); }
-    .ev-REJECTED   { background: rgba(239,68,68,0.18);   color: #fca5a5; border: 1px solid rgba(239,68,68,0.35); }
-    .ev-REOPENED   { background: rgba(234,179,8,0.18);   color: #fde68a; border: 1px solid rgba(234,179,8,0.35); }
-    .ev-EDITED     { background: rgba(234,88,12,0.18);   color: #fdba74; border: 1px solid rgba(234,88,12,0.35); }
-    .ev-REPORT_SENT { background: rgba(37, 99, 235, 0.18); color: #bfdbfe; border: 1px solid rgba(37, 99, 235, 0.35); }
+    .ev-CREATED, .ev-SUBMITTED { background: rgba(31,111,235,0.18); color: #93c5fd; border: 1px solid rgba(31,111,235,0.35); }
+    .ev-ASSIGNED { background: rgba(139,92,246,0.18); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.35); }
+    .ev-VETTED { background: rgba(16,185,129,0.18); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.35); }
+    .ev-REJECTED { background: rgba(239,68,68,0.18); color: #fca5a5; border: 1px solid rgba(239,68,68,0.35); }
+    .ev-REOPENED { background: rgba(234,179,8,0.18); color: #fde68a; border: 1px solid rgba(234,179,8,0.35); }
+    .ev-EDITED { background: rgba(234,88,12,0.18); color: #fdba74; border: 1px solid rgba(234,88,12,0.35); }
+    .ev-REPORT_SENT { background: rgba(37,99,235,0.18); color: #bfdbfe; border: 1px solid rgba(37,99,235,0.35); }
     .ev-REPORT_SENT_RESET { background: rgba(148,163,184,0.18); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.32); }
     .ev-EXAM_CATALOGUE_EXCEPTION { background: rgba(245,158,11,0.18); color: #fcd34d; border: 1px solid rgba(245,158,11,0.35); }
-    .ev-OTHER      { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.15); }
+    .ev-OTHER { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.15); }
     .detail-row { margin: 3px 0; font-size: 12px; line-height: 1.5; color: rgba(255,255,255,0.65); }
     .detail-row span { color: rgba(255,255,255,0.45); font-weight: 500; }
-
-    @media (max-width: 1200px) {
-      .case-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-    @media (max-width: 800px) {
-      .case-grid { grid-template-columns: 1fr; }
-    }
+    @media (max-width: 1200px) { .case-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 800px) { .case-grid { grid-template-columns: 1fr; } }
     @media (max-width: 700px) {
-      body { font-size: 16px; }
       .container { width: calc(100vw - 24px); padding-top: 16px; }
       table { display: block; overflow-x: auto; white-space: nowrap; }
-      .filters { flex-direction: column; gap: 10px; }
-      .filters input, .filters select { width: 100%; min-width: 0; }
-      .topbar { flex-direction: column; align-items: flex-start; }
       .actions { width: 100%; }
       .btn { width: 100%; text-align: center; }
     }
   </style>
 </head>
 <body>
-  <div id="session-expiry-warning">⚠️ Your session will expire in 5 minutes due to inactivity. <a href="/login" style="color:#fde68a;font-weight:400;">Sign in again</a> to continue.</div>
+  <div id="session-expiry-warning">Session will expire in 5 minutes due to inactivity. <a href="/login" style="color:#fde68a;font-weight:400;">Sign in again</a> to continue.</div>
   <div class="wrapper">
     <div class="main-content container">
-    <div class="topbar internal-page-header">
-      <div>
-        <h1 class="internal-page-title" style="font-size:28px;margin:0;">Case Details</h1>
-        <p class="internal-page-subtitle" style="margin-top:6px;">Review attachments, decision details, report state, and the full case timeline in one place.</p>
-      </div>
-      <div class="actions internal-page-actions">
-        <a class="btn" href="/admin/case/{{ case['id'] }}/edit{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">Edit Case</a>
-        {% if case['status'] == 'vetted' or case['status'] == 'rejected' %}
-          <a class="btn" style="background: #f39c12;" href="/admin/case/{{ case['id'] }}/reopen">Reopen Case</a>
-        {% endif %}
-        <a class="btn secondary" href="{{ return_to if return_to else '/admin' }}">Back</a>
-      </div>
-    </div>
-
-    <div class="case-grid">
-      <div class="card">
-        <h3 style="margin-top: 0;">Case Details</h3>
-        <p><b>Case ID:</b> {{ case["id"] }}</p>
-        {% if org_name %}
-          <p><b>Organisation:</b> {{ org_name }}</p>
-        {% endif %}
-        <p><b>Status:</b> {{ case["status_display"] }}</p>
-        <p><b>Created:</b> {{ case["created_at"] | display_datetime }}</p>
-        <p><b>Patient ID:</b> {{ case["patient_referral_id"] or "—" }}</p>
-        <p><b>Patient DOB:</b> {{ case["patient_dob"] or "—" }}</p>
-        <p><b>Study:</b> {{ case["study_description"] }}{% if case.get("study_code") %} ({{ case["study_code"] }}){% endif %}</p>
-        <p><b>Practitioner:</b> {{ case["radiologist"] }}</p>
-        <p><b>Admin notes:</b><br>{{ case["admin_notes"] or "" }}</p>
-        <p><b>Protocol:</b> {{ case["protocol"] or "" }}</p>
-        {% if case.get("contrast_required") %}
-          <p><b>Contrast Required:</b> {{ case["contrast_required"] }}
-            {% if case["contrast_required"] == "Yes" and case.get("contrast_details") %}
-              — {{ case["contrast_details"] }}
-            {% endif %}
-          </p>
-        {% endif %}
-        <p><b>Decision:</b> {{ case["decision_display"] or "" }}</p>
-        <p><b>Comment:</b><br>{{ case["decision_comment"] or "" }}</p>
-        <p><b>Justification Sent:</b> {% if case["report_sent"] %}{{ case["report_sent_display"] }} by {{ case["report_sent_by"] or "Unknown" }}{% else %}Not sent{% endif %}</p>
-        {% if case["catalogue_review_required"] %}
-        <p><b>Catalogue Review:</b> Required{% if case["catalogue_review_display"] %} ({{ case["catalogue_review_display"] }}){% endif %}</p>
-        {% endif %}
-        {% if case["status"] in ["vetted", "rejected"] %}
-        <div class="actions" style="margin-top:14px;">
-          {% if case["report_sent"] %}
-          <form method="post" action="/admin/case/{{ case['id'] }}/report-sent/reset" style="display:inline;">
-            <button type="submit" class="btn secondary">Reset Justification Sent</button>
-          </form>
-          {% else %}
-          <form method="post" action="/admin/case/{{ case['id'] }}/report-sent" style="display:inline;">
-            <button type="submit" class="btn">Mark Justification Sent</button>
-          </form>
-          {% endif %}
+      <div class="topbar internal-page-header">
+        <div>
+          <h1 class="internal-page-title" style="font-size:28px;margin:0;">Case Details</h1>
+          <p class="internal-page-subtitle" style="margin-top:6px;">Review attachments, decision details, justification sent status, and the full case timeline in one place.</p>
         </div>
-        {% endif %}
+        <div class="actions internal-page-actions">
+          <a class="btn" href="/admin/case/{{ case['id'] }}/edit{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">Edit Case</a>
+          {% if case['status'] == 'vetted' or case['status'] == 'rejected' %}
+          <a class="btn" style="background:#f39c12;" href="/admin/case/{{ case['id'] }}/reopen">Reopen Case</a>
+          {% endif %}
+          <a class="btn secondary" href="{{ return_to if return_to else '/admin' }}">Back</a>
+        </div>
       </div>
 
-      <div class="card preview-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-          <h3 style="margin: 0;">Referral Preview</h3>
-          {% if case["uploaded_filename"] and case["stored_filepath"] %}
-            <a href="/case/{{ case['id'] }}/attachment/inline" target="_blank" rel="noopener" class="btn" style="padding:6px 12px;font-size:12px;">Open Referral</a>
-          {% elif case["uploaded_filename"] %}
-            <span style="font-size:12px;color:rgba(255,255,255,0.4);">File expired</span>
+      <div class="case-grid">
+        <div class="card">
+          <h3 style="margin-top: 0;">Case Details</h3>
+          <p><b>Case ID:</b> {{ case["id"] }}</p>
+          {% if org_name %}<p><b>Organisation:</b> {{ org_name }}</p>{% endif %}
+          <p><b>Status:</b> {{ case["status_display"] }}</p>
+          <p><b>Created:</b> {{ case["created_at"] | display_datetime }}</p>
+          <p><b>Patient ID:</b> {{ case["patient_referral_id"] or "—" }}</p>
+          <p><b>Patient DOB:</b> {{ case["patient_dob"] or "—" }}</p>
+          <p><b>Study:</b> {{ case["study_description"] }}{% if case.get("study_code") %} ({{ case["study_code"] }}){% endif %}</p>
+          <p><b>Practitioner:</b> {{ case["radiologist"] }}</p>
+          <p><b>Admin notes:</b><br>{{ case["admin_notes"] or "" }}</p>
+          <p><b>Protocol:</b> {{ case["protocol"] or "" }}</p>
+          {% if case.get("contrast_required") %}
+          <p><b>Contrast Required:</b> {{ case["contrast_required"] }}{% if case["contrast_required"] == "Yes" and case.get("contrast_details") %} — {{ case["contrast_details"] }}{% endif %}</p>
           {% endif %}
-        </div>
-        {% if case["uploaded_filename"] %}
-          <div class="preview-body">
-            {% if case["stored_filepath"] %}
-              <iframe src="/case/{{ case['id'] }}/attachment/preview" class="preview-frame"></iframe>
+          <p><b>Decision:</b> {{ case["decision_display"] or "" }}</p>
+          <p><b>Comment:</b><br>{{ case["decision_comment"] or "" }}</p>
+          <p><b>Justification Sent:</b> {% if case["report_sent"] %}{{ case["report_sent_display"] }} by {{ case["report_sent_by"] or "Unknown" }}{% else %}Not sent{% endif %}</p>
+          {% if case["catalogue_review_required"] %}
+          <p><b>Catalogue Review:</b> Required{% if case["catalogue_review_display"] %} ({{ case["catalogue_review_display"] }}){% endif %}</p>
+          {% endif %}
+          {% if case["status"] in ["vetted", "rejected"] %}
+          <div class="actions" style="margin-top:14px;">
+            {% if case["report_sent"] %}
+            <form method="post" action="/admin/case/{{ case['id'] }}/report-sent/reset" style="display:inline;">
+              <input type="hidden" name="return_to" value="/admin/case/{{ case['id'] }}{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">
+              <button type="submit" class="btn secondary">Reset Justification Sent</button>
+            </form>
             {% else %}
-              <div style="display:flex;align-items:center;justify-content:center;height:200px;color:rgba(255,255,255,0.4);font-size:0.95em;flex-direction:column;gap:8px;">
-                <span style="font-size:1.8em;">🗂️</span>
-                <span>Referral file expired — no longer available</span>
-                <span style="font-size:0.85em;">(Referral attachments are retained for 7 days)</span>
-              </div>
+            <form method="post" action="/admin/case/{{ case['id'] }}/report-sent" style="display:inline;">
+              <input type="hidden" name="return_to" value="/admin/case/{{ case['id'] }}{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">
+              <button type="submit" class="btn">Mark Justification Sent</button>
+            </form>
             {% endif %}
           </div>
-        {% else %}
+          {% endif %}
+        </div>
+
+        <div class="card preview-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+            <h3 style="margin: 0;">Referral Preview</h3>
+            {% if case["preview_available"] %}
+            <a href="{{ case['inline_url'] }}" target="_blank" rel="noopener" class="btn" style="padding:6px 12px;font-size:12px;">Open in New Tab</a>
+            {% elif case["uploaded_filename"] %}
+            <span style="font-size:12px;color:rgba(255,255,255,0.4);">File expired</span>
+            {% endif %}
+          </div>
+          {% if case["preview_available"] %}
+          <div class="preview-body">
+            <div style="font-size:12px;color:rgba(255,255,255,0.62);margin:0 0 8px 0;">Currently viewing: <span id="casePreviewName" style="color:#fff;">{{ case["preview_name"] }}</span></div>
+            <iframe id="casePreviewFrame" src="{{ case['preview_url'] }}" class="preview-frame"></iframe>
+          </div>
+          {% elif case["uploaded_filename"] %}
+          <div style="display:flex;align-items:center;justify-content:center;height:200px;color:rgba(255,255,255,0.4);font-size:0.95em;flex-direction:column;gap:8px;">
+            <span style="font-size:1.6em;">Preview unavailable</span>
+            <span>Referral file expired and is no longer available</span>
+            <span style="font-size:0.85em;">(Referral attachments are retained for 7 days)</span>
+          </div>
+          {% else %}
           <p class="small">No referral attachment uploaded.</p>
-        {% endif %}
-        {% if attachments %}
+          {% endif %}
+          {% if attachments %}
           <div class="attachment-list">
             {% for attachment in attachments %}
             <div class="attachment-item">
@@ -198,42 +157,42 @@
                 </div>
               </div>
               {% if attachment.available %}
-                <a href="/case/{{ case['id'] }}/attachments/{{ attachment.id }}/inline" target="_blank" rel="noopener" class="btn secondary" style="padding:6px 12px;font-size:12px;">Open</a>
+              <button type="button" class="btn secondary attachment-preview-trigger" data-preview-url="/case/{{ case['id'] }}/attachments/{{ attachment.id }}/preview" data-preview-name="{{ attachment.uploaded_filename }}" style="padding:6px 12px;font-size:12px;">View</button>
               {% endif %}
             </div>
             {% endfor %}
           </div>
-        {% endif %}
-      </div>
+          {% endif %}
+        </div>
 
-      <div class="card preview-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-          <h3 style="margin: 0;">Decision Report Preview</h3>
-          {% if case["status"] in ["vetted", "rejected"] %}
+        <div class="card preview-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+            <h3 style="margin: 0;">Decision Report Preview</h3>
+            {% if case["status"] in ["vetted", "rejected"] %}
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <a href="/case/{{ case['id'] }}/pdf" target="_blank" class="btn" style="padding:6px 12px;font-size:12px;">Download Report</a>
               <a href="/case/{{ case['id'] }}/pdf?include_timeline=1" target="_blank" class="btn secondary" style="padding:6px 12px;font-size:12px;">Download Report with Timeline</a>
             </div>
-          {% endif %}
-        </div>
-        {% if case["status"] == "vetted" or case["status"] == "rejected" %}
+            {% endif %}
+          </div>
+          {% if case["status"] in ["vetted", "rejected"] %}
           <div class="preview-body">
             <iframe src="/case/{{ case['id'] }}/pdf?inline=1#view=FitH" class="preview-frame"></iframe>
           </div>
-        {% else %}
+          {% else %}
           <p class="small">Report preview will appear once the decision has been recorded.</p>
-        {% endif %}
-      </div>
-
-      <div class="card card-full-width">
-        <div class="timeline-header">
-          <h3>Case Timeline</h3>
-          <div class="timeline-buttons">
-            <a href="/admin/case/{{ case['id'] }}/timeline.pdf" class="btn" style="padding:6px 12px;font-size:12px;">⬇ Download (PDF)</a>
-            <a href="/admin/case/{{ case['id'] }}/timeline.csv" class="btn" style="padding:6px 12px;font-size:12px;">⬇ Download (Excel)</a>
-          </div>
+          {% endif %}
         </div>
-        {% if events and events|length > 0 %}
+
+        <div class="card card-full-width">
+          <div class="timeline-header">
+            <h3>Case Timeline</h3>
+            <div class="timeline-buttons">
+              <a href="/admin/case/{{ case['id'] }}/timeline.pdf" class="btn" style="padding:6px 12px;font-size:12px;">Download (PDF)</a>
+              <a href="/admin/case/{{ case['id'] }}/timeline.csv" class="btn" style="padding:6px 12px;font-size:12px;">Download (Excel)</a>
+            </div>
+          </div>
+          {% if events and events|length > 0 %}
           <table class="timeline-table">
             <thead>
               <tr>
@@ -245,65 +204,74 @@
             </thead>
             <tbody>
               {% for e in events %}
-                {% set ev = e["event_type"] | upper %}
-                <tr>
-                  <td class="ts">{{ e["created_at"] | display_datetime }}</td>
-                  <td>
-                    <span class="ev-badge ev-{% if ev in ['CREATED','SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','EDITED','REPORT_SENT','REPORT_SENT_RESET','EXAM_CATALOGUE_EXCEPTION'] %}{{ ev }}{% else %}OTHER{% endif %}">
-                      {{ ev }}
-                    </span>
-                  </td>
-                  <td>{{ e["username"] or "-" }}</td>
-                  <td>
-                    {% if e["decision"] %}
-                      <div class="detail-row"><span>Decision: </span>{{ e["decision"] }}</div>
+              {% set ev = e["event_type"] | upper %}
+              <tr>
+                <td class="ts">{{ e["created_at"] | display_datetime }}</td>
+                <td>
+                  <span class="ev-badge ev-{% if ev in ['CREATED','SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','EDITED','REPORT_SENT','REPORT_SENT_RESET','EXAM_CATALOGUE_EXCEPTION'] %}{{ ev }}{% else %}OTHER{% endif %}">
+                    {{ ev|display_case_event_label }}
+                  </span>
+                </td>
+                <td>{{ e["username"] or "-" }}</td>
+                <td>
+                  {% if e["decision"] %}
+                  <div class="detail-row"><span>Decision: </span>{{ e["decision"] }}</div>
+                  {% endif %}
+                  {% if e["protocol"] %}
+                  <div class="detail-row"><span>Protocol: </span>{{ e["protocol"] }}</div>
+                  {% endif %}
+                  {% if e["comment"] %}
+                  <div class="detail-row"><span>Note: </span>{{ e["comment"] }}</div>
+                  {% endif %}
+                  {% if not e["decision"] and not e["protocol"] and not e["comment"] %}
+                    {% if ev == "CREATED" or ev == "SUBMITTED" %}
+                    <div class="detail-row"><span>Details: </span>Case created.</div>
+                    {% elif ev == "ASSIGNED" %}
+                    <div class="detail-row"><span>Details: </span>Practitioner assignment updated.</div>
+                    {% elif ev == "VETTED" %}
+                    <div class="detail-row"><span>Details: </span>Decision recorded.</div>
+                    {% elif ev == "REPORT_SENT" %}
+                    <div class="detail-row"><span>Details: </span>Justification marked as sent.</div>
+                    {% elif ev == "REPORT_SENT_RESET" %}
+                    <div class="detail-row"><span>Details: </span>Justification sent status reset.</div>
+                    {% elif ev == "EXAM_CATALOGUE_EXCEPTION" %}
+                    <div class="detail-row"><span>Details: </span>Temporary uncatalogued exam recorded for later review.</div>
+                    {% elif ev == "REJECTED" %}
+                    <div class="detail-row"><span>Details: </span>Case rejected.</div>
+                    {% elif ev == "REOPENED" %}
+                    <div class="detail-row"><span>Details: </span>Case reopened.</div>
+                    {% elif ev == "EDITED" %}
+                    <div class="detail-row"><span>Details: </span>Case details updated.</div>
+                    {% else %}
+                    <div class="detail-row"><span>Details: </span>Activity recorded.</div>
                     {% endif %}
-                    {% if e["protocol"] %}
-                      <div class="detail-row"><span>Protocol: </span>{{ e["protocol"] }}</div>
-                    {% endif %}
-                    {% if e["comment"] %}
-                      <div class="detail-row"><span>Note: </span>{{ e["comment"] }}</div>
-                    {% endif %}
-                    {% if not e["decision"] and not e["protocol"] and not e["comment"] %}
-                      {% if ev == "CREATED" or ev == "SUBMITTED" %}
-                        <div class="detail-row"><span>Details: </span>Case created.</div>
-                      {% elif ev == "ASSIGNED" %}
-                        <div class="detail-row"><span>Details: </span>Practitioner assignment updated.</div>
-                      {% elif ev == "VETTED" %}
-                        <div class="detail-row"><span>Details: </span>Decision recorded.</div>
-                      {% elif ev == "REPORT_SENT" %}
-                        <div class="detail-row"><span>Details: </span>Justification marked as sent.</div>
-                      {% elif ev == "REPORT_SENT_RESET" %}
-                        <div class="detail-row"><span>Details: </span>Justification sent status reset.</div>
-                      {% elif ev == "EXAM_CATALOGUE_EXCEPTION" %}
-                        <div class="detail-row"><span>Details: </span>Temporary uncatalogued exam recorded for later review.</div>
-                      {% elif ev == "REJECTED" %}
-                        <div class="detail-row"><span>Details: </span>Case rejected.</div>
-                      {% elif ev == "REOPENED" %}
-                        <div class="detail-row"><span>Details: </span>Case reopened.</div>
-                      {% elif ev == "EDITED" %}
-                        <div class="detail-row"><span>Details: </span>Case details updated.</div>
-                      {% else %}
-                        <div class="detail-row"><span>Details: </span>Activity recorded.</div>
-                      {% endif %}
-                    {% endif %}
-                  </td>
-                </tr>
+                  {% endif %}
+                </td>
+              </tr>
               {% endfor %}
             </tbody>
           </table>
-        {% else %}
+          {% else %}
           <p class="small">No event history available.</p>
-        {% endif %}
+          {% endif %}
+        </div>
       </div>
     </div>
-    </div>
-    </div>
-
-    <div class="page-footer">
-    </div>
   </div>
+  <script>
+    document.querySelectorAll('.attachment-preview-trigger').forEach((button) => {
+      button.addEventListener('click', () => {
+        const frame = document.getElementById('casePreviewFrame');
+        const name = document.getElementById('casePreviewName');
+        if (frame && button.dataset.previewUrl) {
+          frame.src = button.dataset.previewUrl;
+        }
+        if (name && button.dataset.previewName) {
+          name.textContent = button.dataset.previewName;
+        }
+      });
+    });
+  </script>
   <script src="/static/js/session.js"></script>
 </body>
 </html>
-

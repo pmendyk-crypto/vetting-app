@@ -33,6 +33,10 @@
         .meta-item { border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 14px; }
         .meta-k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.56); margin-bottom: 5px; }
         .meta-v { color: rgba(255, 255, 255, 0.92); line-height: 1.45; }
+        .catalogue-visibility-box { border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; background: rgba(255,255,255,0.03); margin-top: 12px; }
+        .catalogue-progress { color: rgba(255,255,255,0.72); font-size: 13px; line-height: 1.45; margin: 0 0 12px; }
+        .catalogue-ready { color: #86efac; font-weight: 700; }
+        .catalogue-partial { color: #fde68a; font-weight: 700; }
         .users-table-wrap { overflow-x: auto; }
         .users-table { width: 100%; border-collapse: collapse; table-layout: auto; }
         .users-table th, .users-table td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: left; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
@@ -102,6 +106,8 @@
         <div class="notice success">User deleted from the organisation.</div>
         {% elif notice == 'institution_deleted' %}
         <div class="notice success">Institution deleted from the organisation.</div>
+        {% elif notice == 'catalogue_assigned' %}
+        <div class="notice success">Full National Reference List visibility assigned to the organisation.</div>
         {% endif %}
 
         {% if error %}
@@ -137,9 +143,23 @@
 
                         <div class="inline-actions">
                             <button type="submit" class="btn primary">Save Organisation</button>
-                            <button type="submit" class="btn secondary" formaction="/owner/organisations/{{ organisation.id }}/delete" formmethod="post" onclick="return confirm('Delete this organisation and all of its users, institutions, cases, and protocols?');">Delete Organisation</button>
+                            <button
+                                type="submit"
+                                class="btn secondary"
+                                formaction="/owner/organisations/{{ organisation.id }}/delete"
+                                formmethod="post"
+                                form="organisationDeleteForm"
+                            >Delete Organisation</button>
                         </div>
                     </form>
+                    <form
+                        id="organisationDeleteForm"
+                        method="post"
+                        action="/owner/organisations/{{ organisation.id }}/delete"
+                        data-confirm-message="Delete this organisation and all of its users, institutions, cases, and protocols?"
+                        data-confirm-title="Delete Organisation"
+                        data-confirm-label="Delete Organisation"
+                    ></form>
                 </section>
 
                 <aside class="panel">
@@ -181,6 +201,21 @@
                             <div class="meta-v">{{ 'Active' if organisation.is_active else 'Inactive' }}</div>
                         </div>
                     </div>
+
+                    <div class="catalogue-visibility-box">
+                        <div class="meta-k">National Reference List Visibility</div>
+                        <p class="catalogue-progress">
+                            {% if exam_catalogue_visibility.is_full_catalogue_visible %}
+                            <span class="catalogue-ready">Full list visible.</span>
+                            {% else %}
+                            <span class="catalogue-partial">Partial list visible.</span>
+                            {% endif %}
+                            {{ exam_catalogue_visibility.assigned_count }} of {{ exam_catalogue_visibility.active_catalogue_count }} active exams assigned.
+                        </p>
+                        <form method="post" action="/owner/organisations/{{ organisation.id }}/exam-catalogue/assign-full">
+                            <button type="submit" class="btn secondary">Assign Full National Reference List</button>
+                        </form>
+                    </div>
                 </aside>
             </div>
 
@@ -209,7 +244,13 @@
                                     <td>{{ inst.sla_hours or 48 }}h</td>
                                     <td>{{ inst.case_count or 0 }}</td>
                                     <td>
-                                        <form method="post" action="/owner/organisations/{{ organisation.id }}/institutions/{{ inst.id }}/delete" onsubmit="return confirm('Delete this institution? Existing cases will be kept but detached from the institution.');">
+                                        <form
+                                            method="post"
+                                            action="/owner/organisations/{{ organisation.id }}/institutions/{{ inst.id }}/delete"
+                                            data-confirm-message="Delete this institution? Existing cases will be kept but detached from the institution."
+                                            data-confirm-title="Delete Institution"
+                                            data-confirm-label="Delete Institution"
+                                        >
                                             <button type="submit" class="btn secondary">Delete</button>
                                         </form>
                                     </td>
@@ -434,7 +475,14 @@
 
             <div class="divider" style="margin: 20px 0;"></div>
 
-            <form id="userDeleteForm" method="post" class="form-stack" onsubmit="return confirm('Delete this user from the organisation?');">
+            <form
+                id="userDeleteForm"
+                method="post"
+                class="form-stack"
+                data-confirm-message="Delete this user from the organisation?"
+                data-confirm-title="Delete User"
+                data-confirm-label="Delete User"
+            >
                 <div class="inline-actions">
                     <button type="submit" class="btn secondary">Delete User</button>
                 </div>
@@ -478,5 +526,6 @@
             document.getElementById('userEditorModal').classList.remove('open');
         }
     </script>
+    <script src="/static/js/confirm-modal.js"></script>
 </body>
 </html>

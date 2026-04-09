@@ -7,10 +7,57 @@
     <link rel="stylesheet" href="/static/css/site.css">
     <style>
         .settings-container {
-            max-width: 1400px;
-            width: 95%;
+            width: min(1560px, calc(100vw - 40px));
+            max-width: none;
             margin: 0 auto;
             padding: 20px;
+        }
+
+        .shell-panel {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:14px;
+            flex-wrap:wrap;
+            margin-bottom:16px;
+            padding:14px 18px;
+            background:rgba(255,255,255,0.03);
+            border:1px solid rgba(255,255,255,0.08);
+            border-radius:18px;
+        }
+
+        .shell-tabs {
+            display:flex;
+            gap:8px;
+            flex-wrap:wrap;
+        }
+
+        .shell-tab {
+            min-height:44px;
+            min-width:126px;
+            padding:0 16px;
+            border-radius:12px;
+            text-decoration:none;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            text-align:center;
+            color:rgba(255,255,255,0.82);
+            background:rgba(255,255,255,0.05);
+            border:1px solid rgba(191,214,255,0.18);
+            transition:all 0.2s ease;
+        }
+
+        .shell-tab:hover {
+            color:#fff;
+            background:rgba(255,255,255,0.08);
+        }
+
+        .shell-tab.active {
+            color:#fff;
+            background:linear-gradient(135deg, rgba(31,111,235,0.2), rgba(97,168,255,0.1));
+            border-color:rgba(97,168,255,0.42);
+            box-shadow:inset 0 0 0 1px rgba(97,168,255,0.18);
         }
 
         .settings-header {
@@ -333,8 +380,18 @@
 
         @media (max-width: 768px) {
             .settings-container {
-                width: 100%;
+                width: calc(100vw - 24px);
                 padding: 12px;
+            }
+            .shell-panel {
+                padding:12px;
+            }
+            .shell-tabs {
+                width:100%;
+            }
+            .shell-tab {
+                width:100%;
+                min-width:0;
             }
             .settings-hero {
                 grid-template-columns: 1fr;
@@ -457,6 +514,13 @@
     <div class="page-wrapper">
         <div class="settings-container">
         <div class="main-content">
+        <div class="shell-panel">
+            <div class="shell-tabs">
+                <a class="shell-tab" href="/admin?view=worklist">Worklist</a>
+                <a class="shell-tab" href="/admin?view=dashboard">Dashboard</a>
+                <a class="shell-tab active" href="/settings">Settings</a>
+            </div>
+        </div>
         <div class="settings-header">
             <div class="settings-hero">
                 <div class="settings-hero-left">
@@ -666,7 +730,14 @@
                                     <div class="action-buttons">
                                         <button class="btn btn-secondary btn-small" onclick="editUser('{{ user.username }}', '{{ user.first_name }}', '{{ user.surname }}', '{{ user.email }}', '{{ user.role }}', '{{ user.radiologist_name or '' }}', {{ 1 if user.mfa_required else 0 }})">Edit</button>
                                         {% if user.username != 'admin' %}
-                                        <form style="display: inline;" method="POST" action="/settings/user/delete" onsubmit="return confirm('Delete user?');">
+                                        <form
+                                            style="display: inline;"
+                                            method="POST"
+                                            action="/settings/user/delete"
+                                            data-confirm-message="Delete this user?"
+                                            data-confirm-title="Delete User"
+                                            data-confirm-label="Delete User"
+                                        >
                                             <input type="hidden" name="username" value="{{ user.username }}">
                                             <button type="submit" class="btn btn-danger btn-small">Delete</button>
                                         </form>
@@ -783,7 +854,14 @@
                                     <div class="action-buttons">
                                         <button class="btn btn-secondary btn-small" type="button" onclick='viewProtocol({{ proto.name|tojson }}, {{ (proto.study_modality or "Unlinked")|tojson }}, {{ (proto.institution_name or "Unassigned")|tojson }}, {{ (proto.instructions or "")|tojson }}, {{ ("Active" if proto.is_active else "Inactive")|tojson }})'>View</button>
                                         <button class="btn btn-secondary btn-small" type="button" onclick='editProtocol({{ proto.id }}, {{ proto.name|tojson }}, {{ proto.institution_id }}, {{ proto.study_description_preset_id or "null" }}, {{ proto.instructions|tojson if proto.instructions else "\"\"" }})'>Edit</button>
-                                        <form style="display: inline;" method="POST" action="/settings/protocol/delete/{{ proto.id }}" onsubmit="return confirm('Are you sure you want to delete this protocol?');">
+                                        <form
+                                            style="display: inline;"
+                                            method="POST"
+                                            action="/settings/protocol/delete/{{ proto.id }}"
+                                            data-confirm-message="Are you sure you want to delete this protocol?"
+                                            data-confirm-title="Delete Protocol"
+                                            data-confirm-label="Delete Protocol"
+                                        >
                                             <button type="submit" class="btn btn-danger btn-small">Delete</button>
                                         </form>
                                     </div>
@@ -1097,13 +1175,22 @@
         }
 
         function deleteInstitution() {
-            if (confirm('Are you sure you want to delete this institution?')) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = `/settings/institution/delete/${currentInstId}`;
-                document.body.appendChild(form);
-                form.submit();
+            if (!currentInstId) {
+                return;
             }
+            showConfirmModal({
+                title: 'Delete Institution',
+                message: 'Are you sure you want to delete this institution?',
+                confirmLabel: 'Delete Institution',
+                confirmClass: 'btn-danger',
+                onConfirm: function() {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = `/settings/institution/delete/${currentInstId}`;
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
         }
 
         function editRadiologist(name, surname, email, gmc, speciality) {
@@ -1234,6 +1321,7 @@
             });
         });
     </script>
+        <script src="/static/js/confirm-modal.js"></script>
         </div>
         </div>
 

@@ -874,18 +874,17 @@
                 <div class="vet-card">
                     <h2>Attachment Preview</h2>
 
-                        {% if case.uploaded_filename %}
-                            {% if case.stored_filepath %}
-                                <p style="font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 0;">
-                                    PDFs and images display in the preview below.
-                                </p>
-                                <iframe src="/case/{{ case.id }}/attachment/preview" class="attachment-preview"></iframe>
-                        {% else %}
-                            <div class="attachment-placeholder">
-                                Referral file missing or expired
-                            </div>
-                        {% endif %}
-                        {% else %}
+                    {% if case.preview_available %}
+                        <p style="font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 0;">
+                            Select View on any available document to switch the preview below.
+                        </p>
+                        <div style="font-size:12px;color:rgba(255,255,255,0.62);margin:0 0 8px 0;">Currently viewing: <span id="vetPreviewName" style="color:#fff;">{{ case.preview_name }}</span></div>
+                        <iframe id="vetPreviewFrame" src="{{ case.preview_url }}" class="attachment-preview"></iframe>
+                    {% elif case.uploaded_filename %}
+                        <div class="attachment-placeholder">
+                            Referral file missing or expired
+                        </div>
+                    {% else %}
                         <div class="attachment-placeholder">
                             No attachment uploaded
                         </div>
@@ -903,7 +902,7 @@
                                         {% if attachment.available %}Attached{% else %}Expired{% endif %}
                                         </span>
                                         {% if attachment.available %}
-                                        <a href="/case/{{ case.id }}/attachments/{{ attachment.id }}/preview" target="_blank" rel="noopener" style="color:#93c5fd;text-decoration:none;">Open</a>
+                                        <button type="button" class="btn btn-secondary attachment-view-trigger" data-preview-url="/case/{{ case.id }}/attachments/{{ attachment.id }}/preview" data-preview-name="{{ attachment.uploaded_filename }}" style="padding:6px 12px;font-size:12px;">View</button>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -1144,6 +1143,18 @@
             showProtocolInstructions();
             syncDecisionForm();
             toggleContrastDetails();
+            document.querySelectorAll('.attachment-view-trigger').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const frame = document.getElementById('vetPreviewFrame');
+                    const name = document.getElementById('vetPreviewName');
+                    if (frame && button.dataset.previewUrl) {
+                        frame.src = button.dataset.previewUrl;
+                    }
+                    if (name && button.dataset.previewName) {
+                        name.textContent = button.dataset.previewName;
+                    }
+                });
+            });
         });
     </script>
     <script src="/static/js/session.js"></script>

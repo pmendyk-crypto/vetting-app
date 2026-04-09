@@ -249,3 +249,62 @@ select{
 .small{color:rgba(255,255,255,0.78)}
 .pill{background:rgba(255,255,255,0.05);color:white}
 
+/* Shared confirm modal */
+.confirm-modal-backdrop{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  background:rgba(5,10,20,0.72);
+  z-index:1200;
+}
+.confirm-modal-backdrop.open{display:flex;}
+.confirm-modal-card{
+  width:min(520px, 100%);
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:linear-gradient(180deg, rgba(15,23,42,0.98), rgba(11,19,38,0.98));
+  box-shadow:0 24px 60px rgba(0,0,0,0.38);
+  padding:24px;
+}
+.confirm-modal-title{
+  margin:0 0 10px;
+  color:#fff;
+  font-size:22px;
+}
+.confirm-modal-copy{
+  margin:0;
+  color:rgba(255,255,255,0.76);
+  line-height:1.6;
+}
+.confirm-modal-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:20px;
+}
+.confirm-modal-actions .btn{
+  min-width:140px;
+  justify-content:center;
+}
+.confirm-modal-actions .btn-danger{
+  background:rgba(239,68,68,0.18);
+  color:#fecaca !important;
+  border:1px solid rgba(239,68,68,0.34);
+}
+.confirm-modal-actions .btn-danger:hover{
+  background:rgba(239,68,68,0.28);
+}
+
+@media (max-width:680px){
+  .confirm-modal-backdrop{padding:14px;}
+  .confirm-modal-card{padding:18px;}
+  .confirm-modal-actions .btn{
+    width:100%;
+    min-width:0;
+  }
+}
+
