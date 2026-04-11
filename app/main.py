@@ -2287,7 +2287,7 @@ def list_protocol_rows_for_study(
         clauses.append("p.institution_id = ?")
         params.append(institution_id)
     if org_id and table_has_column("protocols", "org_id"):
-        clauses.append("p.org_id = ?")
+        clauses.append("(p.org_id = ? OR p.org_id IS NULL)")
         params.append(org_id)
 
     rows = conn.execute(
@@ -2348,7 +2348,7 @@ def list_protocol_rows_for_case(case_row: dict, org_id: int | None = None) -> tu
     ]
     params: list = [institution_id]
     if org_id and table_has_column("protocols", "org_id"):
-        clauses.append("p.org_id = ?")
+        clauses.append("(p.org_id = ? OR p.org_id IS NULL)")
         params.append(org_id)
 
     normalized_code = normalize_exam_match_value(case_row.get("study_code"))
@@ -2395,6 +2395,21 @@ def list_protocol_rows_for_case(case_row: dict, org_id: int | None = None) -> tu
             conn.close()
             return rows, rows[0].get("study_description_preset_id")
 
+        legacy_name_row = conn.execute(
+            f"""
+            SELECT p.id, p.name, p.instructions, p.institution_id, p.study_description_preset_id
+            FROM protocols p
+            WHERE {' AND '.join(clauses)}
+              AND LOWER(TRIM(p.name)) = LOWER(TRIM(?))
+            ORDER BY p.name
+            """,
+            params + [str(case_row.get("study_description") or "").strip()],
+        ).fetchall()
+        if legacy_name_row:
+            rows = [dict(r) for r in legacy_name_row]
+            conn.close()
+            return rows, rows[0].get("study_description_preset_id")
+
     conn.close()
     return [], preset_id
 
@@ -2407,7 +2422,7 @@ def get_protocol_row(protocol_id: int, institution_id: int | None = None, org_id
         clauses.append("institution_id = ?")
         params.append(institution_id)
     if org_id and table_has_column("protocols", "org_id"):
-        clauses.append("org_id = ?")
+        clauses.append("(org_id = ? OR org_id IS NULL)")
         params.append(org_id)
     row = conn.execute(
         f"SELECT id, name, instructions, institution_id, study_description_preset_id FROM protocols WHERE {' AND '.join(clauses)} LIMIT 1",
