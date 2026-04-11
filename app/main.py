@@ -3876,7 +3876,7 @@ def remove_case_attachment(case_id: str, attachment_id: str) -> None:
 def save_case_attachments(
     case_id: str,
     org_id: int | None,
-    files: list[UploadFile],
+    files: list[UploadFile | str],
     uploaded_by: str | None,
     primary_when_empty: bool = False,
 ) -> list[str]:
@@ -6835,7 +6835,7 @@ async def admin_case_edit_save(
     uncatalogued_exam_requested: str = Form(""),
     uncatalogued_exam_reason: str = Form(""),
     protocol: str = Form(""),
-    attachments: list[UploadFile] = File([]),
+    attachments: list[UploadFile | str] = File([]),
     remove_attachment_ids: list[str] = Form([]),
     return_to: str = Form(""),
 ):
@@ -8897,7 +8897,7 @@ def referral_trial_create(
     radiologist: str = Form(""),
     attachment_token: str = Form(...),
     attachment_original_name: str = Form("referral_upload"),
-    supporting_attachments: list[UploadFile] = File([]),
+    supporting_attachments: list[UploadFile | str] = File([]),
 ):
     user = require_admin(request)
     org_id = user.get("org_id")
@@ -9012,7 +9012,7 @@ def referral_trial_create(
         is_primary=True,
     )
     for upload in supporting_attachments:
-        if not upload or not upload.filename:
+        if not isinstance(upload, UploadFile) or not upload.filename:
             continue
         upload_bytes = upload.file.read()
         if not upload_bytes:
