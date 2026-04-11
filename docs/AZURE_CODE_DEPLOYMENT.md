@@ -25,10 +25,11 @@ No other production deployment workflow is configured in this repository.
 
 ## Required GitHub Secrets
 
-- `AZUREAPPSERVICE_PUBLISHPROFILE_STAGING`
-- `AZUREAPPSERVICE_PUBLISHPROFILE_PRODUCTION`
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
 
-These secrets must contain the full publish profile XML downloaded from the matching App Service.
+GitHub Actions uses Azure OpenID Connect through `azure/login@v2`. Publish profile secrets are not required for the active workflow, and Azure basic publishing authentication does not need to be enabled for GitHub deployment.
 
 ## Azure App Configuration
 
