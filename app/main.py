@@ -2343,6 +2343,14 @@ def list_protocol_rows_for_case(case_row: dict, org_id: int | None = None) -> tu
     except (TypeError, ValueError):
         preset_id = None
 
+    institution_protocols = list_protocol_rows_for_institution(
+        institution_id,
+        org_id=org_id,
+        active_only=True,
+    )
+    if institution_protocols:
+        return institution_protocols, preset_id
+
     if preset_id:
         rows = list_protocol_rows_for_study(
             preset_id,
@@ -2440,13 +2448,6 @@ def list_protocol_rows_for_case(case_row: dict, org_id: int | None = None) -> tu
             return rows, rows[0].get("study_description_preset_id")
 
     conn.close()
-    institution_protocols = list_protocol_rows_for_institution(
-        institution_id,
-        org_id=org_id,
-        active_only=True,
-    )
-    if institution_protocols:
-        return institution_protocols, preset_id
     return [], preset_id
 
 
