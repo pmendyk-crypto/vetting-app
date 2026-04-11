@@ -1,6 +1,7 @@
 # Azure Code Deployment
 
 This project deploys to Azure App Service using code publishing rather than containers.
+Azure App Service is the only configured staging and production hosting target in this repository.
 
 ## Current Environment Flow
 
@@ -20,6 +21,7 @@ This project deploys to Azure App Service using code publishing rather than cont
 
 - `.github/workflows/deploy-staging.yml` deploys `develop` to `lumosradflow-staging`
 - `.github/workflows/deploy-production.yml` deploys `main` to `lumosradflow-prod`
+No other production deployment workflow is configured in this repository.
 
 ## Required GitHub Secrets
 

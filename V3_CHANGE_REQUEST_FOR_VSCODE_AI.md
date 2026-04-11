@@ -251,7 +251,7 @@ IMPLEMENTATION IN app/main.py
 UI TIMELINE
 - In templates/admin_case.html:
    - Query case events ordered by created_at asc
-   - Render list: timestamp, event_type, username, decision/protocol/comment
+   - Display list: timestamp, event_type, username, decision/protocol/comment
 - For radiologist case view, same timeline is useful, read-only.
 
 ACCEPTANCE
@@ -482,4 +482,4 @@ F) DONE-DEFINITION CHECKLIST
 6) PDF includes org name and vetted-by (name, position, GMC)
 7) External intake page creates cases into correct org
 8) Superuser dashboard navigation and billing export implemented
-````</attachment>``and I think none of the ASCII provided in the 2 files is disallowed. Need to update? The user requests to include in the document; we already created separate file. But they might want this in SYSTEM_OVERVIEW? They asked with whole change request; probably want new file with that content. We already created. Need inform location. Provide response. Maybe add note in SYSTEM_OVERVIEW referencing? But they said no links. They might want appended to overview. But they said 
+````

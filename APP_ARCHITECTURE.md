@@ -187,4 +187,4 @@ The GitHub workflow configuration shows the current branch-to-environment path:
 - push to `develop` -> `.github/workflows/deploy-staging.yml` -> Azure Web App `lumosradflow-staging`
 - push to `main` -> `.github/workflows/deploy-production.yml` -> Azure Web App `lumosradflow-prod`
 
-There is also a manual `deploy.ps1` that builds/pushes a container image and restarts an Azure app named `Lumosradflow`. The repo does not fully explain whether that script is a legacy/manual production path or a parallel deployment path, so treat it as a separately maintained manual option unless the infrastructure owner confirms otherwise.
+There is also a manual `deploy.ps1` that builds/pushes a container image and restarts an Azure app named `Lumosradflow`. The repo does not fully explain whether that script is a legacy/manual production path or a parallel deployment path, so treat it as a separately maintained manual Azure option unless the infrastructure owner confirms otherwise. The active repository workflows deploy only to Azure App Service.
