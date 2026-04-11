@@ -1,6 +1,7 @@
 # Azure Code Deployment
 
-This repo currently deploys to Azure App Service through GitHub Actions code publishing.
+This repo deploys to Azure App Service through GitHub Actions code publishing.
+Azure App Service is the only configured staging and production hosting target in this repository.
 
 ## Current Environment Flow
 
@@ -20,6 +21,7 @@ This repo currently deploys to Azure App Service through GitHub Actions code pub
 
 - `.github/workflows/deploy-staging.yml` deploys `develop` to `lumosradflow-staging`
 - `.github/workflows/deploy-production.yml` deploys `main` to `lumosradflow-prod`
+No other production deployment workflow is configured in this repository.
 
 ## Required GitHub Secrets
 
