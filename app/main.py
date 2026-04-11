@@ -2303,6 +2303,35 @@ def list_protocol_rows_for_study(
     return [dict(r) for r in rows]
 
 
+def list_protocol_rows_for_institution(
+    institution_id: int | None,
+    org_id: int | None = None,
+    active_only: bool = True,
+) -> list[dict]:
+    if not institution_id:
+        return []
+    conn = get_db()
+    clauses = ["p.institution_id = ?"]
+    params: list = [institution_id]
+    if active_only:
+        clauses.append("p.is_active = 1")
+    if org_id and table_has_column("protocols", "org_id"):
+        clauses.append("(p.org_id = ? OR p.org_id IS NULL)")
+        params.append(org_id)
+
+    rows = conn.execute(
+        f"""
+        SELECT p.id, p.name, p.instructions, p.institution_id, p.study_description_preset_id
+        FROM protocols p
+        WHERE {' AND '.join(clauses)}
+        ORDER BY p.name
+        """,
+        params,
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def list_protocol_rows_for_case(case_row: dict, org_id: int | None = None) -> tuple[list[dict], int | None]:
     institution_id = case_row.get("institution_id")
     if not institution_id:
@@ -2411,6 +2440,13 @@ def list_protocol_rows_for_case(case_row: dict, org_id: int | None = None) -> tu
             return rows, rows[0].get("study_description_preset_id")
 
     conn.close()
+    institution_protocols = list_protocol_rows_for_institution(
+        institution_id,
+        org_id=org_id,
+        active_only=True,
+    )
+    if institution_protocols:
+        return institution_protocols, preset_id
     return [], preset_id
 
 
