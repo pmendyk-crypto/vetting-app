@@ -11,9 +11,9 @@
         .owner-title { margin:0 0 8px; font-size:30px; color:#fff; }
         .owner-subtitle { margin:0; color:rgba(255,255,255,0.7); font-size:15px; line-height:1.5; max-width:920px; }
         .owner-actions { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
-        .owner-grid { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:22px; align-items:start; }
-        .left-stack { display:grid; gap:18px; }
-        .panel { background:var(--card-bg); border:1px solid var(--card-border); border-radius:14px; padding:18px; }
+        .owner-grid { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:28px; align-items:start; }
+        .left-stack { display:grid; gap:18px; min-width:0; }
+        .panel { background:var(--card-bg); border:1px solid var(--card-border); border-radius:14px; padding:18px; min-width:0; box-sizing:border-box; }
         .panel-title { margin:0 0 6px; color:#fff; font-size:22px; }
         .panel-copy { margin:0 0 14px; color:rgba(255,255,255,0.68); line-height:1.45; font-size:14px; }
         .notice { border-radius:10px; padding:12px 14px; margin-bottom:16px; font-size:14px; line-height:1.45; }
@@ -29,7 +29,7 @@
         .reference-copy { margin:0 0 14px; color:rgba(255,255,255,0.68); font-size:12px; line-height:1.45; }
         .catalogue-meta-bar { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:10px; flex-wrap:wrap; }
         .catalogue-summary { color:rgba(255,255,255,0.68); font-size:13px; }
-        .catalogue-table-wrap { overflow:auto; border:1px solid rgba(255,255,255,0.08); border-radius:14px; }
+        .catalogue-table-wrap { overflow:auto; max-width:100%; border:1px solid rgba(255,255,255,0.08); border-radius:14px; }
         .catalogue-table { width:100%; border-collapse:collapse; min-width:820px; }
         .catalogue-table th, .catalogue-table td { padding:8px 12px; border-bottom:1px solid rgba(255,255,255,0.07); vertical-align:middle; text-align:left; }
         .catalogue-table th { background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.62); text-transform:uppercase; letter-spacing:.08em; font-size:11px; }
