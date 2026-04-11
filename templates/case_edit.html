@@ -54,6 +54,7 @@
     .attachment-item-sub { margin-top:4px; color:rgba(255,255,255,0.58); font-size:12px; }
     .attachment-item-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
     .attachment-primary { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:11px; background:rgba(31,111,235,0.18); color:#93c5fd; border:1px solid rgba(31,111,235,0.32); }
+    .preview-frame { width:100%; height:520px; border:1px solid rgba(255,255,255,0.12); border-radius:8px; background:#fff; }
     .page-footer { text-align: center; padding: 30px 20px; border-top: 1px solid #ddd; margin-top: 50px; color: #666; font-size: 13px; }
     .page-footer p { margin: 0; }
     
@@ -326,7 +327,13 @@
                 </div>
                 <div class="attachment-item-actions">
                   {% if attachment.available %}
-                  <a class="btn secondary" href="/case/{{ case['id'] }}/attachments/{{ attachment.id }}" style="padding:8px 12px;">Download</a>
+                  <button
+                    type="button"
+                    class="btn secondary attachment-preview-trigger"
+                    data-preview-url="/case/{{ case['id'] }}/attachments/{{ attachment.id }}/preview"
+                    data-preview-name="{{ attachment.uploaded_filename }}"
+                    style="padding:8px 12px;"
+                  >View</button>
                   {% endif %}
                   <label style="display:flex;align-items:center;gap:8px;color:rgba(255,255,255,0.85);font-size:13px;">
                     <input type="checkbox" name="remove_attachment_ids" value="{{ attachment.id }}">
@@ -351,25 +358,19 @@
 
     <div class="card preview-panel">
       <h3 style="margin-top:0;">Referral Preview</h3>
-      {% if case['uploaded_filename'] %}
+      {% if case['preview_available'] %}
         <p class="small" style="margin-top:0;">
-          Current file: <strong>{{ case['uploaded_filename'] }}</strong>
-          {% if not case['stored_filepath'] %}(expired){% endif %}
+          Currently viewing: <strong id="caseEditPreviewName">{{ case['preview_name'] }}</strong>
         </p>
-        {% if case['stored_filepath'] %}
         <div style="margin-bottom:12px;">
-          <a class="btn secondary" href="/case/{{ case['id'] }}/attachment/inline" target="_blank" rel="noopener" style="display:inline-block;">Open Current Referral</a>
+          <a id="caseEditOpenLink" class="btn secondary" href="{{ case['inline_url'] }}" target="_blank" rel="noopener" style="display:inline-block;">Open in New Tab</a>
         </div>
-        {% endif %}
-        {% if case['stored_filepath'] %}
-          <div style="min-height:420px;">
-            <iframe src="/case/{{ case['id'] }}/attachment/preview" style="width:100%;height:420px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#fff;"></iframe>
-          </div>
-        {% else %}
-          <div style="display:flex;align-items:center;justify-content:center;min-height:140px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.5);text-align:center;padding:20px;">
-            Referral attachment has expired and is no longer available.
-          </div>
-        {% endif %}
+        <iframe id="caseEditPreviewFrame" src="{{ case['preview_url'] }}" class="preview-frame"></iframe>
+      {% elif case['uploaded_filename'] %}
+        <div style="display:flex;align-items:center;justify-content:center;min-height:180px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.5);text-align:center;padding:20px;flex-direction:column;gap:8px;">
+          <span>Referral attachment has expired and is no longer available.</span>
+          <span class="small">If another attachment is available, use View from the attached documents list.</span>
+        </div>
       {% else %}
         <p class="small" style="margin:0;">No referral attachment uploaded.</p>
       {% endif %}
@@ -395,6 +396,23 @@
 
   <script>
     let allDescriptions = [];
+
+    document.querySelectorAll('.attachment-preview-trigger').forEach((button) => {
+      button.addEventListener('click', () => {
+        const frame = document.getElementById('caseEditPreviewFrame');
+        const name = document.getElementById('caseEditPreviewName');
+        const openLink = document.getElementById('caseEditOpenLink');
+        if (frame && button.dataset.previewUrl) {
+          frame.src = button.dataset.previewUrl;
+        }
+        if (name && button.dataset.previewName) {
+          name.textContent = button.dataset.previewName;
+        }
+        if (openLink && button.dataset.previewUrl) {
+          openLink.href = button.dataset.previewUrl.replace(/\/preview$/, '/inline');
+        }
+      });
+    });
 
     function resolveOrgId() {
       const hidden = document.getElementById('org_id_hidden');

@@ -3884,7 +3884,15 @@ def save_case_attachments(
     if not files:
         return saved_names
 
-    existing = list_case_attachments(case_id)
+    case_row = None
+    try:
+        conn = get_db()
+        case_row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
+        conn.close()
+    except Exception:
+        case_row = None
+    case_dict = dict(case_row) if case_row else None
+    existing = list_case_attachments(case_id, case_dict=case_dict)
     should_make_primary = primary_when_empty and not existing
 
     for upload in files:
