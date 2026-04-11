@@ -262,13 +262,6 @@
           </div>
           <div class="submitted-link-mark">→</div>
         </a>
-        <a class="submitted-link" href="/case/{{ case['id'] }}/pdf">
-          <div>
-            <strong>Download PDF Summary</strong>
-            <span>Export the current case summary as a PDF.</span>
-          </div>
-          <div class="submitted-link-mark">→</div>
-        </a>
         {% if case["radiologist"] %}
         <a class="submitted-link" href="/admin?radiologist={{ case['radiologist']|urlencode }}">
           <div>

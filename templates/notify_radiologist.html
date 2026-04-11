@@ -32,27 +32,26 @@
     }
 
     .page-wrap {
-      max-width: 1100px;
+      width: min(1560px, calc(100vw - 40px));
       margin: 0 auto;
     }
 
     /* ── Header ── */
     .page-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 14px;
+      margin-bottom: 18px;
     }
     .page-header-inner {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
+      justify-content: space-between;
       gap: 16px;
       width: 100%;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 10px 14px;
+      padding: 14px 16px;
     }
+    .page-header-copy { min-width: 0; }
     .back-btn {
       display: inline-flex;
       align-items: center;
@@ -69,9 +68,15 @@
     .back-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.18); }
 
     .page-title {
-      font-size: 18px;
-      font-weight: 400;
+      font-size: 20px;
+      font-weight: 600;
       letter-spacing: -.4px;
+      margin: 0;
+    }
+    .page-subtitle {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
     }
 
     /* ── Card ── */
@@ -342,6 +347,9 @@
     }
     @media (max-width: 960px) {
       .notify-workspace { grid-template-columns: 1fr; }
+      .page-wrap { width: calc(100vw - 24px); }
+      .page-header-inner { flex-direction: column; }
+      .back-btn { width: 100%; justify-content: center; }
     }
   </style>
 </head>
@@ -351,8 +359,11 @@
   <!-- Header -->
   <div class="page-header">
     <div class="page-header-inner">
+      <div class="page-header-copy">
+        <h1 class="page-title">Notify Practitioner</h1>
+        <p class="page-subtitle">Send a targeted reminder without leaving the admin workflow.</p>
+      </div>
       <a href="/admin" class="back-btn">Back</a>
-      <h1 class="page-title">Notify Practitioner</h1>
     </div>
   </div>
 

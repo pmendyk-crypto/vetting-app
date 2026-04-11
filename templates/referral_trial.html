@@ -6,9 +6,11 @@
   <title>Referral Intake Assistant</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    .trial-wrap { max-width: 980px; margin: 20px auto; padding: 12px; }
+    .trial-wrap { width: min(1560px, calc(100vw - 40px)); max-width: none; margin: 20px auto; padding: 12px 20px 24px; }
     .card { border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .trial-review-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(420px, 0.95fr); gap: 16px; align-items: stretch; }
+    .trial-review-grid .card { margin-bottom: 0; }
     .form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
     .form-row.full { grid-column: 1 / -1; }
     input, select, textarea { padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: inherit; }
@@ -21,6 +23,9 @@
     .btn-primary { background: #1f6feb; color: #fff; }
     .btn-secondary { background: #3a3a3a; color: #fff; text-decoration: none; }
     pre { white-space: pre-wrap; max-height: 180px; overflow: auto; background: rgba(0,0,0,0.25); padding: 10px; border-radius: 8px; }
+    .preview-panel { display:flex; flex-direction:column; min-height: 76vh; }
+    .preview-frame { width:100%; flex:1; min-height:66vh; border:1px solid rgba(255,255,255,0.12); border-radius:10px; background:#fff; }
+    .disclaimer { margin-top:12px; padding:12px 14px; border-radius:10px; border:1px solid rgba(245,158,11,0.32); background:rgba(245,158,11,0.1); color:#fde68a; font-size:13px; line-height:1.5; }
     .info { font-size: 11px; opacity: 0.72; margin-top: 2px; }
     .study-picker { position: relative; }
     .study-picker input { width: 100%; box-sizing: border-box; }
@@ -68,6 +73,7 @@
     .protocol-empty { padding: 14px 12px; text-align: center; color: rgba(148, 163, 184, 0.9); font-size: 12px; font-style: italic; }
     @media (max-width: 760px) {
       .trial-wrap { padding: 10px; }
+      .trial-review-grid { grid-template-columns: 1fr; }
       .form-grid { grid-template-columns: 1fr; }
       .actions { flex-direction: column; }
       .actions .btn { width: 100%; text-align: center; }
@@ -77,8 +83,6 @@
 <body>
   <div class="trial-wrap">
     <h1>Referral Intake Assistant</h1>
-    <p class="meta">Upload a referral file, review the extracted fields, then create a case.</p>
-
     {% if error %}
       <div class="err">{{ error }}</div>
     {% endif %}
@@ -89,8 +93,8 @@
         <div class="form-grid">
           <div class="form-row">
             <label>Institution</label>
-            <select name="institution_id" required>
-              <option value="">Select institution</option>
+            <select name="institution_id">
+              <option value="">Use default institution</option>
               {% for inst in institutions %}
                 <option value="{{ inst.id }}" {% if draft and draft.institution_id == (inst.id | string) %}selected{% endif %}>{{ inst.name }}</option>
               {% endfor %}
@@ -110,6 +114,7 @@
     </div>
 
     {% if parse_confidence is not none %}
+    <div class="trial-review-grid">
     <div class="card">
       <h3>2) Review and confirm case details</h3>
       <p class="meta">Parser confidence: {{ (parse_confidence * 100) | round(0) }}%</p>
@@ -142,8 +147,8 @@
           </div>
           <div class="form-row">
             <label>Institution</label>
-            <select name="institution_id" required>
-              <option value="">Select institution</option>
+            <select name="institution_id">
+              <option value="">Use default institution</option>
               {% for inst in institutions %}
                 <option value="{{ inst.id }}" {% if draft and draft.institution_id == (inst.id | string) %}selected{% endif %}>{{ inst.name }}</option>
               {% endfor %}
@@ -163,6 +168,8 @@
           <div class="form-row full">
             <label>Study description</label>
             <div class="study-picker">
+              <input type="hidden" name="study_description_preset_id" id="study_description_preset_id" value="{{ draft.study_description_preset_id or '' }}">
+              <input type="hidden" name="study_code" id="study_code" value="{{ draft.study_code or '' }}">
               <input
                 name="study_description"
                 id="study_description"
@@ -173,23 +180,44 @@
                 autocomplete="off"
                 oninput="filterDescriptions()"
                 onfocus="showAllDescriptions()"
+                readonly
               >
+              <div class="info" id="studyCodeHint">{% if draft.study_code %}Exam code: {{ draft.study_code }}{% else %}Exam code will appear automatically when you select an exam.{% endif %}</div>
+              {% if can_create_uncatalogued_exam %}
+              <div style="margin-top:10px; padding:10px 12px; border:1px solid rgba(245,158,11,0.28); border-radius:10px; background:rgba(245,158,11,0.08);">
+                <label style="display:flex; align-items:flex-start; gap:10px; margin:0;">
+                  <input type="checkbox" id="uncatalogued_exam_requested" name="uncatalogued_exam_requested" value="1" onchange="toggleUncataloguedExamMode()">
+                  <span>
+                    <strong>Create Temporary Uncatalogued Exam</strong><br>
+                    <small style="color:rgba(255,255,255,0.72);">Owner/super-admin only. Requires a reason and flags the case for later catalogue review.</small>
+                  </span>
+                </label>
+                <div id="uncatalogued_exam_reason_wrap" style="display:none; margin-top:10px;">
+                  <textarea name="uncatalogued_exam_reason" id="uncatalogued_exam_reason" placeholder="Reason for using a temporary uncatalogued exam..." rows="2"></textarea>
+                </div>
+              </div>
+              {% endif %}
               <div id="descriptionList" class="description-dropdown">
                 <div class="protocol-panel-header">
-                  <span class="protocol-title">Available Protocols</span>
+                  <span class="protocol-title">Available Exams</span>
                   <span class="protocol-meta" data-meta>Modality: --</span>
                 </div>
                 <div class="protocol-panel-search">
-                  <input class="protocol-search-input" type="text" placeholder="Search protocols" oninput="filterDescriptions()">
+                  <input class="protocol-search-input" type="text" placeholder="Search exams" oninput="filterDescriptions()">
                 </div>
                 <div class="protocol-panel-list" data-list></div>
               </div>
             </div>
-            <div class="info">This uses the same study-description preset source as manual case submission.</div>
+            <div class="info">This uses the same owner-managed master exam catalogue as manual case submission.</div>
           </div>
           <div class="form-row full">
             <label>Admin notes</label>
             <textarea name="admin_notes">{{ draft.admin_notes }}</textarea>
+          </div>
+          <div class="form-row full">
+            <label>Additional supporting documents</label>
+            <input type="file" name="supporting_attachments" multiple>
+            <div class="info">Optional. Existing referral file remains the primary referral preview.</div>
           </div>
           <div class="form-row">
             <label>Practitioner (optional)</label>
@@ -205,12 +233,21 @@
           <button type="submit" class="btn btn-primary">Create booking/case</button>
           <a class="btn btn-secondary" href="/admin">Cancel</a>
         </div>
+        <div class="disclaimer">The intake assistant may make errors. Please check the referral details carefully before submitting.</div>
       </form>
     </div>
 
-    <div class="card">
-      <h3>Extracted text preview</h3>
-      <pre>{{ parse_preview }}</pre>
+    <div class="card preview-panel">
+      <h3>Referral document preview</h3>
+      <p class="meta" style="margin-top:0;">Review the actual uploaded referral alongside the extracted fields before creating the case.</p>
+      <iframe src="/submit/referral-trial/attachment/{{ draft.attachment_token }}/preview" class="preview-frame"></iframe>
+      {% if parse_preview %}
+      <details style="margin-top:12px;">
+        <summary style="cursor:pointer;color:rgba(255,255,255,0.78);">Show extracted text</summary>
+        <pre>{{ parse_preview }}</pre>
+      </details>
+      {% endif %}
+    </div>
     </div>
     {% endif %}
   </div>
@@ -227,6 +264,9 @@
       const dropdown = document.getElementById('descriptionList');
       const meta = dropdown.querySelector('[data-meta]');
       const orgId = resolveOrgId();
+      document.getElementById('study_description_preset_id').value = '';
+      document.getElementById('study_code').value = '';
+      document.getElementById('studyCodeHint').textContent = 'Exam code will appear automatically when you select an exam.';
 
       if (!modality) {
         allDescriptions = [];
@@ -281,7 +321,7 @@
         list.innerHTML = '<div class="protocol-empty">No matching study descriptions.</div>';
       } else {
         list.innerHTML = filtered.map(item =>
-          `<div class="protocol-item" onclick="selectDescription('${item.description.replace(/'/g, "\\'")}')">${item.description}</div>`
+          `<div class="protocol-item" onclick="selectDescription(${item.id}, '${item.description.replace(/'/g, "\\'")}', '${(item.study_code || '').replace(/'/g, "\\'")}')">${item.label || item.description}</div>`
         ).join('');
       }
       dropdown.style.display = 'block';
@@ -294,10 +334,41 @@
       filterDescriptions();
     }
 
-    function selectDescription(description) {
+    function selectDescription(presetId, description, studyCode) {
       document.getElementById('study_description').value = description;
+      document.getElementById('study_description_preset_id').value = presetId || '';
+      document.getElementById('study_code').value = studyCode || '';
+      document.getElementById('studyCodeHint').textContent = studyCode ? `Exam code: ${studyCode}` : 'Exam code will appear automatically when you select an exam.';
       document.getElementById('descriptionList').style.display = 'none';
     }
+
+    function toggleUncataloguedExamMode() {
+      const enabled = !!document.getElementById('uncatalogued_exam_requested')?.checked;
+      const studyInput = document.getElementById('study_description');
+      const reasonWrap = document.getElementById('uncatalogued_exam_reason_wrap');
+      const reasonField = document.getElementById('uncatalogued_exam_reason');
+      if (reasonWrap) {
+        reasonWrap.style.display = enabled ? 'block' : 'none';
+      }
+      if (reasonField) {
+        reasonField.required = enabled;
+      }
+      if (studyInput) {
+        if (enabled) {
+          studyInput.removeAttribute('readonly');
+          studyInput.placeholder = 'Enter a temporary uncatalogued exam description';
+        } else {
+          studyInput.setAttribute('readonly', 'readonly');
+          studyInput.placeholder = 'Select modality, then choose or search the approved study descriptions';
+        }
+      }
+      if (enabled) {
+        document.getElementById('study_description_preset_id').value = '';
+        document.getElementById('study_code').value = '';
+      }
+    }
+
+    toggleUncataloguedExamMode();
 
     document.addEventListener('click', function (event) {
       const picker = document.querySelector('.study-picker');

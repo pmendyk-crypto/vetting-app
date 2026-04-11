@@ -545,6 +545,7 @@
                     </div>
                 </div>
                 <div class="action-buttons">
+                    <a href="/radiologist{% if tab and tab != 'all' %}?tab={{ tab }}{% endif %}" class="btn btn-secondary">Refresh</a>
                     <a href="/account" class="btn btn-secondary">My Account</a>
                     <a href="/logout" class="btn btn-secondary">Logout</a>
                 </div>
@@ -563,7 +564,7 @@
                 Reopened <span class="tab-count">{{ cases|selectattr('status', 'equalto', 'reopened')|list|length }}</span>
             </button>
             <button class="tab-btn tab-btn-vetted {% if tab == 'vetted' %}active{% endif %}" onclick="switchTab('vetted')">
-                Justified <span class="tab-count">{{ cases|selectattr('status', 'equalto', 'vetted')|list|length }}</span>
+                Approved <span class="tab-count">{{ cases|selectattr('status', 'equalto', 'vetted')|list|length }}</span>
             </button>
             <button class="tab-btn tab-btn-rejected {% if tab == 'rejected' %}active{% endif %}" onclick="switchTab('rejected')">
                 Rejected <span class="tab-count">{{ cases|selectattr('status', 'equalto', 'rejected')|list|length }}</span>
@@ -604,7 +605,7 @@
                     <td data-label="Case ID"><span style="font-family:'Courier New', monospace; color: rgba(255,255,255,0.88);">{{ c.id }}</span></td>
                     <td data-label="Status">
                         <span class="status-badge status-{{ c.status|lower }}">
-                            {{ 'Justified' if c.status == 'vetted' else c.status }}
+                            {{ 'Approved' if c.status == 'vetted' else c.status }}
                         </span>
                     </td>
                     <td data-label="Created">{{ c.created_display }}</td>
@@ -623,7 +624,7 @@
                             {{ c.patient_id or 'N/A' }}
                         {% endif %}
                     </td>
-                    <td data-label="Study">{{ c.study_description }}</td>
+                    <td data-label="Study">{{ c.study_description }}{% if c.study_code %}<br><span style="font-size:11px; color: rgba(255,255,255,0.6);">Code {{ c.study_code }}</span>{% endif %}</td>
                     <td data-label="Actions">
                         <div class="action-links">
                             <a href="/vet/{{ c.id }}">Open</a>
@@ -636,9 +637,6 @@
         <div id="noSearchResults" style="display:none;text-align:center;padding:30px;color:rgba(255,255,255,0.45);">No cases match your search.</div>
         {% endif %}
 
-        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(31,111,235,0.2);">
-            <a href="/radiologist" class="btn btn-secondary">Refresh</a>
-        </div>
     </div>
 
     <script>

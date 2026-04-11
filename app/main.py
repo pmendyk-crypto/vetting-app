@@ -175,6 +175,89 @@ def normalize_case_attachment(case_dict: dict) -> dict:
     return case_dict
 
 
+def normalize_decision_label(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    mapping = {
+        "approve": "Approved",
+        "approved": "Approved",
+        "approve with comment": "Approved with Comment",
+        "approved with comment": "Approved with Comment",
+        "reject": "Rejected",
+        "rejected": "Rejected",
+    }
+    return mapping.get(normalized, "")
+
+
+def display_decision_label(value: str | None, fallback_status: str | None = None) -> str:
+    normalized = normalize_decision_label(value)
+    if normalized:
+        return normalized
+    legacy_mapping = {
+        "justified": "Approved",
+        "justified with comment": "Approved with Comment",
+        "not justified": "Rejected",
+    }
+    raw = str(value or "").strip()
+    mapped = legacy_mapping.get(raw.lower(), raw)
+    if mapped:
+        return mapped
+    return display_case_status(fallback_status)
+
+
+def display_case_status(status_value: str | None) -> str:
+    status = str(status_value or "").strip().lower()
+    mapping = {
+        "pending": "Pending",
+        "vetted": "Approved",
+        "rejected": "Rejected",
+        "reopened": "Reopened",
+    }
+    return mapping.get(status, status.title() if status else "")
+
+
+def display_case_event_label(event_type_value: str | None) -> str:
+    event_type = str(event_type_value or "").strip().upper()
+    mapping = {
+        "CREATED": "Case Created",
+        "SUBMITTED": "Case Created",
+        "ASSIGNED": "Practitioner Assignment Updated",
+        "OPENED": "Case Opened by Practitioner",
+        "VETTED": "Decision Recorded",
+        "REJECTED": "Case Rejected",
+        "REOPENED": "Case Reopened",
+        "EDITED": "Case Edited",
+        "REPORT_SENT": "Justification Sent",
+        "REPORT_SENT_RESET": "Justification Sent Reset",
+        "EXAM_CATALOGUE_EXCEPTION": "Temporary Uncatalogued Exam",
+    }
+    if event_type in mapping:
+        return mapping[event_type]
+    if not event_type:
+        return ""
+    return event_type.replace("_", " ").title()
+
+
+def format_exam_label(description: str | None, study_code: str | None = None) -> str:
+    desc = str(description or "").strip()
+    code = str(study_code or "").strip()
+    if desc and code:
+        return f"{desc} ({code})"
+    return desc or code
+
+
+def make_attachment_storage_key(
+    case_id: str,
+    original_filename: str,
+    org_id: int | None = None,
+    attachment_tag: str | None = None,
+) -> str:
+    ext = Path(original_filename or "").suffix or ".bin"
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", Path(original_filename or "attachment").stem).strip("-") or "attachment"
+    tag = attachment_tag or uuid4().hex[:10]
+    org_prefix = f"org_{int(org_id)}/" if org_id else ""
+    return f"{org_prefix}{case_id}/{tag}_{stem}{ext}"
+
+
 def is_inline_previewable(filename: str | None) -> bool:
     name = str(filename or "").strip().lower()
     if not name:
@@ -211,7 +294,12 @@ def get_blob_service_client():
         return None
 
 
-def upload_to_blob(case_id: str, file_bytes: bytes, original_filename: str, org_id: int | None = None) -> str | None:
+def upload_to_blob(
+    case_id: str,
+    file_bytes: bytes,
+    original_filename: str,
+    blob_name: str | None = None,
+) -> str | None:
     """
     Upload file to Azure Blob Storage.
     Returns the blob name (stored in DB as stored_filepath), or None if upload fails.
@@ -220,11 +308,9 @@ def upload_to_blob(case_id: str, file_bytes: bytes, original_filename: str, org_
         return None
     
     try:
-        # Keep shared storage partitioned by organisation where possible.
-        ext = Path(original_filename).suffix or ".bin"
-        blob_name = f"{case_id}{ext}"
-        if org_id:
-            blob_name = f"org_{int(org_id)}/{blob_name}"
+        if not blob_name:
+            ext = Path(original_filename).suffix or ".bin"
+            blob_name = f"{case_id}{ext}"
         client = get_blob_service_client()
         if not client:
             return None
@@ -236,6 +322,21 @@ def upload_to_blob(case_id: str, file_bytes: bytes, original_filename: str, org_
     except Exception as e:
         print(f"[BLOB] Upload failed for {case_id}: {e}")
         return None
+
+
+def delete_blob(blob_name: str | None) -> None:
+    if not BLOB_STORAGE_ENABLED or not blob_name:
+        return
+
+    try:
+        client = get_blob_service_client()
+        if not client:
+            return
+
+        container_client = client.get_container_client(REFERRAL_BLOB_CONTAINER)
+        container_client.delete_blob(blob_name, delete_snapshots="include")
+    except Exception as exc:
+        print(f"[BLOB] Delete failed for {blob_name}: {exc}")
 
 
 def download_from_blob(blob_name: str) -> bytes | None:
@@ -277,6 +378,43 @@ def blob_exists(blob_name: str) -> bool:
     except Exception as e:
         print(f"[BLOB] exists() check failed for {blob_name}: {e}")
         return False
+
+
+def delete_stored_attachment_file(stored_path: str | None) -> None:
+    if not stored_path:
+        return
+    if BLOB_STORAGE_ENABLED and not str(stored_path).startswith("/"):
+        delete_blob(str(stored_path))
+        return
+    try:
+        path_obj = Path(str(stored_path))
+        if path_obj.exists():
+            path_obj.unlink()
+    except Exception as exc:
+        print(f"[ATTACHMENT] Failed to delete {stored_path}: {exc}")
+
+
+def store_case_attachment_file(
+    case_id: str,
+    original_filename: str,
+    file_bytes: bytes,
+    org_id: int | None = None,
+    attachment_tag: str | None = None,
+) -> str | None:
+    storage_key = make_attachment_storage_key(case_id, original_filename, org_id=org_id, attachment_tag=attachment_tag)
+    stored_path = None
+
+    if BLOB_STORAGE_ENABLED:
+        stored_path = upload_to_blob(case_id, file_bytes, original_filename, blob_name=storage_key)
+
+    if not stored_path:
+        local_path = UPLOAD_DIR / storage_key.replace("/", os.sep)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(local_path, "wb") as f:
+            f.write(file_bytes)
+        stored_path = str(local_path)
+
+    return stored_path
 
 app = FastAPI(title="RadFlow")
 
@@ -385,11 +523,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         path = request.url.path.rstrip("/")
-        allow_same_origin_frame = (
-            path.endswith("/attachment/preview")
-            or path.endswith("/attachment/inline")
-            or (path.endswith("/pdf") and request.query_params.get("inline") == "1")
-        )
+        allow_same_origin_frame = should_allow_same_origin_frame(path, request.query_params.get("inline"))
         response.headers["X-Frame-Options"] = "SAMEORIGIN" if allow_same_origin_frame else "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         if IS_PRODUCTION:
@@ -398,6 +532,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+
+def should_allow_same_origin_frame(path: str | None, inline_query_value: str | None = None) -> bool:
+    clean_path = str(path or "").rstrip("/")
+    if not clean_path:
+        return False
+    if clean_path.endswith("/pdf") and str(inline_query_value or "").strip() == "1":
+        return True
+    if clean_path.startswith("/submit/referral-trial/attachment/") and (
+        clean_path.endswith("/preview") or clean_path.endswith("/inline")
+    ):
+        return True
+    if clean_path.startswith("/case/") and (clean_path.endswith("/preview") or clean_path.endswith("/inline")):
+        return True
+    return False
 
 
 # Global 401/403 handler — redirect to login instead of showing a raw error
@@ -511,7 +660,8 @@ Disallow: /"""
     )
 
 
-DECISIONS = ["Approve", "Reject", "Approve with comment"]
+DECISIONS = ["Approved", "Approved with Comment", "Rejected"]
+CONTROLLED_MODALITIES = ["CT", "DEXA", "MRI", "PET", "XR"]
 
 STATUS_PENDING = "pending"
 STATUS_VETTED = "vetted"
@@ -573,6 +723,7 @@ def format_display_datetime(value: str | None, fallback: str = "") -> str:
 
 
 templates.env.filters["display_datetime"] = format_display_datetime
+templates.env.filters["display_case_event_label"] = display_case_event_label
 
 
 def tat_seconds(created_at: str | None, vetted_at: str | None) -> int:
@@ -725,7 +876,9 @@ def init_db() -> None:
                 created_at TEXT NOT NULL,
                 modified_at TEXT,
                 first_name TEXT,
-                surname TEXT
+                surname TEXT,
+                role TEXT,
+                radiologist_name TEXT
             )
             """
         )
@@ -839,12 +992,11 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS institutions (
                 id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL,
+                name TEXT NOT NULL UNIQUE,
                 sla_hours INTEGER NOT NULL DEFAULT 48,
                 created_at TEXT NOT NULL,
                 modified_at TEXT,
-                org_id INTEGER,
-                UNIQUE(org_id, name)
+                org_id INTEGER
             )
             """
         )
@@ -872,10 +1024,7 @@ def init_db() -> None:
                 vetted_at TEXT,
                 org_id INTEGER,
                 contrast_required TEXT,
-                contrast_details TEXT,
-                report_sent_at TEXT,
-                report_sent_by TEXT,
-                report_sent_by_id INTEGER
+                contrast_details TEXT
             )
             """
         )
@@ -952,12 +1101,9 @@ def init_db() -> None:
         """
         CREATE TABLE IF NOT EXISTS institutions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
+            name TEXT NOT NULL UNIQUE,
             sla_hours INTEGER NOT NULL DEFAULT 48,
-            created_at TEXT NOT NULL,
-            modified_at TEXT,
-            org_id INTEGER,
-            UNIQUE(org_id, name)
+            created_at TEXT NOT NULL
         )
         """
     )
@@ -983,9 +1129,6 @@ def init_db() -> None:
             decision TEXT,
             decision_comment TEXT,
             vetted_at TEXT,
-            report_sent_at TEXT,
-            report_sent_by TEXT,
-            report_sent_by_id INTEGER,
             FOREIGN KEY (institution_id) REFERENCES institutions(id)
         )
         """
@@ -1150,9 +1293,6 @@ def ensure_cases_schema() -> None:
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS stored_filepath TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS admin_notes TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS radiologist TEXT")
-        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_at TEXT")
-        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_by TEXT")
-        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_by_id INTEGER")
         conn.commit()
         conn.close()
         return
@@ -1195,20 +1335,6 @@ def ensure_cases_schema() -> None:
         cur.execute("ALTER TABLE cases ADD COLUMN contrast_required TEXT")
     if "contrast_details" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN contrast_details TEXT")
-    if "uploaded_filename" not in cols:
-        cur.execute("ALTER TABLE cases ADD COLUMN uploaded_filename TEXT")
-    if "stored_filepath" not in cols:
-        cur.execute("ALTER TABLE cases ADD COLUMN stored_filepath TEXT")
-    if "admin_notes" not in cols:
-        cur.execute("ALTER TABLE cases ADD COLUMN admin_notes TEXT")
-    if "radiologist" not in cols:
-        cur.execute("ALTER TABLE cases ADD COLUMN radiologist TEXT")
-    if "report_sent_at" not in cols:
-        cur.execute("ALTER TABLE cases ADD COLUMN report_sent_at TEXT")
-    if "report_sent_by" not in cols:
-        cur.execute("ALTER TABLE cases ADD COLUMN report_sent_by TEXT")
-    if "report_sent_by_id" not in cols:
-        cur.execute("ALTER TABLE cases ADD COLUMN report_sent_by_id INTEGER")
 
     conn.commit()
     conn.close()
@@ -1222,37 +1348,6 @@ def ensure_institutions_schema() -> None:
         conn = get_db()
         conn.execute("ALTER TABLE institutions ADD COLUMN IF NOT EXISTS modified_at TEXT")
         conn.execute("ALTER TABLE institutions ADD COLUMN IF NOT EXISTS org_id INTEGER")
-        conn.execute(
-            """
-            DO $$
-            BEGIN
-                IF EXISTS (
-                    SELECT 1
-                    FROM pg_constraint
-                    WHERE conname = 'institutions_name_key'
-                ) THEN
-                    ALTER TABLE institutions DROP CONSTRAINT institutions_name_key;
-                END IF;
-            END
-            $$;
-            """
-        )
-        conn.execute(
-            """
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM pg_constraint
-                    WHERE conname = 'institutions_org_name_key'
-                ) THEN
-                    ALTER TABLE institutions
-                    ADD CONSTRAINT institutions_org_name_key UNIQUE (org_id, name);
-                END IF;
-            END
-            $$;
-            """
-        )
         conn.commit()
         conn.close()
         return
@@ -1269,46 +1364,6 @@ def ensure_institutions_schema() -> None:
 
     if "modified_at" not in cols:
         cur.execute("ALTER TABLE institutions ADD COLUMN modified_at TEXT")
-        cols.add("modified_at")
-    if "org_id" not in cols:
-        cur.execute("ALTER TABLE institutions ADD COLUMN org_id INTEGER")
-        cols.add("org_id")
-
-    schema_row = cur.execute(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='institutions'"
-    ).fetchone()
-    schema_sql = (schema_row[0] if schema_row else "") or ""
-    has_org_name_unique = "UNIQUE(org_id, name)" in schema_sql or "UNIQUE (org_id, name)" in schema_sql
-    if not has_org_name_unique:
-        default_org_id = 1
-        org_row = cur.execute("SELECT id FROM organisations ORDER BY id LIMIT 1").fetchone()
-        if org_row:
-            default_org_id = org_row[0]
-
-        modified_expr = "modified_at" if "modified_at" in cols else "NULL"
-        org_expr = f"COALESCE(org_id, {default_org_id})" if "org_id" in cols else str(default_org_id)
-        cur.execute("ALTER TABLE institutions RENAME TO institutions_legacy")
-        cur.execute(
-            """
-            CREATE TABLE institutions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                sla_hours INTEGER NOT NULL DEFAULT 48,
-                created_at TEXT NOT NULL,
-                modified_at TEXT,
-                org_id INTEGER,
-                UNIQUE(org_id, name)
-            )
-            """
-        )
-        cur.execute(
-            f"""
-            INSERT INTO institutions (id, name, sla_hours, created_at, modified_at, org_id)
-            SELECT id, name, sla_hours, created_at, {modified_expr}, {org_expr}
-            FROM institutions_legacy
-            """
-        )
-        cur.execute("DROP TABLE institutions_legacy")
 
     conn.commit()
     conn.close()
@@ -1361,6 +1416,8 @@ def ensure_users_schema() -> None:
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT")
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS surname TEXT")
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT")
+        conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT")
+        conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS radiologist_name TEXT")
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled INTEGER NOT NULL DEFAULT 0")
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_required INTEGER NOT NULL DEFAULT 0")
         conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret TEXT")
@@ -1385,6 +1442,10 @@ def ensure_users_schema() -> None:
         cur.execute("ALTER TABLE users ADD COLUMN surname TEXT")
     if "email" not in cols:
         cur.execute("ALTER TABLE users ADD COLUMN email TEXT")
+    if "role" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN role TEXT")
+    if "radiologist_name" not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN radiologist_name TEXT")
     if "mfa_enabled" not in cols:
         cur.execute("ALTER TABLE users ADD COLUMN mfa_enabled INTEGER NOT NULL DEFAULT 0")
     if "mfa_required" not in cols:
@@ -1439,6 +1500,7 @@ def ensure_study_description_presets_schema() -> None:
     if using_postgres():
         conn = get_db()
         conn.execute("ALTER TABLE study_description_presets ADD COLUMN IF NOT EXISTS is_active INTEGER NOT NULL DEFAULT 1")
+        conn.execute("ALTER TABLE study_description_presets ADD COLUMN IF NOT EXISTS study_code TEXT")
         conn.commit()
         conn.close()
         return
@@ -1451,6 +1513,95 @@ def ensure_study_description_presets_schema() -> None:
     if "is_active" not in cols:
         cur.execute("ALTER TABLE study_description_presets ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
         cur.execute("UPDATE study_description_presets SET is_active = 1 WHERE is_active IS NULL")
+    if "study_code" not in cols:
+        cur.execute("ALTER TABLE study_description_presets ADD COLUMN study_code TEXT")
+    conn.commit()
+    conn.close()
+
+
+def ensure_exam_catalogue_assignment_schema() -> None:
+    conn = get_db()
+    if using_postgres():
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS study_description_preset_assignments (
+                id SERIAL PRIMARY KEY,
+                org_id INTEGER NOT NULL,
+                preset_id INTEGER NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                assigned_at TEXT NOT NULL,
+                assigned_by INTEGER,
+                UNIQUE(org_id, preset_id)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_preset_assignments_org ON study_description_preset_assignments(org_id, is_active)"
+        )
+        conn.commit()
+        conn.close()
+        return
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS study_description_preset_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id INTEGER NOT NULL,
+            preset_id INTEGER NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            assigned_at TEXT NOT NULL,
+            assigned_by INTEGER,
+            UNIQUE(org_id, preset_id)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_preset_assignments_org ON study_description_preset_assignments(org_id, is_active)"
+    )
+    conn.commit()
+    conn.close()
+
+
+def ensure_report_sent_schema() -> None:
+    conn = get_db()
+    if using_postgres():
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS study_description_preset_id INTEGER")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS study_code TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS exam_catalogue_requires_review INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS exam_catalogue_exception_reason TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS exam_catalogue_exception_at TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS exam_catalogue_exception_by TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS exam_catalogue_exception_by_id INTEGER")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_at TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_by TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_by_id INTEGER")
+        conn.commit()
+        conn.close()
+        return
+
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(cases)")
+    cols = {row[1] for row in cur.fetchall()}
+    if "study_description_preset_id" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN study_description_preset_id INTEGER")
+    if "study_code" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN study_code TEXT")
+    if "exam_catalogue_requires_review" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN exam_catalogue_requires_review INTEGER NOT NULL DEFAULT 0")
+    if "exam_catalogue_exception_reason" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN exam_catalogue_exception_reason TEXT")
+    if "exam_catalogue_exception_at" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN exam_catalogue_exception_at TEXT")
+    if "exam_catalogue_exception_by" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN exam_catalogue_exception_by TEXT")
+    if "exam_catalogue_exception_by_id" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN exam_catalogue_exception_by_id INTEGER")
+    if "report_sent_at" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN report_sent_at TEXT")
+    if "report_sent_by" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN report_sent_by TEXT")
+    if "report_sent_by_id" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN report_sent_by_id INTEGER")
     conn.commit()
     conn.close()
 
@@ -1704,20 +1855,33 @@ def ensure_default_protocols() -> None:
     conn.close()
 
 
-def _load_study_presets_from_migration() -> list[tuple[str, str]]:
+def _load_study_presets_from_migration() -> list[tuple[str, str, str]]:
     full_csv_path = BASE_DIR / "database" / "migrations" / "004_study_description_presets_full.csv"
     if full_csv_path.exists():
-        presets: list[tuple[str, str]] = []
-        seen: set[tuple[str, str]] = set()
+        presets: list[tuple[str, str, str]] = []
+        seen: set[tuple[str, str, str]] = set()
         try:
             with full_csv_path.open("r", encoding="utf-8", errors="ignore", newline="") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    modality_clean = (row.get("modality") or "").strip().upper()
-                    description_clean = (row.get("description") or "").strip()
+                    normalized_row = {
+                        re.sub(r"[^a-z0-9]+", "_", str(key or "").strip().lower()).strip("_"): value
+                        for key, value in row.items()
+                    }
+                    modality_clean = (normalized_row.get("modality") or "").strip().upper()
+                    description_clean = (
+                        normalized_row.get("description")
+                        or normalized_row.get("study_description")
+                        or ""
+                    ).strip()
+                    study_code_clean = (
+                        normalized_row.get("study_code")
+                        or normalized_row.get("exam_code")
+                        or ""
+                    ).strip()
                     if not modality_clean or not description_clean:
                         continue
-                    key = (modality_clean, description_clean)
+                    key = (modality_clean, description_clean, study_code_clean)
                     if key in seen:
                         continue
                     seen.add(key)
@@ -1737,15 +1901,15 @@ def _load_study_presets_from_migration() -> list[tuple[str, str]]:
         return []
 
     pattern = re.compile(r"\(\s*1\s*,\s*'([^']+)'\s*,\s*'((?:''|[^'])+)'\s*,")
-    presets: list[tuple[str, str]] = []
-    seen: set[tuple[str, str]] = set()
+    presets: list[tuple[str, str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
 
     for modality, description in pattern.findall(sql_text):
         modality_clean = modality.strip().upper()
         description_clean = description.replace("''", "'").strip()
         if not modality_clean or not description_clean:
             continue
-        key = (modality_clean, description_clean)
+        key = (modality_clean, description_clean, "")
         if key in seen:
             continue
         seen.add(key)
@@ -1754,11 +1918,274 @@ def _load_study_presets_from_migration() -> list[tuple[str, str]]:
     return presets
 
 
+def assign_exam_catalogue_to_org(org_id: int, assigned_by: int | None = None, preset_ids: list[int] | None = None) -> None:
+    if not org_id or not table_exists("study_description_preset_assignments"):
+        return
+    conn = get_db()
+    now = utc_now_iso()
+    if preset_ids is None:
+        rows = conn.execute(
+            """
+            SELECT id
+            FROM study_description_presets
+            WHERE organization_id = 0 AND COALESCE(is_active, 1) = 1
+            ORDER BY modality, description
+            """
+        ).fetchall()
+        preset_ids = []
+        for row in rows:
+            row_id = dict(row).get("id")
+            if row_id is None:
+                continue
+            try:
+                preset_ids.append(int(row_id))
+            except (TypeError, ValueError):
+                continue
+    for preset_id in preset_ids:
+        if using_postgres():
+            conn.execute(
+                """
+                INSERT INTO study_description_preset_assignments (org_id, preset_id, is_active, assigned_at, assigned_by)
+                VALUES (?, ?, 1, ?, ?)
+                ON CONFLICT (org_id, preset_id) DO UPDATE SET
+                    is_active = 1,
+                    assigned_at = EXCLUDED.assigned_at,
+                    assigned_by = EXCLUDED.assigned_by
+                """,
+                (org_id, preset_id, now, assigned_by),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO study_description_preset_assignments (org_id, preset_id, is_active, assigned_at, assigned_by)
+                VALUES (?, ?, 1, ?, ?)
+                ON CONFLICT (org_id, preset_id) DO UPDATE SET
+                    is_active = 1,
+                    assigned_at = excluded.assigned_at,
+                    assigned_by = excluded.assigned_by
+                """,
+                (org_id, preset_id, now, assigned_by),
+            )
+    conn.commit()
+    conn.close()
+
+
+def assign_full_exam_catalogue_to_all_orgs(assigned_by: int | None = None) -> None:
+    if not table_exists("organisations"):
+        return
+    conn = get_db()
+    org_rows = conn.execute(
+        """
+        SELECT id
+        FROM organisations
+        WHERE COALESCE(is_active, 1) = 1
+        ORDER BY id
+        """
+    ).fetchall()
+    conn.close()
+    for org_row in org_rows:
+        org_data = dict(org_row)
+        org_raw_id = org_data.get("id")
+        try:
+            org_id = int(org_raw_id) if org_raw_id is not None else None
+        except (TypeError, ValueError):
+            org_id = None
+        if org_id:
+            assign_exam_catalogue_to_org(org_id, assigned_by=assigned_by)
+
+
+def set_exam_catalogue_assignments(org_id: int, preset_ids: list[int], assigned_by: int | None = None) -> None:
+    if not org_id:
+        return
+    preset_ids = sorted({int(p) for p in preset_ids if p})
+    conn = get_db()
+    now = utc_now_iso()
+    if preset_ids:
+        placeholders = ",".join("?" for _ in preset_ids)
+        conn.execute(
+            f"UPDATE study_description_preset_assignments SET is_active = 0 WHERE org_id = ? AND preset_id NOT IN ({placeholders})",
+            [org_id, *preset_ids],
+        )
+    else:
+        conn.execute("UPDATE study_description_preset_assignments SET is_active = 0 WHERE org_id = ?", (org_id,))
+    conn.commit()
+    conn.close()
+    assign_exam_catalogue_to_org(org_id, assigned_by=assigned_by, preset_ids=preset_ids)
+
+
 def ensure_default_study_description_presets() -> None:
-    if not table_exists("study_description_presets"):
+    if not table_exists("study_description_presets") or not table_exists("organisations"):
         return
 
     conn = get_db()
+    presets = _load_study_presets_from_migration()
+    if not presets:
+        presets = [
+            ("CT", "CT Head", ""),
+            ("CT", "CT Thorax", ""),
+            ("MRI", "MRI Brain", ""),
+            ("MRI", "MRI Spine lumbar", ""),
+            ("XR", "XR Chest", ""),
+            ("PET", "PET FDG Whole body", ""),
+            ("DEXA", "DXA Whole body", ""),
+        ]
+
+    now = utc_now_iso()
+    for modality, description, study_code in presets:
+        if using_postgres():
+            conn.execute(
+                """
+                INSERT INTO study_description_presets (organization_id, modality, description, study_code, created_at, updated_at, created_by, is_active)
+                VALUES (0, ?, ?, ?, ?, ?, ?, 1)
+                ON CONFLICT (organization_id, modality, description) DO UPDATE SET
+                    study_code = CASE
+                        WHEN COALESCE(study_description_presets.study_code, '') = '' AND COALESCE(EXCLUDED.study_code, '') <> '' THEN EXCLUDED.study_code
+                        ELSE study_description_presets.study_code
+                    END,
+                    is_active = 1,
+                    updated_at = EXCLUDED.updated_at
+                """,
+                (modality, description, study_code or None, now, now, 1),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO study_description_presets (organization_id, modality, description, study_code, created_at, updated_at, created_by, is_active)
+                VALUES (0, ?, ?, ?, ?, ?, ?, 1)
+                ON CONFLICT (organization_id, modality, description) DO UPDATE SET
+                    study_code = CASE
+                        WHEN COALESCE(study_description_presets.study_code, '') = '' AND COALESCE(excluded.study_code, '') <> '' THEN excluded.study_code
+                        ELSE study_description_presets.study_code
+                    END,
+                    is_active = 1,
+                    updated_at = excluded.updated_at
+                """,
+                (modality, description, study_code or None, now, now, 1),
+            )
+
+    organisations = conn.execute("SELECT id FROM organisations ORDER BY id").fetchall()
+    conn.commit()
+    conn.close()
+
+    for org_row in organisations:
+        org_data = dict(org_row)
+        org_id = int(org_data["id"])
+        assign_exam_catalogue_to_org(org_id, assigned_by=1)
+
+
+def list_exam_catalogue(active_only: bool = True, org_id: int | None = None) -> list[dict]:
+    if not table_exists("study_description_presets"):
+        return []
+    conn = get_db()
+    params: list = []
+    if org_id:
+        sql = (
+            "SELECT p.id, p.modality, p.description, COALESCE(p.study_code, '') AS study_code, "
+            "COALESCE(p.is_active, 1) AS is_active "
+            "FROM study_description_presets p "
+            "LEFT JOIN study_description_preset_assignments a ON a.preset_id = p.id AND a.org_id = ? "
+            "WHERE ("
+            "  (p.organization_id = 0 AND a.org_id IS NOT NULL AND COALESCE(a.is_active, 1) = 1) "
+            "  OR p.organization_id = ?"
+            ")"
+        )
+        params.extend([org_id, org_id])
+    else:
+        sql = (
+            "SELECT p.id, p.modality, p.description, COALESCE(p.study_code, '') AS study_code, "
+            "COALESCE(p.is_active, 1) AS is_active "
+            "FROM study_description_presets p "
+            "WHERE p.organization_id = 0"
+        )
+    if active_only:
+        sql += " AND COALESCE(p.is_active, 1) = 1"
+    sql += " ORDER BY p.modality, p.description"
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def list_study_description_presets(org_id: int | None = None) -> list[dict]:
+    return list_exam_catalogue(active_only=True, org_id=org_id)
+
+
+def get_study_description_preset(preset_id: int, org_id: int | None = None) -> dict | None:
+    conn = get_db()
+    params: list = [preset_id]
+    sql = (
+        "SELECT p.id, p.modality, p.description, COALESCE(p.study_code, '') AS study_code, COALESCE(p.is_active, 1) AS is_active "
+        "FROM study_description_presets p "
+        "WHERE p.id = ? AND p.organization_id = 0"
+    )
+    if org_id:
+        sql = (
+            "SELECT p.id, p.modality, p.description, COALESCE(p.study_code, '') AS study_code, COALESCE(p.is_active, 1) AS is_active "
+            "FROM study_description_presets p "
+            "LEFT JOIN study_description_preset_assignments a ON a.preset_id = p.id AND a.org_id = ? "
+            "WHERE p.id = ? AND ("
+            "  (p.organization_id = 0 AND a.org_id IS NOT NULL AND COALESCE(a.is_active, 1) = 1) "
+            "  OR p.organization_id = ?"
+            ")"
+        )
+        params = [org_id, preset_id, org_id]
+    row = conn.execute(sql, params).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def normalize_exam_match_value(value: str | None) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
+
+
+def find_matching_exam_catalogue_item(
+    *,
+    org_id: int | None,
+    study_description: str | None,
+    modality: str | None = None,
+    study_code: str | None = None,
+) -> dict | None:
+    available_exams = list_exam_catalogue(active_only=True, org_id=org_id)
+    if not available_exams:
+        return None
+
+    normalized_code = normalize_exam_match_value(study_code)
+    normalized_description = normalize_exam_match_value(study_description)
+    normalized_modality = str(modality or "").strip().upper()
+
+    def _prefer_modality(items: list[dict]) -> list[dict]:
+        if not normalized_modality:
+            return items
+        exact = [item for item in items if str(item.get("modality") or "").strip().upper() == normalized_modality]
+        return exact or items
+
+    if normalized_code:
+        code_matches = [
+            item
+            for item in available_exams
+            if normalize_exam_match_value(item.get("study_code")) == normalized_code
+        ]
+        code_matches = _prefer_modality(code_matches)
+        if code_matches:
+            return code_matches[0]
+
+    if normalized_description:
+        desc_matches = [
+            item
+            for item in available_exams
+            if normalize_exam_match_value(item.get("description")) == normalized_description
+        ]
+        desc_matches = _prefer_modality(desc_matches)
+        if desc_matches:
+            return desc_matches[0]
+
+    return None
+
+    conn = get_db()
+    row = conn.execute("SELECT COUNT(*) AS c FROM study_description_presets").fetchone()
+    if row and row["c"]:
+        conn.close()
+        return
+
     presets = _load_study_presets_from_migration()
     if not presets:
         presets = [
@@ -1772,30 +2199,24 @@ def ensure_default_study_description_presets() -> None:
         ]
 
     now = utc_now_iso()
-    org_rows = []
-    if table_exists("organisations"):
-        org_rows = conn.execute("SELECT id FROM organisations ORDER BY id").fetchall()
-    target_org_ids = [int((row["id"] if isinstance(row, dict) else row[0])) for row in org_rows] or [1]
-
-    for target_org_id in target_org_ids:
-        for modality, description in presets:
-            if using_postgres():
-                conn.execute(
-                    """
-                    INSERT INTO study_description_presets (organization_id, modality, description, created_at, updated_at, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    ON CONFLICT (organization_id, modality, description) DO NOTHING
-                    """,
-                    (target_org_id, modality, description, now, now, 1),
-                )
-            else:
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO study_description_presets (organization_id, modality, description, created_at, updated_at, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (target_org_id, modality, description, now, now, 1),
-                )
+    for modality, description in presets:
+        if using_postgres():
+            conn.execute(
+                """
+                INSERT INTO study_description_presets (organization_id, modality, description, created_at, updated_at, created_by)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (organization_id, modality, description) DO NOTHING
+                """,
+                (1, modality, description, now, now, 1),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO study_description_presets (organization_id, modality, description, created_at, updated_at, created_by)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (1, modality, description, now, now, 1),
+            )
 
     conn.commit()
     conn.close()
@@ -1850,40 +2271,6 @@ def list_protocol_rows(org_id: int | None = None) -> list[dict]:
     return result
 
 
-def list_study_description_presets(org_id: int | None = None) -> list[dict]:
-    if not org_id:
-        return []
-    conn = get_db()
-    rows = conn.execute(
-        """
-        SELECT id, modality, description, is_active
-        FROM study_description_presets
-        WHERE organization_id = ? AND COALESCE(is_active, 1) = 1
-        ORDER BY modality, description
-        """,
-        (org_id,),
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-def get_study_description_preset(preset_id: int, org_id: int | None = None) -> dict | None:
-    if not org_id:
-        return None
-    conn = get_db()
-    row = conn.execute(
-        """
-        SELECT id, modality, description
-        FROM study_description_presets
-        WHERE id = ? AND organization_id = ? AND COALESCE(is_active, 1) = 1
-        LIMIT 1
-        """,
-        (preset_id, org_id),
-    ).fetchone()
-    conn.close()
-    return dict(row) if row else None
-
-
 def list_protocol_rows_for_study(
     study_description_preset_id: int,
     institution_id: int | None = None,
@@ -1900,7 +2287,7 @@ def list_protocol_rows_for_study(
         clauses.append("p.institution_id = ?")
         params.append(institution_id)
     if org_id and table_has_column("protocols", "org_id"):
-        clauses.append("p.org_id = ?")
+        clauses.append("(p.org_id = ? OR p.org_id IS NULL)")
         params.append(org_id)
 
     rows = conn.execute(
@@ -1914,6 +2301,319 @@ def list_protocol_rows_for_study(
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def list_protocol_rows_for_institution(
+    institution_id: int | None,
+    org_id: int | None = None,
+    active_only: bool = True,
+) -> list[dict]:
+    if not institution_id:
+        return []
+    conn = get_db()
+    clauses = ["p.institution_id = ?"]
+    params: list = [institution_id]
+    if active_only:
+        clauses.append("p.is_active = 1")
+    if org_id and table_has_column("protocols", "org_id"):
+        clauses.append("(p.org_id = ? OR p.org_id IS NULL)")
+        params.append(org_id)
+
+    rows = conn.execute(
+        f"""
+        SELECT p.id, p.name, p.instructions, p.institution_id, p.study_description_preset_id
+        FROM protocols p
+        WHERE {' AND '.join(clauses)}
+        ORDER BY p.name
+        """,
+        params,
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def list_protocol_rows_for_case(case_row: dict, org_id: int | None = None) -> tuple[list[dict], int | None]:
+    institution_id = case_row.get("institution_id")
+    if not institution_id:
+        return [], None
+
+    preset_id = case_row.get("study_description_preset_id")
+    try:
+        preset_id = int(preset_id) if preset_id is not None else None
+    except (TypeError, ValueError):
+        preset_id = None
+
+    institution_protocols = list_protocol_rows_for_institution(
+        institution_id,
+        org_id=org_id,
+        active_only=True,
+    )
+    if institution_protocols:
+        return institution_protocols, preset_id
+
+    if preset_id:
+        rows = list_protocol_rows_for_study(
+            preset_id,
+            institution_id=institution_id,
+            org_id=org_id,
+            active_only=True,
+        )
+        if rows:
+            return rows, preset_id
+
+    matched_exam = find_matching_exam_catalogue_item(
+        org_id=org_id,
+        study_description=case_row.get("study_description"),
+        modality=case_row.get("modality"),
+        study_code=case_row.get("study_code"),
+    )
+    if matched_exam:
+        matched_preset_id = int(matched_exam["id"])
+        rows = list_protocol_rows_for_study(
+            matched_preset_id,
+            institution_id=institution_id,
+            org_id=org_id,
+            active_only=True,
+        )
+        if rows:
+            return rows, matched_preset_id
+
+    conn = get_db()
+    clauses = [
+        "p.institution_id = ?",
+        "p.is_active = 1",
+    ]
+    params: list = [institution_id]
+    if org_id and table_has_column("protocols", "org_id"):
+        clauses.append("(p.org_id = ? OR p.org_id IS NULL)")
+        params.append(org_id)
+
+    normalized_code = normalize_exam_match_value(case_row.get("study_code"))
+    if normalized_code:
+        row = conn.execute(
+            f"""
+            SELECT p.id, p.name, p.instructions, p.institution_id, p.study_description_preset_id
+            FROM protocols p
+            JOIN study_description_presets s ON s.id = p.study_description_preset_id
+            WHERE {' AND '.join(clauses)}
+              AND COALESCE(TRIM(s.study_code), '') <> ''
+              AND LOWER(TRIM(s.study_code)) = LOWER(TRIM(?))
+            ORDER BY p.name
+            """,
+            params + [str(case_row.get("study_code") or "").strip()],
+        ).fetchall()
+        if row:
+            rows = [dict(r) for r in row]
+            conn.close()
+            return rows, rows[0].get("study_description_preset_id")
+
+    normalized_description = normalize_exam_match_value(case_row.get("study_description"))
+    normalized_modality = str(case_row.get("modality") or "").strip().upper()
+    if normalized_description:
+        extra_clauses = [
+            "LOWER(TRIM(s.description)) = LOWER(TRIM(?))",
+        ]
+        extra_params = [str(case_row.get("study_description") or "").strip()]
+        if normalized_modality:
+            extra_clauses.append("UPPER(TRIM(COALESCE(s.modality, ''))) = ?")
+            extra_params.append(normalized_modality)
+        row = conn.execute(
+            f"""
+            SELECT p.id, p.name, p.instructions, p.institution_id, p.study_description_preset_id
+            FROM protocols p
+            JOIN study_description_presets s ON s.id = p.study_description_preset_id
+            WHERE {' AND '.join(clauses + extra_clauses)}
+            ORDER BY p.name
+            """,
+            params + extra_params,
+        ).fetchall()
+        if row:
+            rows = [dict(r) for r in row]
+            conn.close()
+            return rows, rows[0].get("study_description_preset_id")
+
+        legacy_name_row = conn.execute(
+            f"""
+            SELECT p.id, p.name, p.instructions, p.institution_id, p.study_description_preset_id
+            FROM protocols p
+            WHERE {' AND '.join(clauses)}
+              AND LOWER(TRIM(p.name)) = LOWER(TRIM(?))
+            ORDER BY p.name
+            """,
+            params + [str(case_row.get("study_description") or "").strip()],
+        ).fetchall()
+        if legacy_name_row:
+            rows = [dict(r) for r in legacy_name_row]
+            conn.close()
+            return rows, rows[0].get("study_description_preset_id")
+
+    conn.close()
+    return [], preset_id
+
+
+def get_protocol_row(protocol_id: int, institution_id: int | None = None, org_id: int | None = None) -> dict | None:
+    conn = get_db()
+    clauses = ["id = ?"]
+    params: list = [protocol_id]
+    if institution_id is not None:
+        clauses.append("institution_id = ?")
+        params.append(institution_id)
+    if org_id and table_has_column("protocols", "org_id"):
+        clauses.append("(org_id = ? OR org_id IS NULL)")
+        params.append(org_id)
+    row = conn.execute(
+        f"SELECT id, name, instructions, institution_id, study_description_preset_id FROM protocols WHERE {' AND '.join(clauses)} LIMIT 1",
+        params,
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_report_sent_summary(case_row: dict) -> tuple[bool, str]:
+    sent_at = str(case_row.get("report_sent_at") or "").strip()
+    if not sent_at:
+        return False, ""
+    return True, format_display_datetime(sent_at, sent_at)
+
+
+def get_exam_catalogue_review_summary(case_row: dict) -> tuple[bool, str]:
+    requires_review = str(case_row.get("exam_catalogue_requires_review") or "0").strip().lower() in {"1", "true", "yes", "on"}
+    if not requires_review:
+        return False, ""
+    reason = str(case_row.get("exam_catalogue_exception_reason") or "").strip()
+    flagged_at = str(case_row.get("exam_catalogue_exception_at") or "").strip()
+    flagged_by = str(case_row.get("exam_catalogue_exception_by") or "").strip()
+    pieces: list[str] = []
+    if reason:
+        pieces.append(reason)
+    if flagged_at:
+        pieces.append(format_display_datetime(flagged_at, flagged_at))
+    if flagged_by:
+        pieces.append(flagged_by)
+    return True, " | ".join(pieces)
+
+
+def build_case_preview_context(case_id: str, case_row: dict, attachments: list[dict]) -> dict:
+    preview_attachment = next((item for item in attachments if item.get("available")), None)
+    preview_url = f"/case/{case_id}/attachment/preview"
+    inline_url = f"/case/{case_id}/attachment/inline"
+    preview_name = case_row.get("uploaded_filename") or "Referral attachment"
+    preview_from_attachment = False
+    preview_available = bool(case_row.get("stored_filepath"))
+    preview_source = "primary"
+
+    if preview_attachment and (
+        not preview_available
+        or not case_row.get("uploaded_filename")
+        or not case_row.get("attachment_previewable")
+    ):
+        preview_url = f"/case/{case_id}/attachments/{preview_attachment['id']}/preview"
+        inline_url = f"/case/{case_id}/attachments/{preview_attachment['id']}/inline"
+        preview_name = preview_attachment.get("uploaded_filename") or preview_name
+        preview_from_attachment = True
+        preview_available = True
+        preview_source = "attachment"
+
+    return {
+        "preview_url": preview_url,
+        "inline_url": inline_url,
+        "preview_name": preview_name,
+        "preview_available": preview_available,
+        "preview_source": preview_source,
+        "preview_from_attachment": preview_from_attachment,
+    }
+
+
+def can_use_uncatalogued_exam_exception(user: dict | None) -> bool:
+    return bool(user and user.get("is_superuser"))
+
+
+def resolve_case_exam_selection(
+    *,
+    user: dict | None,
+    org_id: int | None,
+    study_description: str,
+    study_description_preset_id: str,
+    study_code: str = "",
+    modality: str = "",
+    uncatalogued_exam_requested: str = "",
+    uncatalogued_exam_reason: str = "",
+    existing_case: dict | None = None,
+) -> dict:
+    selected_preset = None
+    selected_preset_id = None
+    if str(study_description_preset_id or "").strip().isdigit():
+        selected_preset_id = int(str(study_description_preset_id).strip())
+        selected_preset = get_study_description_preset(selected_preset_id, org_id)
+
+    cleaned_study_description = (study_description or "").strip()
+    cleaned_study_code = (study_code or "").strip() or None
+    cleaned_modality = (modality or "").strip().upper() or None
+    exception_requested = str(uncatalogued_exam_requested or "").strip().lower() in {"1", "true", "on", "yes"}
+    exception_reason = (uncatalogued_exam_reason or "").strip()
+
+    existing_description = (str(existing_case.get("study_description") or "").strip() if existing_case else "")
+    existing_code = (str(existing_case.get("study_code") or "").strip() if existing_case else "")
+    existing_modality = (str(existing_case.get("modality") or "").strip().upper() if existing_case and existing_case.get("modality") else "")
+
+    if selected_preset:
+        return {
+            "study_description": str(selected_preset.get("description") or cleaned_study_description).strip(),
+            "study_code": str(selected_preset.get("study_code") or cleaned_study_code or "").strip() or None,
+            "modality": str(selected_preset.get("modality") or cleaned_modality or "").strip().upper() or None,
+            "study_description_preset_id": selected_preset_id,
+            "requires_review": 0,
+            "exception_reason": None,
+            "exception_at": None,
+            "exception_by": None,
+            "exception_by_id": None,
+            "exception_requested": False,
+        }
+
+    changed_without_catalogue = existing_case is None or (
+        cleaned_study_description != existing_description
+        or (cleaned_study_code or "") != existing_code
+        or (cleaned_modality or "") != existing_modality
+    )
+
+    if not changed_without_catalogue and existing_case is not None:
+        return {
+            "study_description": existing_description,
+            "study_code": existing_code or None,
+            "modality": existing_modality or None,
+            "study_description_preset_id": existing_case.get("study_description_preset_id"),
+            "requires_review": int(existing_case.get("exam_catalogue_requires_review") or 0),
+            "exception_reason": existing_case.get("exam_catalogue_exception_reason"),
+            "exception_at": existing_case.get("exam_catalogue_exception_at"),
+            "exception_by": existing_case.get("exam_catalogue_exception_by"),
+            "exception_by_id": existing_case.get("exam_catalogue_exception_by_id"),
+            "exception_requested": False,
+        }
+
+    if exception_requested:
+        if not can_use_uncatalogued_exam_exception(user):
+            raise HTTPException(status_code=403, detail="Only owner or super-admin users can create a temporary uncatalogued exam")
+        if not cleaned_study_description:
+            raise HTTPException(status_code=400, detail="Study description is required for a temporary uncatalogued exam")
+        if not cleaned_modality:
+            raise HTTPException(status_code=400, detail="Modality is required for a temporary uncatalogued exam")
+        if not exception_reason:
+            raise HTTPException(status_code=400, detail="Reason is required for a temporary uncatalogued exam")
+        now = utc_now_iso()
+        return {
+            "study_description": cleaned_study_description,
+            "study_code": cleaned_study_code,
+            "modality": cleaned_modality,
+            "study_description_preset_id": None,
+            "requires_review": 1,
+            "exception_reason": exception_reason,
+            "exception_at": now,
+            "exception_by": user.get("username") if user else None,
+            "exception_by_id": user.get("id") if user else None,
+            "exception_requested": True,
+        }
+
+    raise HTTPException(status_code=400, detail="Please select an exam from the master exam catalogue")
 
 
 def upsert_protocol(name: str) -> None:
@@ -2431,42 +3131,98 @@ def get_institution(inst_id: int, org_id: int | None = None) -> dict | None:
     return dict(row) if row else None
 
 
-def upsert_institution(name: str, sla_hours: int, org_id: int | None = None) -> int:
-    name_clean = name.strip()
+def ensure_default_institution(org_id: int | None) -> dict | None:
+    if not org_id:
+        return None
+
+    institutions = list_institutions(org_id)
+    if institutions:
+        return institutions[0]
+
+    conn = get_db()
+    org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
+    if not org_row:
+        conn.close()
+        return None
+
+    org_name = (org_row.get("name") if isinstance(org_row, dict) else org_row[0]) or "Default Institution"
     now = utc_now_iso()
+    if table_has_column("institutions", "org_id"):
+        conn.execute(
+            """
+            INSERT INTO institutions (name, sla_hours, org_id, created_at, modified_at)
+            VALUES (?, 48, ?, ?, ?)
+            """,
+            (org_name, org_id, now, now),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO institutions (name, sla_hours, created_at, modified_at) VALUES (?, 48, ?, ?)",
+            (org_name, now, now),
+        )
+    conn.commit()
+    conn.close()
+
+
+def ensure_case_attachments_schema() -> None:
+    conn = get_db()
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS case_attachments (
+            id TEXT PRIMARY KEY,
+            case_id TEXT NOT NULL,
+            org_id INTEGER,
+            uploaded_filename TEXT NOT NULL,
+            stored_filepath TEXT,
+            uploaded_by TEXT,
+            created_at TEXT NOT NULL,
+            is_primary INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_case_attachments_case ON case_attachments(case_id, created_at)")
+    conn.commit()
+    conn.close()
+
+
+def get_default_institution(org_id: int | None) -> dict | None:
+    if not org_id:
+        return None
+
+    institutions = list_institutions(org_id)
+    if not institutions:
+        return ensure_default_institution(org_id)
+
+    conn = get_db()
+    org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
+    conn.close()
+    org_name = ((org_row.get("name") if isinstance(org_row, dict) else org_row[0]) if org_row else "") or ""
+    if org_name:
+        for institution in institutions:
+            if str(institution.get("name") or "").strip().lower() == org_name.strip().lower():
+                return institution
+    return institutions[0]
+
+
+def upsert_institution(name: str, sla_hours: int, org_id: int | None = None) -> int:
     conn = get_db()
     if org_id and table_has_column("institutions", "org_id"):
-        row = conn.execute(
-            "SELECT id FROM institutions WHERE name = ? AND org_id = ?",
-            (name_clean, org_id),
-        ).fetchone()
-        if row:
-            conn.execute(
-                "UPDATE institutions SET sla_hours = ?, modified_at = ? WHERE id = ? AND org_id = ?",
-                (sla_hours, now, row["id"] if isinstance(row, dict) else row[0], org_id),
-            )
-        else:
-            conn.execute(
-                "INSERT INTO institutions(name, sla_hours, created_at, modified_at, org_id) VALUES(?, ?, ?, ?, ?)",
-                (name_clean, sla_hours, now, now, org_id),
-            )
+        conn.execute(
+            "INSERT INTO institutions(name, sla_hours, created_at, modified_at, org_id) VALUES(?, ?, ?, ?, ?) "
+            "ON CONFLICT(name) DO UPDATE SET sla_hours=excluded.sla_hours, modified_at=excluded.modified_at",
+            (name.strip(), sla_hours, utc_now_iso(), utc_now_iso(), org_id),
+        )
     else:
-        row = conn.execute("SELECT id FROM institutions WHERE name = ?", (name_clean,)).fetchone()
-        if row:
-            conn.execute(
-                "UPDATE institutions SET sla_hours = ?, modified_at = ? WHERE id = ?",
-                (sla_hours, now, row["id"] if isinstance(row, dict) else row[0]),
-            )
-        else:
-            conn.execute(
-                "INSERT INTO institutions(name, sla_hours, created_at, modified_at) VALUES(?, ?, ?, ?)",
-                (name_clean, sla_hours, now, now),
-            )
+        conn.execute(
+            "INSERT INTO institutions(name, sla_hours, created_at, modified_at) VALUES(?, ?, ?, ?) "
+            "ON CONFLICT(name) DO UPDATE SET sla_hours=excluded.sla_hours, modified_at=excluded.modified_at",
+            (name.strip(), sla_hours, utc_now_iso(), utc_now_iso()),
+        )
     conn.commit()
     if org_id and table_has_column("institutions", "org_id"):
-        row = conn.execute("SELECT id FROM institutions WHERE name = ? AND org_id = ?", (name_clean, org_id)).fetchone()
+        row = conn.execute("SELECT id FROM institutions WHERE name = ? AND org_id = ?", (name.strip(), org_id)).fetchone()
     else:
-        row = conn.execute("SELECT id FROM institutions WHERE name = ?", (name_clean,)).fetchone()
+        row = conn.execute("SELECT id FROM institutions WHERE name = ?", (name.strip(),)).fetchone()
     inst_id = row["id"] if row else None
     conn.close()
     return inst_id
@@ -2923,8 +3679,10 @@ def ensure_extended_identity_schema() -> None:
     cur.execute("UPDATE cases SET org_id = ? WHERE org_id IS NULL", (default_org_id,))
     cur.execute("UPDATE protocols SET org_id = ? WHERE org_id IS NULL", (default_org_id,))
 
+    # Study presets now act as a central owner-managed exam catalogue.
+    # Keep central rows on organization_id = 0 and let assignment rows control org visibility.
     if table_exists("study_description_presets"):
-        cur.execute("UPDATE study_description_presets SET organization_id = ? WHERE organization_id IS NULL OR organization_id = 0", (default_org_id,))
+        cur.execute("UPDATE study_description_presets SET organization_id = ? WHERE organization_id IS NULL", (default_org_id,))
 
     cur.execute("PRAGMA table_info(users)")
     user_cols_after_upgrade = {row[1] for row in cur.fetchall()}
@@ -3005,6 +3763,219 @@ def insert_case_event(
     conn.close()
 
 
+def ensure_primary_case_attachment_record(case_dict: dict | None) -> None:
+    if not case_dict or not table_exists("case_attachments"):
+        return
+    if not case_dict.get("uploaded_filename"):
+        return
+
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT id FROM case_attachments WHERE case_id = ? LIMIT 1",
+        (case_dict.get("id"),),
+    ).fetchone()
+    if existing:
+        conn.close()
+        return
+
+    conn.execute(
+        """
+        INSERT INTO case_attachments (id, case_id, org_id, uploaded_filename, stored_filepath, uploaded_by, created_at, is_primary)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        """,
+        (
+            uuid4().hex,
+            case_dict.get("id"),
+            case_dict.get("org_id"),
+            case_dict.get("uploaded_filename"),
+            case_dict.get("stored_filepath"),
+            None,
+            case_dict.get("created_at") or utc_now_iso(),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_case_attachments(case_id: str, case_dict: dict | None = None) -> list[dict]:
+    if not table_exists("case_attachments"):
+        return []
+
+    if case_dict:
+        ensure_primary_case_attachment_record(case_dict)
+
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT id, case_id, org_id, uploaded_filename, stored_filepath, uploaded_by, created_at, is_primary
+        FROM case_attachments
+        WHERE case_id = ?
+        ORDER BY is_primary DESC, created_at ASC
+        """,
+        (case_id,),
+    ).fetchall()
+    conn.close()
+
+    attachments: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        stored_path = item.get("stored_filepath")
+        available = bool(stored_path)
+        if stored_path:
+            if BLOB_STORAGE_ENABLED and not str(stored_path).startswith("/"):
+                available = blob_exists(str(stored_path))
+            else:
+                available = Path(str(stored_path)).exists()
+        item["stored_filepath"] = stored_path if available else None
+        item["available"] = available
+        item["previewable"] = is_inline_previewable(item.get("uploaded_filename"))
+        item["created_at_display"] = format_display_datetime(item.get("created_at"), item.get("created_at") or "")
+        attachments.append(item)
+    return attachments
+
+
+def add_case_attachment_record(
+    case_id: str,
+    org_id: int | None,
+    uploaded_filename: str,
+    stored_filepath: str | None,
+    uploaded_by: str | None = None,
+    is_primary: bool = False,
+) -> str:
+    attachment_id = uuid4().hex
+    conn = get_db()
+    if is_primary:
+        conn.execute("UPDATE case_attachments SET is_primary = 0 WHERE case_id = ?", (case_id,))
+    conn.execute(
+        """
+        INSERT INTO case_attachments (id, case_id, org_id, uploaded_filename, stored_filepath, uploaded_by, created_at, is_primary)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (attachment_id, case_id, org_id, uploaded_filename, stored_filepath, uploaded_by, utc_now_iso(), 1 if is_primary else 0),
+    )
+    conn.commit()
+    conn.close()
+    return attachment_id
+
+
+def sync_case_primary_attachment(case_id: str) -> None:
+    if not table_exists("case_attachments"):
+        return
+
+    conn = get_db()
+    primary = conn.execute(
+        """
+        SELECT uploaded_filename, stored_filepath
+        FROM case_attachments
+        WHERE case_id = ?
+        ORDER BY is_primary DESC, created_at ASC
+        LIMIT 1
+        """,
+        (case_id,),
+    ).fetchone()
+    if primary:
+        conn.execute(
+            "UPDATE cases SET uploaded_filename = ?, stored_filepath = ? WHERE id = ?",
+            (primary["uploaded_filename"], primary["stored_filepath"], case_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE cases SET uploaded_filename = NULL, stored_filepath = NULL WHERE id = ?",
+            (case_id,),
+        )
+    conn.commit()
+    conn.close()
+
+
+def remove_case_attachment(case_id: str, attachment_id: str) -> None:
+    if not table_exists("case_attachments"):
+        return
+
+    conn = get_db()
+    row = conn.execute(
+        """
+        SELECT id, stored_filepath, is_primary
+        FROM case_attachments
+        WHERE id = ? AND case_id = ?
+        """,
+        (attachment_id, case_id),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return
+
+    conn.execute("DELETE FROM case_attachments WHERE id = ? AND case_id = ?", (attachment_id, case_id))
+    if row.get("is_primary"):
+        replacement = conn.execute(
+            """
+            SELECT id
+            FROM case_attachments
+            WHERE case_id = ?
+            ORDER BY created_at ASC
+            LIMIT 1
+            """,
+            (case_id,),
+        ).fetchone()
+        if replacement:
+            conn.execute("UPDATE case_attachments SET is_primary = 1 WHERE id = ?", (replacement["id"],))
+    conn.commit()
+    conn.close()
+
+    delete_stored_attachment_file(row.get("stored_filepath"))
+    sync_case_primary_attachment(case_id)
+
+
+def save_case_attachments(
+    case_id: str,
+    org_id: int | None,
+    files: list[UploadFile | str],
+    uploaded_by: str | None,
+    primary_when_empty: bool = False,
+) -> list[str]:
+    saved_names: list[str] = []
+    if not files:
+        return saved_names
+
+    case_row = None
+    try:
+        conn = get_db()
+        case_row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
+        conn.close()
+    except Exception:
+        case_row = None
+    case_dict = dict(case_row) if case_row else None
+    existing = list_case_attachments(case_id, case_dict=case_dict)
+    should_make_primary = primary_when_empty and not existing
+
+    for upload in files:
+        if not upload or not upload.filename:
+            continue
+        file_bytes = upload.file.read()
+        if not file_bytes:
+            continue
+        stored_path = store_case_attachment_file(
+            case_id,
+            upload.filename,
+            file_bytes,
+            org_id=org_id,
+            attachment_tag=uuid4().hex[:10],
+        )
+        add_case_attachment_record(
+            case_id,
+            org_id,
+            upload.filename,
+            stored_path,
+            uploaded_by=uploaded_by,
+            is_primary=should_make_primary,
+        )
+        should_make_primary = False
+        saved_names.append(upload.filename)
+
+    if saved_names:
+        sync_case_primary_attachment(case_id)
+    return saved_names
+
+
 # -------------------------
 # Init DB on startup
 # -------------------------
@@ -3018,8 +3989,11 @@ try:
     ensure_users_schema()
     ensure_protocols_schema()
     ensure_study_description_presets_schema()
+    ensure_exam_catalogue_assignment_schema()
     ensure_notify_events_schema()
     ensure_case_events_schema()
+    ensure_case_attachments_schema()
+    ensure_report_sent_schema()
     ensure_seed_data()
     ensure_local_owner_account()
     ensure_default_protocols()
@@ -3400,9 +4374,226 @@ def owner_dashboard(request: Request, created: str = "", error: str = ""):
                 "admin_email": "",
                 "admin_username": "",
                 "admin_mfa_required": 0,
+                "assign_full_catalogue": 1,
             },
         },
     )
+
+
+@app.get("/owner/exam-catalogue", response_class=HTMLResponse)
+def owner_exam_catalogue_page(request: Request, saved: str = "", error: str = ""):
+    user = require_superuser(request)
+    organisations = list_organisations_summary()
+    catalogue = list_owner_exam_catalogue()
+    manual_catalogue = list_owner_manual_exam_catalogue()
+    active_org_count = sum(1 for org in organisations if org.get("is_active"))
+    return templates.TemplateResponse(
+        "owner_exam_catalogue.html",
+        {
+            "request": request,
+            "user": user,
+            "catalogue": catalogue,
+            "manual_catalogue": manual_catalogue,
+            "organisations": organisations,
+            "modalities": CONTROLLED_MODALITIES,
+            "saved": saved,
+            "error": error,
+            "active_org_count": active_org_count,
+            "catalogue_source_path": str(BASE_DIR / "database" / "migrations" / "004_study_description_presets_full.csv"),
+        },
+    )
+
+
+@app.post("/owner/exam-catalogue/refresh")
+def owner_exam_catalogue_refresh(request: Request):
+    user = require_superuser(request)
+    source_path = BASE_DIR / "database" / "migrations" / "004_study_description_presets_full.csv"
+    if not source_path.exists():
+        return RedirectResponse(url="/owner/exam-catalogue?error=missing_master_file", status_code=303)
+    ensure_default_study_description_presets()
+    assign_full_exam_catalogue_to_all_orgs(user.get("id") or 1)
+    return RedirectResponse(url="/owner/exam-catalogue?saved=refreshed", status_code=303)
+
+
+@app.post("/owner/exam-catalogue/add")
+def owner_exam_catalogue_add(
+    request: Request,
+    org_id: int = Form(...),
+    modality: str = Form(...),
+    description: str = Form(...),
+    study_code: str = Form(""),
+    is_active: str = Form("1"),
+):
+    user = require_superuser(request)
+    modality_value = (modality or "").strip().upper()
+    description_value = (description or "").strip()
+    study_code_value = (study_code or "").strip()
+    active_value = 1 if str(is_active).strip() == "1" else 0
+    valid_org_ids = {int(org["id"]) for org in list_organisations_summary() if org.get("is_active")}
+    if modality_value not in CONTROLLED_MODALITIES or not description_value or org_id not in valid_org_ids:
+        return RedirectResponse(url="/owner/exam-catalogue?error=invalid", status_code=303)
+
+    conn = get_db()
+    now = utc_now_iso()
+    try:
+        duplicate = conn.execute(
+            """
+            SELECT id
+            FROM study_description_presets
+            WHERE COALESCE(is_active, 1) = 1
+              AND (organization_id = 0 OR organization_id = ?)
+              AND (
+                  LOWER(TRIM(description)) = LOWER(TRIM(?))
+                  OR (
+                      ? <> ''
+                      AND COALESCE(TRIM(study_code), '') <> ''
+                      AND LOWER(TRIM(study_code)) = LOWER(TRIM(?))
+                  )
+              )
+            LIMIT 1
+            """,
+            (org_id, description_value, study_code_value, study_code_value),
+        ).fetchone()
+        if duplicate:
+            conn.close()
+            return RedirectResponse(url="/owner/exam-catalogue?error=duplicate", status_code=303)
+        if using_postgres():
+            row = conn.execute(
+                """
+                INSERT INTO study_description_presets (organization_id, modality, description, study_code, is_active, created_at, updated_at, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (organization_id, modality, description) DO UPDATE SET
+                    study_code = EXCLUDED.study_code,
+                    is_active = EXCLUDED.is_active,
+                    updated_at = EXCLUDED.updated_at
+                RETURNING id
+                """,
+                (org_id, modality_value, description_value, study_code_value or None, active_value, now, now, user.get("id") or 1),
+            ).fetchone()
+            preset_id = int(dict(row)["id"]) if row else None
+        else:
+            conn.execute(
+                """
+                INSERT INTO study_description_presets (organization_id, modality, description, study_code, is_active, created_at, updated_at, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (organization_id, modality, description) DO UPDATE SET
+                    study_code = excluded.study_code,
+                    is_active = excluded.is_active,
+                    updated_at = excluded.updated_at
+                """,
+                (org_id, modality_value, description_value, study_code_value or None, active_value, now, now, user.get("id") or 1),
+            )
+            row = conn.execute(
+                "SELECT id FROM study_description_presets WHERE organization_id = ? AND modality = ? AND description = ?",
+                (org_id, modality_value, description_value),
+            ).fetchone()
+            preset_id = int(dict(row)["id"]) if row else None
+        conn.commit()
+    finally:
+        conn.close()
+
+    return RedirectResponse(url="/owner/exam-catalogue?saved=1", status_code=303)
+
+
+@app.post("/owner/exam-catalogue/{preset_id}/edit")
+def owner_exam_catalogue_edit(
+    request: Request,
+    preset_id: int,
+    org_id: int = Form(...),
+    modality: str = Form(...),
+    description: str = Form(...),
+    study_code: str = Form(""),
+    is_active: str = Form("1"),
+):
+    require_superuser(request)
+    modality_value = (modality or "").strip().upper()
+    description_value = (description or "").strip()
+    study_code_value = (study_code or "").strip()
+    active_value = 1 if str(is_active).strip() == "1" else 0
+    valid_org_ids = {int(org["id"]) for org in list_organisations_summary() if org.get("is_active")}
+    if modality_value not in CONTROLLED_MODALITIES or not description_value or org_id not in valid_org_ids:
+        return RedirectResponse(url="/owner/exam-catalogue?error=invalid", status_code=303)
+
+    conn = get_db()
+    try:
+        existing = conn.execute(
+            "SELECT organization_id FROM study_description_presets WHERE id = ? LIMIT 1",
+            (preset_id,),
+        ).fetchone()
+        if not existing or int(dict(existing).get("organization_id") or 0) == 0:
+            conn.close()
+            return RedirectResponse(url="/owner/exam-catalogue?error=read_only", status_code=303)
+
+        duplicate = conn.execute(
+            """
+            SELECT id
+            FROM study_description_presets
+            WHERE id != ?
+              AND COALESCE(is_active, 1) = 1
+              AND (organization_id = 0 OR organization_id = ?)
+              AND (
+                  LOWER(TRIM(description)) = LOWER(TRIM(?))
+                  OR (
+                      ? <> ''
+                      AND COALESCE(TRIM(study_code), '') <> ''
+                      AND LOWER(TRIM(study_code)) = LOWER(TRIM(?))
+                  )
+              )
+            LIMIT 1
+            """,
+            (preset_id, org_id, description_value, study_code_value, study_code_value),
+        ).fetchone()
+        if duplicate:
+            conn.close()
+            return RedirectResponse(url="/owner/exam-catalogue?error=duplicate", status_code=303)
+
+        conn.execute(
+            """
+            UPDATE study_description_presets
+            SET organization_id = ?, modality = ?, description = ?, study_code = ?, is_active = ?, updated_at = ?
+            WHERE id = ? AND organization_id != 0
+            """,
+            (org_id, modality_value, description_value, study_code_value or None, active_value, utc_now_iso(), preset_id),
+        )
+        conn.commit()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return RedirectResponse(url="/owner/exam-catalogue?saved=1", status_code=303)
+
+
+@app.post("/owner/exam-catalogue/{preset_id}/assignments")
+def owner_exam_catalogue_assignments(
+    request: Request,
+    preset_id: int,
+    org_ids: list[int] = Form([]),
+):
+    require_superuser(request)
+    return RedirectResponse(url="/owner/exam-catalogue?error=read_only", status_code=303)
+
+
+@app.post("/owner/exam-catalogue/{preset_id}/delete")
+def owner_exam_catalogue_delete(request: Request, preset_id: int):
+    require_superuser(request)
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT organization_id FROM study_description_presets WHERE id = ? LIMIT 1",
+            (preset_id,),
+        ).fetchone()
+        if not row or int(dict(row).get("organization_id") or 0) == 0:
+            conn.close()
+            return RedirectResponse(url="/owner/exam-catalogue?error=read_only", status_code=303)
+        conn.execute("DELETE FROM study_description_presets WHERE id = ? AND organization_id != 0", (preset_id,))
+        conn.commit()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return RedirectResponse(url="/owner/exam-catalogue?saved=1", status_code=303)
 
 
 @app.post("/owner/organisations")
@@ -3416,6 +4607,7 @@ def owner_create_organisation(
     admin_username: str = Form(...),
     admin_password: str = Form(...),
     admin_mfa_required: str = Form("0"),
+    assign_full_catalogue: str = Form("0"),
 ):
     user = require_superuser(request)
 
@@ -3427,6 +4619,7 @@ def owner_create_organisation(
     admin_username = admin_username.strip()
     admin_password = admin_password.strip()
     admin_mfa_required_value = 1 if str(admin_mfa_required).strip().lower() in {"1", "true", "on", "yes"} else 0
+    assign_full_catalogue_value = 1 if str(assign_full_catalogue).strip().lower() in {"1", "true", "on", "yes"} else 0
 
     form_data = {
         "org_name": org_name,
@@ -3436,6 +4629,7 @@ def owner_create_organisation(
         "admin_email": admin_email,
         "admin_username": admin_username,
         "admin_mfa_required": admin_mfa_required_value,
+        "assign_full_catalogue": assign_full_catalogue_value,
     }
 
     if not org_name or not admin_first_name or not admin_username or not admin_password:
@@ -3562,41 +4756,6 @@ def owner_create_organisation(
             (org_id, user_id, now, now),
         )
 
-        if table_exists("study_description_presets"):
-            presets = _load_study_presets_from_migration()
-            if not presets:
-                presets = [
-                    ("CT", "CT Head"),
-                    ("CT", "CT Thorax"),
-                    ("MRI", "MRI Brain"),
-                    ("MRI", "MRI Spine lumbar"),
-                    ("XR", "XR Chest"),
-                    ("PET", "PET FDG Whole body"),
-                    ("DEXA", "DXA Whole body"),
-                ]
-            for modality, description in presets:
-                if using_postgres():
-                    conn.execute(
-                        """
-                        INSERT INTO study_description_presets(
-                            organization_id, modality, description, is_active, created_at, updated_at, created_by
-                        )
-                        VALUES (?, ?, ?, 1, ?, ?, ?)
-                        ON CONFLICT (organization_id, modality, description) DO NOTHING
-                        """,
-                        (org_id, modality, description, now, now, user.get("id") or user_id),
-                    )
-                else:
-                    conn.execute(
-                        """
-                        INSERT OR IGNORE INTO study_description_presets(
-                            organization_id, modality, description, is_active, created_at, updated_at, created_by
-                        )
-                        VALUES (?, ?, ?, 1, ?, ?, ?)
-                        """,
-                        (org_id, modality, description, now, now, user.get("id") or user_id),
-                    )
-
         conn.commit()
     except Exception as exc:
         conn.rollback()
@@ -3615,6 +4774,9 @@ def owner_create_organisation(
     finally:
         conn.close()
 
+    if assign_full_catalogue_value:
+        assign_exam_catalogue_to_org(org_id, assigned_by=user.get("id") or user_id)
+
     return RedirectResponse(url="/owner?created=1", status_code=303)
 
 
@@ -3632,11 +4794,22 @@ def owner_edit_organisation_page(request: Request, org_id: int, saved: str = "",
             "organisation": organisation,
             "org_users": list_organisation_users(org_id),
             "org_institutions": list_organisation_institutions(org_id),
+            "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
             "saved": saved,
             "notice": request.query_params.get("notice", ""),
             "error": error,
         },
     )
+
+
+@app.post("/owner/organisations/{org_id}/exam-catalogue/assign-full")
+def owner_assign_full_exam_catalogue_to_org(request: Request, org_id: int):
+    user = require_superuser(request)
+    organisation = get_organisation_summary(org_id)
+    if not organisation:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+    assign_exam_catalogue_to_org(org_id, assigned_by=user.get("id") or 1)
+    return RedirectResponse(url=f"/owner/organisations/{org_id}?notice=catalogue_assigned", status_code=303)
 
 
 @app.post("/owner/organisations/{org_id}")
@@ -3668,7 +4841,11 @@ def owner_edit_organisation_submit(
                     "slug": clean_slug,
                     "is_active": active_value,
                 },
+                "org_users": list_organisation_users(org_id),
+                "org_institutions": list_organisation_institutions(org_id),
+                "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
                 "saved": "",
+                "notice": "",
                 "error": "Organisation name is required.",
             },
             status_code=400,
@@ -3692,7 +4869,11 @@ def owner_edit_organisation_submit(
                         "slug": clean_slug,
                         "is_active": active_value,
                     },
+                    "org_users": list_organisation_users(org_id),
+                    "org_institutions": list_organisation_institutions(org_id),
+                    "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
                     "saved": "",
+                    "notice": "",
                     "error": "That organisation code is already in use.",
                 },
                 status_code=400,
@@ -3750,6 +4931,8 @@ def owner_add_organisation_user(
                 "user": get_session_user(request),
                 "organisation": organisation,
                 "org_users": list_organisation_users(org_id),
+                "org_institutions": list_organisation_institutions(org_id),
+                "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
                 "saved": "",
                 "notice": "",
                 "error": "Username, password, and a valid role are required.",
@@ -3765,6 +4948,8 @@ def owner_add_organisation_user(
                 "user": get_session_user(request),
                 "organisation": organisation,
                 "org_users": list_organisation_users(org_id),
+                "org_institutions": list_organisation_institutions(org_id),
+                "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
                 "saved": "",
                 "notice": "",
                 "error": "Practitioner accounts need at least a first name.",
@@ -3777,6 +4962,8 @@ def owner_add_organisation_user(
     now = utc_now_iso()
     email_val = email or None
     org_role = "org_admin" if role == "admin" else "radiologist" if role == "radiologist" else "org_user"
+    has_role_column = table_has_column("users", "role")
+    has_radiologist_name_column = table_has_column("users", "radiologist_name")
 
     conn = get_db()
     try:
@@ -3785,23 +4972,41 @@ def owner_add_organisation_user(
         if email_val and conn.execute("SELECT 1 FROM users WHERE email = ?", (email_val,)).fetchone():
             raise HTTPException(status_code=400, detail="That email address is already in use.")
 
+        user_columns = [
+            "username",
+            "email",
+            "password_hash",
+            "salt_hex",
+            "is_superuser",
+            "is_active",
+            "created_at",
+            "modified_at",
+            "first_name",
+            "surname",
+        ]
+        user_values = ["?", "?", "?", "?", "0", "1", "?", "?", "?", "?"]
+        user_params: list = [
+            username,
+            email_val,
+            pw_hash.hex(),
+            salt.hex(),
+            now,
+            now,
+            first_name,
+            surname,
+        ]
+        if has_role_column:
+            user_columns.append("role")
+            user_values.append("?")
+            user_params.append("admin" if role == "admin" else role)
+        if has_radiologist_name_column:
+            user_columns.append("radiologist_name")
+            user_values.append("?")
+            user_params.append(None if role != "radiologist" else (f"{first_name} {surname}".strip() or username))
+
         conn.execute(
-            """
-            INSERT INTO users(username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at, first_name, surname, role, radiologist_name)
-            VALUES (?, ?, ?, ?, 0, 1, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                username,
-                email_val,
-                pw_hash.hex(),
-                salt.hex(),
-                now,
-                now,
-                first_name,
-                surname,
-                "admin" if role == "admin" else role,
-                None if role != "radiologist" else (f"{first_name} {surname}".strip() or username),
-            ),
+            f"INSERT INTO users({', '.join(user_columns)}) VALUES ({', '.join(user_values)})",
+            tuple(user_params),
         )
         conn.execute(
             "UPDATE users SET mfa_required = ? WHERE username = ?",
@@ -3852,6 +5057,8 @@ def owner_add_organisation_user(
                 "user": get_session_user(request),
                 "organisation": organisation,
                 "org_users": list_organisation_users(org_id),
+                "org_institutions": list_organisation_institutions(org_id),
+                "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
                 "saved": "",
                 "notice": "",
                 "error": exc.detail,
@@ -3868,6 +5075,8 @@ def owner_add_organisation_user(
                 "user": get_session_user(request),
                 "organisation": organisation,
                 "org_users": list_organisation_users(org_id),
+                "org_institutions": list_organisation_institutions(org_id),
+                "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
                 "saved": "",
                 "notice": "",
                 "error": f"Unable to add user: {exc}",
@@ -3927,23 +5136,28 @@ def owner_edit_organisation_user(
     org_role = "org_admin" if role == "admin" else "radiologist" if role == "radiologist" else "org_user"
     display_name = f"{first_name.strip()} {surname.strip()}".strip() or (row["username"] if isinstance(row, dict) else row[1])
 
-    conn.execute(
-        """
+    has_role_column = table_has_column("users", "role")
+    has_radiologist_name_column = table_has_column("users", "radiologist_name")
+    update_sql = """
         UPDATE users
-        SET first_name = ?, surname = ?, email = ?, role = ?, is_active = ?, radiologist_name = ?, modified_at = ?
-        WHERE id = ?
-        """,
-        (
-            first_name.strip(),
-            surname.strip(),
-            clean_email or None,
-            "admin" if role == "admin" else role,
-            active_value,
-            display_name if role == "radiologist" else None,
-            now,
-            user_id,
-        ),
-    )
+        SET first_name = ?, surname = ?, email = ?, is_active = ?, modified_at = ?
+    """
+    update_params: list = [
+        first_name.strip(),
+        surname.strip(),
+        clean_email or None,
+        active_value,
+        now,
+    ]
+    if has_role_column:
+        update_sql += ", role = ?"
+        update_params.append("admin" if role == "admin" else role)
+    if has_radiologist_name_column:
+        update_sql += ", radiologist_name = ?"
+        update_params.append(display_name if role == "radiologist" else None)
+    update_sql += " WHERE id = ?"
+    update_params.append(user_id)
+    conn.execute(update_sql, tuple(update_params))
     if mfa_required_value:
         conn.execute(
             "UPDATE users SET mfa_required = ?, modified_at = ? WHERE id = ?",
@@ -4109,8 +5323,8 @@ def owner_delete_organisation(request: Request, org_id: int):
         conn.execute("DELETE FROM protocols WHERE org_id = ?", (org_id,))
     if table_exists("institutions"):
         conn.execute("DELETE FROM institutions WHERE org_id = ?", (org_id,))
-    if table_exists("study_description_presets"):
-        conn.execute("DELETE FROM study_description_presets WHERE organization_id = ?", (org_id,))
+    if table_exists("study_description_preset_assignments"):
+        conn.execute("DELETE FROM study_description_preset_assignments WHERE org_id = ?", (org_id,))
     if table_exists("notify_events"):
         conn.execute("DELETE FROM notify_events WHERE org_id = ?", (org_id,))
     if table_exists("case_events"):
@@ -4314,7 +5528,7 @@ def build_dashboard_series(rows: list[dict]):
 
     status_chart = [
         {"label": "Pending", "value": status_counts["pending"], "tone": "pending"},
-        {"label": "Vetted", "value": status_counts["vetted"], "tone": "vetted"},
+        {"label": "Approved", "value": status_counts["vetted"], "tone": "vetted"},
         {"label": "Rejected", "value": status_counts["rejected"], "tone": "rejected"},
         {"label": "Reopened", "value": status_counts["reopened"], "tone": "reopened"},
     ]
@@ -4373,7 +5587,7 @@ def build_dashboard_series(rows: list[dict]):
         "insights": {
             "top_institution": top_institution_label,
             "top_practitioner": top_practitioner_label,
-            "largest_status": max(status_counts.items(), key=lambda item: item[1])[0].capitalize() if total_cases else "No data",
+            "largest_status": display_case_status(max(status_counts.items(), key=lambda item: item[1])[0]) if total_cases else "No data",
         },
     }
 
@@ -4557,7 +5771,6 @@ def admin_dashboard(
         secs = tat_seconds(d.get("created_at"), d.get("vetted_at"))
         d["tat_display"] = format_tat(secs)
         d["tat_seconds"] = secs
-        d["report_sent_display"] = format_display_datetime(d.get("report_sent_at"), d.get("report_sent_at") or "")
         inst = get_institution(d.get("institution_id")) if d.get("institution_id") else None
         sla_hours = inst["sla_hours"] if inst else 48
         sla_seconds = sla_hours * 3600
@@ -4570,6 +5783,9 @@ def admin_dashboard(
             d["tat_tone"] = "good"
         d["sla_breached"] = (d.get("status") == "pending") and (secs > sla_seconds)
         d["display_case_id"] = d.get("id") or "-"
+        d["status_display"] = display_case_status(d.get("status"))
+        d["report_sent"], d["report_sent_display"] = get_report_sent_summary(d)
+        d["catalogue_review_required"], d["catalogue_review_display"] = get_exam_catalogue_review_summary(d)
         cases.append(d)
 
     dashboard = build_dashboard_series(dashboard_rows)
@@ -4724,7 +5940,7 @@ def admin_dashboard_csv(
             "Reopened By",
             "Latest Decision",
             "Latest Decision At",
-            "Latest Vetted By",
+            "Latest Approved By",
             "Latest Protocol",
             "Latest Protocol At",
             "Current Status",
@@ -4752,7 +5968,7 @@ def admin_dashboard_csv(
             latest_protocol_at = ""
 
             if events:
-                submitted = next((e for e in events if e.get("event_type") == "SUBMITTED"), None)
+                submitted = next((e for e in events if str(e.get("event_type") or "").upper() in {"SUBMITTED", "CREATED"}), None)
                 if submitted:
                     submitted_at = submitted.get("created_at") or ""
 
@@ -4766,7 +5982,7 @@ def admin_dashboard_csv(
                 vetted_events = [e for e in events if e.get("event_type") == "VETTED"]
                 if vetted_events:
                     last_vet = vetted_events[-1]
-                    latest_decision = last_vet.get("decision") or ""
+                    latest_decision = display_decision_label(last_vet.get("decision")) or ""
                     latest_decision_at = last_vet.get("created_at") or ""
                     latest_vetted_by = last_vet.get("username") or ""
                     latest_protocol = last_vet.get("protocol") or ""
@@ -4785,7 +6001,7 @@ def admin_dashboard_csv(
                 latest_vetted_by,
                 latest_protocol,
                 format_csv_timestamp(latest_protocol_at),
-                d.get("status", ""),
+                display_case_status(d.get("status")),
                 d.get("radiologist", ""),
                 d.get("patient_referral_id", ""),
                 d.get("patient_dob", "") or "",
@@ -4900,7 +6116,7 @@ def admin_dashboard_report_pdf(
         row_h = 18
         for idx, item in enumerate(items[:4]):
             current_y = chart_y - (idx * row_h)
-            label = "Completed" if item["label"] == "Vetted" else item["label"]
+            label = item["label"]
             value = int(item["value"])
             bar_w = ((w - 110) * value / max_value) if max_value else 0
             draw_text(x, current_y, label, size=8, color=muted)
@@ -4929,7 +6145,7 @@ def admin_dashboard_report_pdf(
     status_cards = [
         ("Pending", str(dashboard["kpis"]["pending"]), "Awaiting review", warning),
         ("Reopened", str(dashboard["kpis"]["reopened"]), "Returned for action", accent_soft),
-        ("Completed", str(dashboard["kpis"]["vetted"]), "Finished cases", success),
+        ("Approved", str(dashboard["kpis"]["vetted"]), "Decision recorded", success),
         ("Rejected", str(dashboard["kpis"]["rejected"]), "Declined cases", danger),
         ("Total Cases", str(dashboard["kpis"]["total"]), "Filtered scope", card_fill),
     ]
@@ -4939,10 +6155,10 @@ def admin_dashboard_report_pdf(
 
     op_w = (right - left - (gap * 3)) / 4
     op_cards = [
-        ("Completed Avg TAT", dashboard["operational_kpis"]["completed_avg_tat"], "", card_fill),
+        ("Approved Avg TAT", dashboard["operational_kpis"]["completed_avg_tat"], "", card_fill),
         ("Unassigned", str(dashboard["operational_kpis"]["unassigned"]), "", card_fill),
         ("SLA Breaches", str(dashboard["operational_kpis"]["sla_breaches"]), "", card_fill),
-        ("Completion Rate", dashboard["operational_kpis"]["completion_rate"], "", card_fill),
+        ("Approval Rate", dashboard["operational_kpis"]["completion_rate"], "", card_fill),
     ]
     for idx, (label, value, note, fill) in enumerate(op_cards):
         draw_card(left + idx * (op_w + gap), y, op_w, 56, label, value, note, fill)
@@ -4964,8 +6180,8 @@ def admin_dashboard_report_pdf(
     takeaway_lines = [
         f"Top institution: {dashboard['insights']['top_institution']}",
         f"Busiest practitioner: {dashboard['insights']['top_practitioner']}",
-        f"Largest status group: {'Completed' if dashboard['insights']['largest_status'] == 'Vetted' else dashboard['insights']['largest_status']}",
-        f"Cases in selection: {dashboard['kpis']['total']} with {dashboard['operational_kpis']['completion_rate']} completion rate",
+        f"Largest status group: {dashboard['insights']['largest_status']}",
+        f"Cases in selection: {dashboard['kpis']['total']} with {dashboard['operational_kpis']['completion_rate']} approval rate",
     ]
     for idx, line in enumerate(takeaway_lines):
         draw_text(left + 18, y - 38 - (idx * 14), f"- {line}", size=9, color=muted)
@@ -5297,6 +6513,14 @@ def admin_case_view(request: Request, case_id: str):
     if case_dict:
         case_dict = normalize_case_attachment(case_dict)
         case_dict["attachment_previewable"] = is_inline_previewable(case_dict.get("uploaded_filename"))
+        case_dict["status_display"] = display_case_status(case_dict.get("status"))
+        case_dict["decision_display"] = display_decision_label(case_dict.get("decision"))
+        case_dict["report_sent"], case_dict["report_sent_display"] = get_report_sent_summary(case_dict)
+        case_dict["catalogue_review_required"], case_dict["catalogue_review_display"] = get_exam_catalogue_review_summary(case_dict)
+        attachments = list_case_attachments(case_id, case_dict=case_dict)
+        case_dict.update(build_case_preview_context(case_id, case_dict, attachments))
+    else:
+        attachments = []
 
     if case_dict and case_dict.get("org_id"):
         org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (case_dict.get("org_id"),)).fetchone()
@@ -5337,57 +6561,73 @@ def admin_case_view(request: Request, case_id: str):
             "case": case_dict,
             "org_name": org_name,
             "events": events,
-            "report_sent_notice": request.query_params.get("report_sent", "") == "1",
+            "attachments": attachments,
+            "return_to": (request.query_params.get("return_to") or "").strip(),
         },
     )
 
 
-@app.post("/admin/case/{case_id}/mark-report-sent")
-def admin_mark_report_sent(request: Request, case_id: str):
+@app.post("/admin/case/{case_id}/report-sent")
+def admin_case_mark_report_sent(request: Request, case_id: str, return_to: str = Form("")):
     user = require_admin(request)
-    org_id = user.get("org_id")
-    sent_at = utc_now_iso()
-    sent_by = user.get("username") or "admin"
-    sent_by_id = user.get("id")
-
     conn = get_db()
+    org_id = user.get("org_id")
     if org_id and not user.get("is_superuser"):
-        case_row = conn.execute("SELECT id, status, org_id FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
+        row = conn.execute("SELECT id, org_id FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
     else:
-        case_row = conn.execute("SELECT id, status, org_id FROM cases WHERE id = ?", (case_id,)).fetchone()
-
-    if not case_row:
+        row = conn.execute("SELECT id, org_id FROM cases WHERE id = ?", (case_id,)).fetchone()
+    if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Case not found")
-
-    case_dict = case_row if isinstance(case_row, dict) else dict(case_row)
-    if str(case_dict.get("status") or "").lower() not in {"vetted", "rejected"}:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Report can only be marked as sent after a decision has been recorded")
-
+    now = utc_now_iso()
     conn.execute(
-        """
-        UPDATE cases
-        SET report_sent_at = ?, report_sent_by = ?, report_sent_by_id = ?
-        WHERE id = ?
-        """,
-        (sent_at, sent_by, sent_by_id, case_id),
+        "UPDATE cases SET report_sent_at = ?, report_sent_by = ?, report_sent_by_id = ? WHERE id = ?",
+        (now, user.get("username"), user.get("id"), case_id),
     )
     conn.commit()
     conn.close()
+    insert_case_event(
+        case_id=case_id,
+        org_id=dict(row).get("org_id"),
+        event_type="REPORT_SENT",
+        user=user,
+        comment="Justification sent",
+    )
+    safe_return_to = (return_to or "").strip()
+    if safe_return_to.startswith("/admin"):
+        return RedirectResponse(url=safe_return_to, status_code=303)
+    return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
 
-    try:
-        insert_case_event(
-            case_id=case_id,
-            org_id=case_dict.get("org_id") or org_id,
-            event_type="REPORT_SENT",
-            user=user,
-            comment="Decision report marked as sent by admin",
-        )
-    except Exception as exc:
-        print(f"[WARN] Updated sent timestamp for case {case_id} but failed to write event: {exc}")
 
-    return RedirectResponse(url=f"/admin/case/{case_id}?report_sent=1", status_code=303)
+@app.post("/admin/case/{case_id}/report-sent/reset")
+def admin_case_reset_report_sent(request: Request, case_id: str, return_to: str = Form("")):
+    user = require_admin(request)
+    conn = get_db()
+    org_id = user.get("org_id")
+    if org_id and not user.get("is_superuser"):
+        row = conn.execute("SELECT id, org_id FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
+    else:
+        row = conn.execute("SELECT id, org_id FROM cases WHERE id = ?", (case_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Case not found")
+    conn.execute(
+        "UPDATE cases SET report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL WHERE id = ?",
+        (case_id,),
+    )
+    conn.commit()
+    conn.close()
+    insert_case_event(
+        case_id=case_id,
+        org_id=dict(row).get("org_id"),
+        event_type="REPORT_SENT_RESET",
+        user=user,
+        comment="Justification sent status reset",
+    )
+    safe_return_to = (return_to or "").strip()
+    if safe_return_to.startswith("/admin"):
+        return RedirectResponse(url=safe_return_to, status_code=303)
+    return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
 
 
 @app.get("/admin/case/{case_id}/timeline.pdf")
@@ -5473,7 +6713,7 @@ def admin_case_timeline_pdf(request: Request, case_id: str):
     else:
         for event in events:
             ts = format_display_datetime(event.get("created_at"), event.get("created_at") or "")
-            event_type = str(event.get("event_type") or "-")
+            event_type = display_case_event_label(event.get("event_type")) or "-"
             username = str(event.get("username") or "-")
             details = str(event.get("comment") or "")
             detail_lines = wrap_text(details, 250)
@@ -5564,7 +6804,7 @@ def admin_case_timeline_csv(request: Request, case_id: str):
     else:
         for event in events:
             ts = format_display_datetime(event.get("created_at"), event.get("created_at") or "")
-            event_type = str(event.get("event_type") or "-")
+            event_type = display_case_event_label(event.get("event_type")) or "-"
             username = str(event.get("username") or "-")
             details = str(event.get("comment") or "")
             writer.writerow([ts, event_type, username, details])
@@ -5583,6 +6823,7 @@ def admin_case_timeline_csv(request: Request, case_id: str):
 @app.get("/admin/case/{case_id}/edit", response_class=HTMLResponse)
 def admin_case_edit_view(request: Request, case_id: str):
     saved = request.query_params.get("saved", "")
+    return_to = (request.query_params.get("return_to") or request.headers.get("referer") or "").strip()
     try:
         user = require_admin(request)
     except HTTPException as e:
@@ -5604,7 +6845,12 @@ def admin_case_edit_view(request: Request, case_id: str):
     
     case_dict = dict(case)
     case_dict = normalize_case_attachment(case_dict)
+    case_dict["status_display"] = display_case_status(case_dict.get("status"))
+    case_dict["decision_display"] = display_decision_label(case_dict.get("decision"), fallback_status=case_dict.get("status"))
+    case_dict["catalogue_review_required"], case_dict["catalogue_review_display"] = get_exam_catalogue_review_summary(case_dict)
     case_dict["attachment_previewable"] = is_inline_previewable(case_dict.get("uploaded_filename"))
+    attachments = list_case_attachments(case_id, case_dict=case_dict)
+    case_dict.update(build_case_preview_context(case_id, case_dict, attachments))
     
     return templates.TemplateResponse(
         "case_edit.html",
@@ -5614,8 +6860,12 @@ def admin_case_edit_view(request: Request, case_id: str):
             "institutions": institutions,
             "radiologists": radiologists,
             "protocols": [p["protocol"] for p in protocols] if protocols else [],
+            "available_exams": list_exam_catalogue(active_only=True, org_id=org_id),
             "user_org_id": org_id,
             "saved": saved == "1",
+            "attachments": attachments,
+            "return_to": return_to,
+            "can_create_uncatalogued_exam": can_use_uncatalogued_exam_exception(user),
         }
     )
 
@@ -5632,8 +6882,14 @@ async def admin_case_edit_save(
     admin_notes: str = Form(""),
     radiologist: str = Form(""),
     modality: str = Form(""),
+    study_description_preset_id: str = Form(""),
+    study_code: str = Form(""),
+    uncatalogued_exam_requested: str = Form(""),
+    uncatalogued_exam_reason: str = Form(""),
     protocol: str = Form(""),
-    attachment: UploadFile | None = File(None),
+    attachments: list[UploadFile | str] = File([]),
+    remove_attachment_ids: list[str] = Form([]),
+    return_to: str = Form(""),
 ):
     try:
         user = require_admin(request)
@@ -5657,6 +6913,7 @@ async def admin_case_edit_save(
     cleaned_referral_id = patient_referral_id.strip()
     cleaned_dob = patient_dob.strip() or None
     cleaned_study_description = study_description.strip()
+    cleaned_study_code = study_code.strip() or None
     cleaned_admin_notes = admin_notes.strip()
     cleaned_protocol = protocol.strip() or None
     cleaned_modality = modality.strip() or None
@@ -5668,31 +6925,20 @@ async def admin_case_edit_save(
     # Empty string is allowed by current app flow; avoid writing NULL.
     cleaned_radiologist = radiologist.strip() or (case_dict.get("radiologist") or "")
 
-    replacement_uploaded_filename: str | None = None
-    replacement_stored_path: str | None = None
-    old_stored_path = case_dict.get("stored_filepath")
-    if attachment and attachment.filename:
-        replacement_uploaded_filename = attachment.filename
-        replacement_bytes = await attachment.read()
-        if replacement_bytes:
-            if BLOB_STORAGE_ENABLED:
-                blob_name = upload_to_blob(case_id, replacement_bytes, replacement_uploaded_filename, case_dict.get("org_id") or org_id)
-                if blob_name:
-                    replacement_stored_path = blob_name
-
-            if not replacement_stored_path:
-                safe_name = f"{case_id}_{Path(replacement_uploaded_filename).name}"
-                replacement_stored_path = str(UPLOAD_DIR / safe_name)
-                with open(replacement_stored_path, "wb") as f:
-                    f.write(replacement_bytes)
-
-            if old_stored_path and old_stored_path != replacement_stored_path and str(old_stored_path).startswith(str(UPLOAD_DIR)):
-                try:
-                    old_path_obj = Path(str(old_stored_path))
-                    if old_path_obj.exists():
-                        old_path_obj.unlink()
-                except Exception:
-                    pass
+    resolved_exam = resolve_case_exam_selection(
+        user=user,
+        org_id=org_id,
+        study_description=cleaned_study_description,
+        study_description_preset_id=study_description_preset_id,
+        study_code=cleaned_study_code or "",
+        modality=cleaned_modality or "",
+        uncatalogued_exam_requested=uncatalogued_exam_requested,
+        uncatalogued_exam_reason=uncatalogued_exam_reason,
+        existing_case=case_dict,
+    )
+    cleaned_study_description = resolved_exam["study_description"]
+    cleaned_study_code = resolved_exam["study_code"]
+    cleaned_modality = resolved_exam["modality"]
 
     def _clean(value: str | None) -> str:
         return (value or "").strip()
@@ -5709,17 +6955,19 @@ async def admin_case_edit_save(
     add_field_if_exists("patient_dob", cleaned_dob)
     add_field_if_exists("institution_id", cleaned_institution_id)
     add_field_if_exists("study_description", cleaned_study_description)
+    add_field_if_exists("study_description_preset_id", resolved_exam["study_description_preset_id"])
+    add_field_if_exists("study_code", cleaned_study_code)
     add_field_if_exists("admin_notes", cleaned_admin_notes)
     add_field_if_exists("radiologist", cleaned_radiologist)
     add_field_if_exists("protocol", cleaned_protocol)
     add_field_if_exists("modality", cleaned_modality)
-    if replacement_uploaded_filename is not None:
-        add_field_if_exists("uploaded_filename", replacement_uploaded_filename)
-        add_field_if_exists("stored_filepath", replacement_stored_path)
-
+    add_field_if_exists("exam_catalogue_requires_review", resolved_exam["requires_review"])
+    add_field_if_exists("exam_catalogue_exception_reason", resolved_exam["exception_reason"])
+    add_field_if_exists("exam_catalogue_exception_at", resolved_exam["exception_at"])
+    add_field_if_exists("exam_catalogue_exception_by", resolved_exam["exception_by"])
+    add_field_if_exists("exam_catalogue_exception_by_id", resolved_exam["exception_by_id"])
     if not update_fields:
-        conn.close()
-        raise HTTPException(status_code=400, detail="No editable fields available for this case")
+        update_fields = []
 
     changes: list[str] = []
     old_case = dict(case)
@@ -5735,16 +6983,30 @@ async def admin_case_edit_save(
     update_sql = "UPDATE cases SET " + ", ".join([f"{col} = ?" for col, _ in update_fields]) + " WHERE id = ?"
     update_params = [value for _, value in update_fields] + [case_id]
     try:
-        conn.execute(update_sql, update_params)
-        conn.commit()
+        if update_fields:
+            conn.execute(update_sql, update_params)
+            conn.commit()
     except Exception as exc:
         conn.close()
         print(f"[ERROR] Failed to save case edits for case {case_id}: {exc}")
         raise HTTPException(status_code=400, detail="Unable to save case changes")
     conn.close()
-
-    if replacement_uploaded_filename is not None:
-        changes.append(f"attachment: replaced with {replacement_uploaded_filename}")
+    removed_attachment_count = 0
+    for attachment_id in remove_attachment_ids:
+        if attachment_id:
+            remove_case_attachment(case_id, attachment_id)
+            removed_attachment_count += 1
+    uploaded_attachment_names = save_case_attachments(
+        case_id,
+        org_id or case_dict.get("org_id"),
+        attachments,
+        uploaded_by=user.get("username"),
+        primary_when_empty=True,
+    )
+    if uploaded_attachment_names:
+        changes.append("attachments added: " + ", ".join(uploaded_attachment_names))
+    if removed_attachment_count:
+        changes.append(f"attachments removed: {removed_attachment_count}")
 
     change_summary = "; ".join(changes) if changes else "No field changes"
     note_text = cleaned_admin_notes
@@ -5761,14 +7023,30 @@ async def admin_case_edit_save(
             user=user,
             comment=event_comment,
         )
+        if resolved_exam["exception_requested"]:
+            insert_case_event(
+                case_id=case_id,
+                org_id=event_org_id,
+                event_type="EXAM_CATALOGUE_EXCEPTION",
+                user=user,
+                comment=f"Temporary uncatalogued exam created during edit. Reason: {resolved_exam['exception_reason']}",
+            )
     except Exception as exc:
         print(f"[WARN] Saved case {case_id} but failed to write edit event: {exc}")
-
-    return RedirectResponse(url=f"/admin/case/{case_id}/edit?saved=1", status_code=303)
+    safe_return_to = (return_to or "").strip()
+    if safe_return_to.startswith("/admin"):
+        separator = "&" if "?" in safe_return_to else "?"
+        return RedirectResponse(url=f"{safe_return_to}{separator}case_saved=1", status_code=303)
+    return RedirectResponse(url="/admin", status_code=303)
 
 
 @app.post("/admin/case/{case_id}/assign-radiologist")
-def assign_radiologist(request: Request, case_id: str, radiologist: str = Form("")):
+def assign_radiologist(
+    request: Request,
+    case_id: str,
+    radiologist: str = Form(""),
+    return_to: str = Form(""),
+):
     user = require_admin(request)
     org_id = user.get("org_id")
 
@@ -5792,7 +7070,7 @@ def assign_radiologist(request: Request, case_id: str, radiologist: str = Form("
     old_rad = case["radiologist"] if isinstance(case, dict) else case[1]
     conn.execute(
         "UPDATE cases SET radiologist = ? WHERE id = ?",
-        (radiologist or None, case_id),
+        (radiologist or "", case_id),
     )
     conn.commit()
     conn.close()
@@ -5806,6 +7084,9 @@ def assign_radiologist(request: Request, case_id: str, radiologist: str = Form("
         comment=comment,
     )
 
+    safe_return_to = (return_to or "").strip()
+    if safe_return_to.startswith("/admin"):
+        return RedirectResponse(url=safe_return_to, status_code=303)
     return RedirectResponse(url="/admin", status_code=303)
 
 
@@ -6101,7 +7382,22 @@ def list_organisations_summary() -> list[dict]:
                 SELECT COUNT(*)
                 FROM memberships m
                 WHERE m.org_id = o.id AND m.org_role = 'radiologist' AND m.is_active = 1
+            ) AS practitioner_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.org_role = 'radiologist' AND m.is_active = 1
             ) AS radiologist_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.org_role = 'org_user' AND m.is_active = 1
+            ) AS coordinator_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.is_active = 1
+            ) AS member_count,
             (
                 SELECT COUNT(*)
                 FROM memberships m
@@ -6141,7 +7437,22 @@ def get_organisation_summary(org_id: int) -> dict | None:
                 SELECT COUNT(*)
                 FROM memberships m
                 WHERE m.org_id = o.id AND m.org_role = 'radiologist' AND m.is_active = 1
+            ) AS practitioner_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.org_role = 'radiologist' AND m.is_active = 1
             ) AS radiologist_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.org_role = 'org_user' AND m.is_active = 1
+            ) AS coordinator_count,
+            (
+                SELECT COUNT(*)
+                FROM memberships m
+                WHERE m.org_id = o.id AND m.is_active = 1
+            ) AS member_count,
             (
                 SELECT COUNT(*)
                 FROM memberships m
@@ -6157,6 +7468,144 @@ def get_organisation_summary(org_id: int) -> dict | None:
         LIMIT 1
         """,
         (org_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def list_owner_exam_catalogue() -> list[dict]:
+    if not table_exists("study_description_presets"):
+        return []
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT
+            p.id,
+            p.modality,
+            p.description,
+            COALESCE(p.study_code, '') AS study_code,
+            COALESCE(p.is_active, 1) AS is_active,
+            p.updated_at,
+            (
+                SELECT COUNT(*)
+                FROM study_description_preset_assignments a
+                WHERE a.preset_id = p.id AND COALESCE(a.is_active, 1) = 1
+            ) AS assigned_org_count
+        FROM study_description_presets p
+        WHERE p.organization_id = 0
+        ORDER BY p.modality, p.description
+        """
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def list_owner_manual_exam_catalogue() -> list[dict]:
+    if not table_exists("study_description_presets"):
+        return []
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT
+            p.id,
+            p.organization_id AS org_id,
+            COALESCE(o.name, 'Unknown organisation') AS org_name,
+            p.modality,
+            p.description,
+            COALESCE(p.study_code, '') AS study_code,
+            COALESCE(p.is_active, 1) AS is_active,
+            p.updated_at
+        FROM study_description_presets p
+        LEFT JOIN organisations o ON o.id = p.organization_id
+        WHERE p.organization_id IS NOT NULL AND p.organization_id != 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM study_description_presets n
+              WHERE n.organization_id = 0
+                AND (
+                    LOWER(TRIM(n.description)) = LOWER(TRIM(p.description))
+                    OR (
+                        COALESCE(TRIM(n.study_code), '') <> ''
+                        AND COALESCE(TRIM(p.study_code), '') <> ''
+                        AND LOWER(TRIM(n.study_code)) = LOWER(TRIM(p.study_code))
+                    )
+                )
+          )
+        ORDER BY o.name, p.modality, p.description
+        """
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def list_exam_catalogue_assignment_org_ids(preset_id: int) -> list[int]:
+    if not table_exists("study_description_preset_assignments"):
+        return []
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT org_id
+        FROM study_description_preset_assignments
+        WHERE preset_id = ? AND COALESCE(is_active, 1) = 1
+        ORDER BY org_id
+        """,
+        (preset_id,),
+    ).fetchall()
+    conn.close()
+    return [int(dict(row)["org_id"]) for row in rows]
+
+
+def get_exam_catalogue_visibility_summary(org_id: int) -> dict:
+    summary = {
+        "active_catalogue_count": 0,
+        "assigned_count": 0,
+        "is_full_catalogue_visible": False,
+    }
+    if not table_exists("study_description_presets"):
+        return summary
+    conn = get_db()
+    active_row = conn.execute(
+        """
+        SELECT COUNT(*) AS c
+        FROM study_description_presets
+        WHERE organization_id = 0 AND COALESCE(is_active, 1) = 1
+        """
+    ).fetchone()
+    summary["active_catalogue_count"] = int(active_row["c"] if active_row else 0)
+    if table_exists("study_description_preset_assignments"):
+        assigned_row = conn.execute(
+            """
+            SELECT COUNT(DISTINCT a.preset_id) AS c
+            FROM study_description_preset_assignments a
+            JOIN study_description_presets p ON p.id = a.preset_id
+            WHERE a.org_id = ?
+              AND COALESCE(a.is_active, 1) = 1
+              AND p.organization_id = 0
+              AND COALESCE(p.is_active, 1) = 1
+            """,
+            (org_id,),
+        ).fetchone()
+        summary["assigned_count"] = int(assigned_row["c"] if assigned_row else 0)
+    conn.close()
+    summary["is_full_catalogue_visible"] = (
+        summary["active_catalogue_count"] > 0
+        and summary["assigned_count"] >= summary["active_catalogue_count"]
+    )
+    return summary
+
+
+def get_exam_catalogue_item(preset_id: int) -> dict | None:
+    if not table_exists("study_description_presets"):
+        return None
+    conn = get_db()
+    row = conn.execute(
+        """
+        SELECT id, modality, description, COALESCE(study_code, '') AS study_code, COALESCE(is_active, 1) AS is_active
+        FROM study_description_presets
+        WHERE id = ? AND organization_id = 0
+        LIMIT 1
+        """,
+        (preset_id,),
     ).fetchone()
     conn.close()
     return dict(row) if row else None
@@ -6343,33 +7792,16 @@ def settings_page(request: Request, error: str = ""):
     org_id = get_request_org_id(request)
     org_name = ""
     
-    # Ensure default institution exists for this org
     if org_id:
+        default_institution = ensure_default_institution(org_id)
         institutions = list_institutions(org_id)
         conn = get_db()
         org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
         conn.close()
         if org_row:
             org_name = org_row["name"] or ""
-        if not institutions:
-            # Create default institution with org name
-            conn = get_db()
-            org_row = conn.execute("SELECT name FROM organisations WHERE id = ?", (org_id,)).fetchone()
-            if org_row:
-                org_name = org_row["name"]
-                now = utc_now_iso()
-                if table_has_column("institutions", "org_id"):
-                    conn.execute(
-                        """
-                        INSERT INTO institutions (name, sla_hours, org_id, created_at, modified_at)
-                        VALUES (?, 48, ?, ?, ?)
-                        """,
-                        (org_name, org_id, now, now)
-                    )
-                    conn.commit()
-            conn.close()
-            # Refresh institutions list
-            institutions = list_institutions(org_id)
+        if not institutions and default_institution:
+            institutions = [default_institution]
     else:
         institutions = list_institutions(org_id)
     
@@ -6377,8 +7809,8 @@ def settings_page(request: Request, error: str = ""):
     users = list_users(org_id)
     rad_names = [r["name"] for r in rads]
     protocols = list_protocol_rows(org_id)
-    study_description_presets = list_study_description_presets(org_id)
-    protocol_modalities = sorted({str(p.get("modality") or "").strip() for p in study_description_presets if str(p.get("modality") or "").strip()})
+    available_exams = list_exam_catalogue(active_only=True, org_id=org_id)
+    protocol_modalities = CONTROLLED_MODALITIES
     report_key_scope = org_id or 0
     report_header_text = get_setting(f"report_header:{report_key_scope}", org_name or "")
     report_footer_text = get_setting(f"report_footer:{report_key_scope}", "Confidential workflow document")
@@ -6392,7 +7824,7 @@ def settings_page(request: Request, error: str = ""):
             "users": users,
             "rad_names": rad_names,
             "protocols": protocols,
-            "study_description_presets": study_description_presets,
+            "available_exams": available_exams,
             "protocol_modalities": protocol_modalities,
             "org_name": org_name,
             "report_header_text": report_header_text,
@@ -6432,26 +7864,30 @@ def preview_report_settings(request: Request):
   <title>Report Preview</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    body {{ margin: 0; background: #eef3f8; color: #102033; font-family: Arial, sans-serif; }}
-    .page {{ max-width: 900px; margin: 32px auto; background: white; border: 1px solid #d6e0eb; box-shadow: 0 18px 40px rgba(16,32,51,0.08); }}
-    .toolbar {{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding: 16px 20px; border-bottom: 1px solid #e5edf5; background: #f8fbff; }}
-    .btn {{ display:inline-flex; align-items:center; justify-content:center; padding: 10px 14px; border-radius: 8px; text-decoration:none; background:#1f6feb; color:white; }}
-    .page-inner {{ padding: 28px 36px 32px; }}
-    .header-rule {{ height: 8px; border-radius: 999px; background: linear-gradient(90deg, #1f6feb, #6ea8ff); margin-bottom: 20px; }}
-    .report-header {{ font-size: 28px; font-weight: 700; margin: 0 0 4px; }}
-    .report-sub {{ color: #526274; font-size: 13px; margin-bottom: 24px; }}
-    .status {{ display:inline-block; padding: 6px 12px; border-radius: 999px; background:#dcfce7; color:#166534; font-size: 12px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; }}
+    body {{ margin: 0; min-height: 100vh; background: linear-gradient(180deg, #08101d 0%, #0e1a2c 100%); color: rgba(241, 245, 249, 0.92); font-family: Inter, system-ui, sans-serif; }}
+    .shell {{ max-width: 1180px; margin: 0 auto; padding: 24px; }}
+    .page {{ max-width: 960px; margin: 0 auto; background: rgba(10, 18, 34, 0.96); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 18px; box-shadow: 0 28px 60px rgba(4, 10, 22, 0.55); overflow: hidden; }}
+    .toolbar {{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding: 18px 22px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); background: rgba(255,255,255,0.03); }}
+    .toolbar strong {{ color: #f8fbff; }}
+    .toolbar span {{ color: rgba(203, 213, 225, 0.78) !important; }}
+    .btn {{ display:inline-flex; align-items:center; justify-content:center; padding: 10px 14px; border-radius: 10px; text-decoration:none; background:#1f6feb; color:white; }}
+    .page-inner {{ padding: 30px 38px 34px; }}
+    .header-rule {{ height: 8px; border-radius: 999px; background: linear-gradient(90deg, #1f6feb, #60a5fa); margin-bottom: 20px; }}
+    .report-header {{ font-size: 28px; font-weight: 700; margin: 0 0 4px; color: #ffffff; }}
+    .report-sub {{ color: rgba(191, 219, 254, 0.82); font-size: 13px; margin-bottom: 24px; }}
+    .status {{ display:inline-block; padding: 6px 12px; border-radius: 999px; background: rgba(16,185,129,0.18); border: 1px solid rgba(16,185,129,0.3); color:#86efac; font-size: 12px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; }}
     .section {{ margin-top: 24px; }}
-    .section h2 {{ font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #526274; margin: 0 0 12px; }}
+    .section h2 {{ font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(191, 219, 254, 0.8); margin: 0 0 12px; }}
     .grid {{ display:grid; grid-template-columns: 180px 1fr; gap: 10px 18px; }}
-    .label {{ color:#526274; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; }}
-    .value {{ color:#102033; font-size:14px; }}
-    .card {{ border: 1px solid #dbe7f3; border-radius: 12px; padding: 16px 18px; background: #fbfdff; }}
-    .footer {{ margin-top: 28px; padding-top: 16px; border-top: 1px solid #dbe7f3; color:#526274; font-size:12px; line-height:1.6; white-space:pre-wrap; }}
-    @media (max-width: 760px) {{ .page {{ margin: 0; border: 0; box-shadow:none; }} .page-inner {{ padding: 22px 18px 28px; }} .grid {{ grid-template-columns: 1fr; gap: 6px; }} .toolbar {{ flex-direction:column; align-items:flex-start; }} }}
+    .label {{ color: rgba(148, 163, 184, 0.92); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; }}
+    .value {{ color:#f8fbff; font-size:14px; }}
+    .card {{ border: 1px solid rgba(148, 163, 184, 0.14); border-radius: 14px; padding: 16px 18px; background: rgba(255,255,255,0.03); }}
+    .footer {{ margin-top: 28px; padding-top: 16px; border-top: 1px solid rgba(148, 163, 184, 0.14); color:rgba(203, 213, 225, 0.86); font-size:12px; line-height:1.6; white-space:pre-wrap; }}
+    @media (max-width: 760px) {{ .shell {{ padding: 0; }} .page {{ margin: 0; border-radius: 0; border: 0; box-shadow:none; }} .page-inner {{ padding: 22px 18px 28px; }} .grid {{ grid-template-columns: 1fr; gap: 6px; }} .toolbar {{ flex-direction:column; align-items:flex-start; }} }}
   </style>
 </head>
 <body>
+  <div class="shell">
   <div class="page">
     <div class="toolbar">
       <div>
@@ -6464,7 +7900,7 @@ def preview_report_settings(request: Request):
       <div class="header-rule"></div>
       <div class="report-header">{html.escape(header_text)}</div>
       <div class="report-sub">Preview generated {html.escape(sample_now)}</div>
-      <span class="status">Justified With Comment</span>
+      <span class="status">Approved with Comment</span>
 
       <div class="section">
         <h2>Case Summary</h2>
@@ -6485,7 +7921,7 @@ def preview_report_settings(request: Request):
         <h2>Decision</h2>
         <div class="card">
           <div class="grid">
-            <div class="label">Decision</div><div class="value">Approve with comment</div>
+            <div class="label">Decision</div><div class="value">Approved with Comment</div>
             <div class="label">Protocol</div><div class="value">MRI Brain with contrast protocol</div>
             <div class="label">Comment</div><div class="value">Clinical details support the request. Please correlate with prior imaging and proceed with contrast if renal function is satisfactory.</div>
           </div>
@@ -6501,6 +7937,7 @@ def preview_report_settings(request: Request):
 
       <div class="footer">{html.escape(footer_text)}</div>
     </div>
+  </div>
   </div>
 </body>
 </html>"""
@@ -7122,34 +8559,37 @@ def delete_protocol_route(request: Request, protocol_id: int):
 # -------------------------
 @app.get("/api/study-descriptions/by-modality/{modality}")
 def get_study_descriptions(modality: str, request: Request, org_id: str = None):
-    """Get study description presets by modality for user's organization (searchable via form)"""
-    # If org_id is provided as query parameter, use it; otherwise get from session
+    """Get available exam catalogue entries by modality for an organisation."""
     if org_id:
         try:
             org_id = int(org_id)
         except (ValueError, TypeError):
             org_id = None
-    
+
     if not org_id:
-        # Get user's organization from session
         user = request.session.get("user")
         if not user:
             return []
-        
-        # Try both org_id and organization_id for backward compatibility
         org_id = user.get("org_id") or user.get("organization_id")
-    
+
     if not org_id:
         return []
-    
-    conn = get_db()
-    modality = modality.upper().strip()
-    rows = conn.execute(
-        "SELECT id, description FROM study_description_presets WHERE organization_id = ? AND modality = ? AND COALESCE(is_active, 1) = 1 ORDER BY description",
-        (org_id, modality)
-    ).fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+
+    modality_value = modality.upper().strip()
+    rows = [
+        item
+        for item in list_exam_catalogue(active_only=True, org_id=org_id)
+        if str(item.get("modality") or "").upper() == modality_value
+    ]
+    return [
+        {
+            "id": item["id"],
+            "description": item["description"],
+            "study_code": item.get("study_code") or "",
+            "label": format_exam_label(item["description"], item.get("study_code")),
+        }
+        for item in rows
+    ]
 
 
 @app.get("/api/protocols/by-study-description/{preset_id}")
@@ -7185,119 +8625,10 @@ def get_protocols_by_study_description(
     )
     return rows
 
-@app.get("/settings/study-descriptions", response_class=HTMLResponse)
+@app.get("/settings/study-descriptions")
 def study_descriptions_page(request: Request):
-    """Admin page to manage study description presets for the current organization."""
-    user = require_admin(request)
-    org_id = user.get("org_id") or user.get("organization_id") or 1
-    
-    conn = get_db()
-    presets = conn.execute(
-        "SELECT id, modality, description, COALESCE(is_active, 1) AS is_active, created_at, updated_at FROM study_description_presets WHERE organization_id = ? ORDER BY modality, description",
-        (org_id,)
-    ).fetchall()
-    conn.close()
-    return templates.TemplateResponse("superuser_study_descriptions.html", {
-        "request": request,
-        "current_user": user,
-        "presets": [dict(row) for row in presets],
-        "modalities": ["MRI", "CT", "XR", "PET", "DEXA"]
-    })
-
-@app.post("/settings/study-descriptions/add")
-def add_study_description(request: Request, modality: str = Form(...), description: str = Form(...), org_id: str = Form("")):
-    """Add new study description preset for the current organization."""
-    user = require_admin(request)
-    target_org_id = user.get("org_id") or user.get("organization_id")
-    if org_id:
-        try:
-            target_org_id = int(org_id)
-        except Exception:
-            pass
-    if not target_org_id:
-        return RedirectResponse(url="/settings?tab=study-presets&error=org-required", status_code=303)
-    modality = modality.upper().strip()
-    description = description.strip()
-    
-    if not modality or not description:
-        return RedirectResponse(url="/settings?tab=study-presets&error=empty", status_code=303)
-    
-    creator_id = user.get("id") or 1
-    try:
-        creator_id = int(creator_id)
-    except Exception:
-        creator_id = 1
-
-    conn = get_db()
-    try:
-        conn.execute(
-            "INSERT INTO study_description_presets (organization_id, modality, description, is_active, created_at, updated_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (target_org_id, modality, description, 1, datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat(), creator_id)
-        )
-        conn.commit()
-    except (sqlite3.IntegrityError, SQLAlchemyError):
-        conn.close()
-        return RedirectResponse(url="/settings?tab=study-presets&error=duplicate", status_code=303)
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
-    
-    return RedirectResponse(url="/settings?tab=study-presets", status_code=303)
-
-@app.post("/settings/study-descriptions/archive/{preset_id}")
-def archive_study_description(request: Request, preset_id: int):
-    """Archive study description preset from the current organization."""
-    user = require_admin(request)
-    org_id = user.get("org_id") or user.get("organization_id") or 1
-    conn = get_db()
-    conn.execute(
-        "UPDATE study_description_presets SET is_active = 0, updated_at = ? WHERE id = ? AND organization_id = ?",
-        (datetime.now(timezone.utc).isoformat(), preset_id, org_id),
-    )
-    conn.commit()
-    conn.close()
-    return RedirectResponse(url="/settings?tab=study-presets", status_code=303)
-
-
-@app.post("/settings/study-descriptions/restore/{preset_id}")
-def restore_study_description(request: Request, preset_id: int):
-    """Restore archived study description preset for the current organization."""
-    user = require_admin(request)
-    org_id = user.get("org_id") or user.get("organization_id") or 1
-    conn = get_db()
-    conn.execute(
-        "UPDATE study_description_presets SET is_active = 1, updated_at = ? WHERE id = ? AND organization_id = ?",
-        (datetime.now(timezone.utc).isoformat(), preset_id, org_id),
-    )
-    conn.commit()
-    conn.close()
-    return RedirectResponse(url="/settings?tab=study-presets", status_code=303)
-
-@app.post("/settings/study-descriptions/edit/{preset_id}")
-def edit_study_description(request: Request, preset_id: int, modality: str = Form(...), description: str = Form(...)):
-    """Edit study description preset for the current organization."""
-    user = require_admin(request)
-    org_id = user.get("org_id") or user.get("organization_id") or 1
-    modality = modality.upper().strip()
-    description = description.strip()
-    
-    if not modality or not description:
-        return RedirectResponse(url="/settings?tab=study-presets&error=empty", status_code=303)
-    
-    try:
-        conn = get_db()
-        conn.execute(
-            "UPDATE study_description_presets SET modality = ?, description = ?, updated_at = ? WHERE id = ? AND organization_id = ?",
-            (modality, description, datetime.now(timezone.utc).isoformat(), preset_id, org_id)
-        )
-        conn.commit()
-        conn.close()
-    except sqlite3.IntegrityError:
-        return RedirectResponse(url="/settings?tab=study-presets&error=duplicate", status_code=303)
-    
-    return RedirectResponse(url="/settings?tab=study-presets", status_code=303)
+    require_admin(request)
+    return RedirectResponse(url="/settings?tab=protocols", status_code=303)
 
 # -------------------------
 # Admin submit
@@ -7309,10 +8640,16 @@ def intake_form(request: Request, org_id: int, token: str = ""):
     if not expected or token != expected:
         raise HTTPException(status_code=403, detail="Invalid intake token")
 
+    ensure_default_institution(org_id)
     institutions = list_institutions(org_id)
     return templates.TemplateResponse(
         "intake_submit.html",
-        {"request": request, "institutions": institutions},
+        {
+            "request": request,
+            "institutions": institutions,
+            "default_institution": get_default_institution(org_id),
+            "available_exams": list_exam_catalogue(active_only=True, org_id=org_id),
+        },
     )
 
 
@@ -7325,69 +8662,113 @@ async def intake_submit(
     patient_surname: str = Form(...),
     patient_referral_id: str = Form(...),
     patient_dob: str = Form(""),
-    institution_id: str = Form(...),
+    institution_id: str = Form(""),
     study_description: str = Form(...),
+    study_description_preset_id: str = Form(""),
+    study_code: str = Form(""),
     admin_notes: str = Form(""),
-    attachment: UploadFile | None = File(...),
+    attachments: list[UploadFile] = File(...),
 ):
     token = (token or request.query_params.get("token") or "").strip()
     expected = get_setting(f"intake_token:{org_id}", "")
     if not expected or token != expected:
         raise HTTPException(status_code=403, detail="Invalid intake token")
 
-    try:
-        inst_id = int(institution_id)
-        inst = get_institution(inst_id, org_id)
+    institution_value = (institution_id or "").strip()
+    if institution_value:
+        try:
+            inst_id = int(institution_value)
+            inst = get_institution(inst_id, org_id)
+            if not inst:
+                raise HTTPException(status_code=400, detail="Invalid institution selection")
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid institution ID")
+    else:
+        inst = get_default_institution(org_id)
         if not inst:
-            raise HTTPException(status_code=400, detail="Invalid institution selection")
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Invalid institution ID")
+            raise HTTPException(status_code=400, detail="No default institution available")
+        inst_id = int(inst["id"])
 
-    if not attachment or not attachment.filename:
-        raise HTTPException(status_code=400, detail="Attachment is required")
+    resolved_exam = resolve_case_exam_selection(
+        user=None,
+        org_id=org_id,
+        study_description=study_description,
+        study_description_preset_id=study_description_preset_id,
+        study_code=study_code,
+    )
+    selected_study_description = resolved_exam["study_description"]
+    selected_study_code = resolved_exam["study_code"]
+    selected_modality = resolved_exam["modality"]
+    selected_preset_id = resolved_exam["study_description_preset_id"]
+
+    valid_attachments = [file for file in attachments if file and file.filename]
+    if not valid_attachments:
+        raise HTTPException(status_code=400, detail="At least one attachment is required")
 
     case_id = generate_case_id(inst_id)
-    original_name = attachment.filename
-    
-    file_bytes = await attachment.read()
-    
-    # Try blob storage first, fallback to local
-    stored_path = None
-    if BLOB_STORAGE_ENABLED:
-        blob_name = upload_to_blob(case_id, file_bytes, original_name, org_id)
-        if blob_name:
-            stored_path = blob_name
-    
-    # Fallback: store locally if blob upload failed or disabled
-    if not stored_path:
-        safe_name = f"{case_id}_{Path(original_name).name}"
-        stored_path = str(UPLOAD_DIR / safe_name)
-        with open(stored_path, "wb") as f:
-            f.write(file_bytes)
+    primary_attachment = valid_attachments[0]
+    original_name = primary_attachment.filename
+    file_bytes = await primary_attachment.read()
+    stored_path = store_case_attachment_file(case_id, original_name, file_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
 
     created_at = utc_now_iso()
     conn = get_db()
     
     # Build insert conditionally based on columns that exist
     has_dob_col = table_has_column("cases", "patient_dob")
-    if has_dob_col:
+    has_preset_col = table_has_column("cases", "study_description_preset_id")
+    has_study_code_col = table_has_column("cases", "study_code")
+    has_modality_col = table_has_column("cases", "modality")
+    has_review_col = table_has_column("cases", "exam_catalogue_requires_review")
+    if has_dob_col and has_study_code_col and has_modality_col:
         conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, study_description.strip(), admin_notes.strip(), "", original_name, stored_path, "pending", None, org_id),
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, study_description_preset_id, study_code, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, selected_study_description, selected_preset_id if has_preset_col else None, selected_study_code, selected_modality, admin_notes.strip(), "", original_name, stored_path, "pending", None, org_id, 0 if has_review_col else 0),
+        )
+    elif has_dob_col and has_study_code_col:
+        conn.execute(
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, study_description_preset_id, study_code, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, selected_study_description, selected_preset_id if has_preset_col else None, selected_study_code, admin_notes.strip(), "", original_name, stored_path, "pending", None, org_id, 0 if has_review_col else 0),
+        )
+    elif has_dob_col:
+        conn.execute(
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, study_description_preset_id, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, selected_study_description, selected_preset_id if has_preset_col else None, admin_notes.strip(), "", original_name, stored_path, "pending", None, org_id, 0 if has_review_col else 0),
         )
     else:
         # PostgreSQL doesn't have patient_dob column, exclude it
         conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, study_description.strip(), admin_notes.strip(), "", original_name, stored_path, "pending", None, org_id),
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, study_description_preset_id, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, selected_study_description, selected_preset_id if has_preset_col else None, admin_notes.strip(), "", original_name, stored_path, "pending", None, org_id, 0 if has_review_col else 0),
         )
     conn.commit()
     conn.close()
 
+    add_case_attachment_record(
+        case_id,
+        org_id,
+        original_name,
+        stored_path,
+        uploaded_by="external",
+        is_primary=True,
+    )
+    for extra_file in valid_attachments[1:]:
+        extra_bytes = await extra_file.read()
+        extra_path = store_case_attachment_file(case_id, extra_file.filename, extra_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
+        add_case_attachment_record(
+            case_id,
+            org_id,
+            extra_file.filename,
+            extra_path,
+            uploaded_by="external",
+            is_primary=False,
+        )
+    sync_case_primary_attachment(case_id)
+
     insert_case_event(
         case_id=case_id,
         org_id=org_id,
-        event_type="SUBMITTED",
+        event_type="CREATED",
         user={"username": "external"},
         comment=admin_notes.strip() or None,
     )
@@ -7399,8 +8780,10 @@ async def intake_submit(
 def referral_trial_form(request: Request):
     user = require_admin(request)
     org_id = user.get("org_id")
+    ensure_default_institution(org_id)
     institutions = list_institutions(org_id)
     radiologists = list_radiologists(org_id)
+    default_institution = get_default_institution(org_id)
 
     return templates.TemplateResponse(
         "referral_trial.html",
@@ -7418,7 +8801,7 @@ def referral_trial_form(request: Request):
                 "modality": "",
                 "admin_notes": "",
                 "radiologist": "",
-                "institution_id": "",
+                "institution_id": str(default_institution["id"]) if default_institution else "",
                 "attachment_token": "",
                 "attachment_original_name": "",
             },
@@ -7426,6 +8809,9 @@ def referral_trial_form(request: Request):
             "parse_confidence": None,
             "parse_preview": "",
             "error": "",
+            "default_institution": default_institution,
+            "available_exams": list_exam_catalogue(active_only=True, org_id=org_id),
+            "can_create_uncatalogued_exam": can_use_uncatalogued_exam_exception(user),
         },
     )
 
@@ -7440,6 +8826,7 @@ async def referral_trial_parse(
     org_id = user.get("org_id")
     institutions = list_institutions(org_id)
     radiologists = list_radiologists(org_id)
+    default_institution = get_default_institution(org_id)
 
     if not attachment or not attachment.filename:
         return templates.TemplateResponse(
@@ -7453,6 +8840,9 @@ async def referral_trial_parse(
                 "parse_confidence": None,
                 "parse_preview": "",
                 "error": "Please select a referral file to parse.",
+                "default_institution": default_institution,
+                "available_exams": list_exam_catalogue(active_only=True, org_id=org_id),
+                "can_create_uncatalogued_exam": can_use_uncatalogued_exam_exception(user),
             },
         )
 
@@ -7482,7 +8872,62 @@ async def referral_trial_parse(
             "parse_confidence": parsed.get("confidence"),
             "parse_preview": parsed.get("text_preview", ""),
             "error": "",
+            "default_institution": default_institution,
+            "available_exams": list_exam_catalogue(active_only=True, org_id=org_id),
+            "can_create_uncatalogued_exam": can_use_uncatalogued_exam_exception(user),
         },
+    )
+
+
+def get_referral_trial_attachment_path(token: str) -> Path:
+    token_name = Path(token or "").name
+    if not token_name.startswith("trial_"):
+        raise HTTPException(status_code=400, detail="Invalid attachment token")
+    trial_path = UPLOAD_DIR / token_name
+    if not trial_path.exists():
+        raise HTTPException(status_code=404, detail="Referral trial attachment not found")
+    return trial_path
+
+
+@app.get("/submit/referral-trial/attachment/{attachment_token}/inline")
+def referral_trial_attachment_inline(request: Request, attachment_token: str):
+    require_admin(request)
+    trial_path = get_referral_trial_attachment_path(attachment_token)
+    filename = trial_path.name.split("_", 2)[-1] if "_" in trial_path.name else trial_path.name
+    media_type, _ = mimetypes.guess_type(filename)
+    return FileResponse(
+        str(trial_path),
+        media_type=media_type or "application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{filename.replace(chr(34), "")}"'},
+    )
+
+
+@app.get("/submit/referral-trial/attachment/{attachment_token}/preview", response_class=HTMLResponse)
+def referral_trial_attachment_preview(request: Request, attachment_token: str):
+    require_admin(request)
+    trial_path = get_referral_trial_attachment_path(attachment_token)
+    filename = trial_path.name.split("_", 2)[-1] if "_" in trial_path.name else trial_path.name
+    lower_name = str(filename).lower()
+    file_bytes = trial_path.read_bytes()
+
+    if lower_name.endswith(".pdf"):
+        return HTMLResponse(
+            f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}iframe{{width:100%;height:100%;border:0;background:#fff}}</style></head><body><iframe src="/submit/referral-trial/attachment/{html.escape(attachment_token)}/inline#view=FitH"></iframe></body></html>"""
+        )
+    if lower_name.endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")):
+        return HTMLResponse(
+            f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}body{{display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}}img{{max-width:100%;max-height:100%;object-fit:contain;background:#fff;border-radius:8px}}</style></head><body><img src="/submit/referral-trial/attachment/{html.escape(attachment_token)}/inline" alt="{html.escape(filename)}"></body></html>"""
+        )
+    if lower_name.endswith((".txt", ".csv", ".json", ".xml", ".html", ".htm")):
+        try:
+            text_content = file_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            text_content = file_bytes.decode("latin-1", errors="replace")
+        return HTMLResponse(
+            f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{margin:0;background:#fff;color:#0f172a;font-family:Segoe UI,Arial,sans-serif}}pre{{margin:0;padding:18px;white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.5}}</style></head><body><pre>{html.escape(text_content)}</pre></body></html>"""
+        )
+    return HTMLResponse(
+        f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220;color:#e2e8f0;font-family:Segoe UI,Arial,sans-serif}}body{{display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}}.card{{max-width:520px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.2);border-radius:14px;padding:24px;text-align:center}}.name{{font-weight:600;color:#fff;margin-bottom:10px}}.msg{{color:#cbd5e1;line-height:1.6;margin-bottom:16px}}.btn{{display:inline-block;padding:10px 14px;border-radius:8px;background:#1f6feb;color:#fff;text-decoration:none}}</style></head><body><div class="card"><div class="name">{html.escape(filename)}</div><div class="msg">Preview is not available for this file type in the current environment.</div><a class="btn" href="/submit/referral-trial/attachment/{html.escape(attachment_token)}/inline" target="_blank" rel="noopener">Open file</a></div></body></html>"""
     )
 
 
@@ -7493,13 +8938,18 @@ def referral_trial_create(
     patient_surname: str = Form(""),
     patient_referral_id: str = Form(""),
     patient_dob: str = Form(""),
-    institution_id: str = Form(...),
+    institution_id: str = Form(""),
     modality: str = Form(""),
     study_description: str = Form(...),
+    study_description_preset_id: str = Form(""),
+    study_code: str = Form(""),
+    uncatalogued_exam_requested: str = Form(""),
+    uncatalogued_exam_reason: str = Form(""),
     admin_notes: str = Form(""),
     radiologist: str = Form(""),
     attachment_token: str = Form(...),
     attachment_original_name: str = Form("referral_upload"),
+    supporting_attachments: list[UploadFile | str] = File([]),
 ):
     user = require_admin(request)
     org_id = user.get("org_id")
@@ -7507,13 +8957,35 @@ def referral_trial_create(
     if not patient_first_name.strip() or not patient_surname.strip() or not patient_referral_id.strip() or not study_description.strip():
         raise HTTPException(status_code=400, detail="Patient name, referral ID, and study description are required")
 
-    try:
-        inst_id = int(institution_id)
-        inst = get_institution(inst_id, org_id)
+    resolved_exam = resolve_case_exam_selection(
+        user=user,
+        org_id=org_id,
+        study_description=study_description,
+        study_description_preset_id=study_description_preset_id,
+        study_code=study_code,
+        modality=modality,
+        uncatalogued_exam_requested=uncatalogued_exam_requested,
+        uncatalogued_exam_reason=uncatalogued_exam_reason,
+    )
+    selected_study_description = resolved_exam["study_description"]
+    selected_study_code = resolved_exam["study_code"]
+    selected_preset_id = resolved_exam["study_description_preset_id"]
+    case_modality = resolved_exam["modality"]
+
+    institution_value = (institution_id or "").strip()
+    if institution_value:
+        try:
+            inst_id = int(institution_value)
+            inst = get_institution(inst_id, org_id)
+            if not inst:
+                raise HTTPException(status_code=400, detail="Invalid institution selection")
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid institution ID")
+    else:
+        inst = get_default_institution(org_id)
         if not inst:
-            raise HTTPException(status_code=400, detail="Invalid institution selection")
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Invalid institution ID")
+            raise HTTPException(status_code=400, detail="No default institution available")
+        inst_id = int(inst["id"])
 
     radiologist = radiologist.strip() if radiologist else ""
     if radiologist:
@@ -7535,17 +9007,7 @@ def referral_trial_create(
     case_id = generate_case_id()
     original_name = (attachment_original_name or "referral_upload").strip() or "referral_upload"
 
-    stored_path = None
-    if BLOB_STORAGE_ENABLED:
-        blob_name = upload_to_blob(case_id, file_bytes, original_name, org_id)
-        if blob_name:
-            stored_path = blob_name
-
-    if not stored_path:
-        safe_name = f"{case_id}_{Path(original_name).name}"
-        stored_path = str(UPLOAD_DIR / safe_name)
-        with open(stored_path, "wb") as f:
-            f.write(file_bytes)
+    stored_path = store_case_attachment_file(case_id, original_name, file_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
 
     try:
         temp_path.unlink(missing_ok=True)
@@ -7557,36 +9019,71 @@ def referral_trial_create(
 
     has_dob_col = table_has_column("cases", "patient_dob")
     has_modality_col = table_has_column("cases", "modality")
-    case_modality = modality.strip().upper() if modality else None
-
-    if has_dob_col and has_modality_col:
+    has_study_code_col = table_has_column("cases", "study_code")
+    has_preset_col = table_has_column("cases", "study_description_preset_id")
+    has_review_col = table_has_column("cases", "exam_catalogue_requires_review")
+    has_exception_reason_col = table_has_column("cases", "exam_catalogue_exception_reason")
+    has_exception_at_col = table_has_column("cases", "exam_catalogue_exception_at")
+    has_exception_by_col = table_has_column("cases", "exam_catalogue_exception_by")
+    has_exception_by_id_col = table_has_column("cases", "exam_catalogue_exception_by_id")
+    if has_dob_col and has_modality_col and has_study_code_col:
         conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, study_description.strip(), case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, study_description_preset_id, study_code, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review, exam_catalogue_exception_reason, exam_catalogue_exception_at, exam_catalogue_exception_by, exam_catalogue_exception_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, selected_study_description, selected_preset_id if has_preset_col else None, selected_study_code, case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id, resolved_exam["requires_review"], resolved_exam["exception_reason"], resolved_exam["exception_at"], resolved_exam["exception_by"], resolved_exam["exception_by_id"]),
+        )
+    elif has_dob_col and has_modality_col:
+        conn.execute(
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, study_description_preset_id, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review, exam_catalogue_exception_reason, exam_catalogue_exception_at, exam_catalogue_exception_by, exam_catalogue_exception_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, selected_study_description, selected_preset_id if has_preset_col else None, case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id, resolved_exam["requires_review"], resolved_exam["exception_reason"], resolved_exam["exception_at"], resolved_exam["exception_by"], resolved_exam["exception_by_id"]),
         )
     elif has_dob_col:
         conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, study_description.strip(), admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, study_description_preset_id, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review, exam_catalogue_exception_reason, exam_catalogue_exception_at, exam_catalogue_exception_by, exam_catalogue_exception_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, selected_study_description, selected_preset_id if has_preset_col else None, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id, resolved_exam["requires_review"], resolved_exam["exception_reason"], resolved_exam["exception_at"], resolved_exam["exception_by"], resolved_exam["exception_by_id"]),
         )
     elif has_modality_col:
         conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, study_description.strip(), case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, study_description_preset_id, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review, exam_catalogue_exception_reason, exam_catalogue_exception_at, exam_catalogue_exception_by, exam_catalogue_exception_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, selected_study_description, selected_preset_id if has_preset_col else None, case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id, resolved_exam["requires_review"], resolved_exam["exception_reason"], resolved_exam["exception_at"], resolved_exam["exception_by"], resolved_exam["exception_by_id"]),
         )
     else:
         conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, study_description.strip(), admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
+            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, study_description_preset_id, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review, exam_catalogue_exception_reason, exam_catalogue_exception_at, exam_catalogue_exception_by, exam_catalogue_exception_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, selected_study_description, selected_preset_id if has_preset_col else None, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id, resolved_exam["requires_review"], resolved_exam["exception_reason"], resolved_exam["exception_at"], resolved_exam["exception_by"], resolved_exam["exception_by_id"]),
         )
 
     conn.commit()
     conn.close()
 
+    add_case_attachment_record(
+        case_id,
+        org_id,
+        original_name,
+        stored_path,
+        uploaded_by=user.get("username") or "admin",
+        is_primary=True,
+    )
+    for upload in supporting_attachments:
+        if not isinstance(upload, UploadFile) or not upload.filename:
+            continue
+        upload_bytes = upload.file.read()
+        if not upload_bytes:
+            continue
+        extra_path = store_case_attachment_file(case_id, upload.filename, upload_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
+        add_case_attachment_record(
+            case_id,
+            org_id,
+            upload.filename,
+            extra_path,
+            uploaded_by=user.get("username") or "admin",
+            is_primary=False,
+        )
+    sync_case_primary_attachment(case_id)
+
     insert_case_event(
         case_id=case_id,
         org_id=org_id,
-        event_type="SUBMITTED",
+        event_type="CREATED",
         user={"username": user.get("username") or "admin"},
         comment="Created via referral trial parser",
     )
@@ -7602,8 +9099,10 @@ def submit_form(request: Request):
         return redirect_to_login("admin", "/submit")
 
     org_id = user.get("org_id")
+    ensure_default_institution(org_id)
     institutions = list_institutions(org_id)
     radiologists = list_radiologists(org_id)
+    default_institution = get_default_institution(org_id)
     
     # Keep institution org_id available for existing study description filtering
     for inst in institutions:
@@ -7617,6 +9116,9 @@ def submit_form(request: Request):
             "institutions": institutions,
             "radiologists": radiologists,
             "user_org_id": org_id,
+            "default_institution": default_institution,
+            "available_exams": list_exam_catalogue(active_only=True, org_id=org_id),
+            "can_create_uncatalogued_exam": can_use_uncatalogued_exam_exception(user),
         },
     )
 
@@ -7628,15 +9130,21 @@ async def submit_case(
     patient_surname: str = Form(...),
     patient_referral_id: str = Form(...),
     patient_dob: str = Form(""),
-    institution_id: str = Form(...),
+    institution_id: str = Form(""),
     org_id_form: str = Form(""),
     modality: str = Form(""),
     study_description: str = Form(...),
+    study_description_preset_id: str = Form(""),
+    study_code: str = Form(""),
+    uncatalogued_exam_requested: str = Form(""),
+    uncatalogued_exam_reason: str = Form(""),
     admin_notes: str = Form(""),
     radiologist: str = Form(""),
-    attachment: UploadFile | None = File(...),
+    attachments: list[UploadFile] = File(...),
     action: str = Form("submit"),
     extra_study_description: list[str] = Form([]),
+    extra_study_description_preset_id: list[str] = Form([]),
+    extra_study_code: list[str] = Form([]),
     extra_modality: list[str] = Form([]),
     extra_radiologist: list[str] = Form([]),
 ):
@@ -7646,14 +9154,20 @@ async def submit_case(
     if table_exists("memberships") and not user.get("is_superuser") and not org_id:
         raise HTTPException(status_code=403, detail="Organisation access required")
 
-    # Validate institution
-    try:
-        inst_id = int(institution_id)
-        inst = get_institution(inst_id, org_id)
+    institution_value = (institution_id or "").strip()
+    if institution_value:
+        try:
+            inst_id = int(institution_value)
+            inst = get_institution(inst_id, org_id)
+            if not inst:
+                raise HTTPException(status_code=400, detail="Invalid institution selection")
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid institution ID")
+    else:
+        inst = get_default_institution(org_id)
         if not inst:
-            raise HTTPException(status_code=400, detail="Invalid institution selection")
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Invalid institution ID")
+            raise HTTPException(status_code=400, detail="No default institution available")
+        inst_id = int(inst["id"])
 
     if user.get("is_superuser"):
         inst_org_id = inst.get("org_id") if isinstance(inst, dict) else None
@@ -7665,6 +9179,21 @@ async def submit_case(
             except ValueError:
                 pass
 
+    resolved_exam = resolve_case_exam_selection(
+        user=user,
+        org_id=org_id,
+        study_description=study_description,
+        study_description_preset_id=study_description_preset_id,
+        study_code=study_code,
+        modality=modality,
+        uncatalogued_exam_requested=uncatalogued_exam_requested,
+        uncatalogued_exam_reason=uncatalogued_exam_reason,
+    )
+    selected_study_description = resolved_exam["study_description"]
+    selected_study_code = resolved_exam["study_code"]
+    selected_preset_id = resolved_exam["study_description_preset_id"]
+    case_modality = resolved_exam["modality"]
+
     # Validate radiologist (optional - can assign later via bulk assignment)
     radiologist = radiologist.strip() if radiologist else ""
     if radiologist:
@@ -7672,46 +9201,46 @@ async def submit_case(
         if radiologist not in valid_rads:
             raise HTTPException(status_code=400, detail="Invalid radiologist selection")
 
-    # Validate attachment is provided
-    if not attachment or not attachment.filename:
-        raise HTTPException(status_code=400, detail="Attachment is required")
+    valid_attachments = [upload for upload in attachments if upload and upload.filename]
+    if not valid_attachments:
+        raise HTTPException(status_code=400, detail="At least one attachment is required")
+    prepared_attachments: list[tuple[str, bytes]] = []
+    for upload in valid_attachments:
+        file_payload = await upload.read()
+        if file_payload:
+            prepared_attachments.append((upload.filename, file_payload))
+    if not prepared_attachments:
+        raise HTTPException(status_code=400, detail="At least one attachment is required")
 
-    cleaned_extra_cases: list[tuple[str, str | None, str]] = []
+    cleaned_extra_cases: list[tuple[str, str | None, str, str | None]] = []
     if extra_study_description:
         valid_rads = {r["name"] for r in list_radiologists(org_id)}
         for i, extra_desc in enumerate(extra_study_description):
             normalized_desc = (extra_desc or "").strip()
             if not normalized_desc:
                 continue
+            selected_extra_preset = None
+            if i < len(extra_study_description_preset_id) and str(extra_study_description_preset_id[i] or "").strip().isdigit():
+                selected_extra_preset = get_study_description_preset(int(str(extra_study_description_preset_id[i]).strip()), org_id)
+                if selected_extra_preset:
+                    normalized_desc = str(selected_extra_preset.get("description") or normalized_desc).strip()
+            if not selected_extra_preset:
+                raise HTTPException(status_code=400, detail="Each additional exam must be selected from the master exam catalogue")
             normalized_rad = extra_radiologist[i].strip() if i < len(extra_radiologist) else ""
             if normalized_rad and normalized_rad not in valid_rads:
                 normalized_rad = ""
-            normalized_modality = (
+            normalized_modality = str(selected_extra_preset.get("modality") if selected_extra_preset else "").strip().upper() or (
                 extra_modality[i].strip().upper()
                 if i < len(extra_modality) and extra_modality[i].strip()
                 else None
             )
-            cleaned_extra_cases.append((normalized_desc, normalized_modality, normalized_rad))
+            normalized_study_code = str(selected_extra_preset.get("study_code") if selected_extra_preset else (extra_study_code[i] if i < len(extra_study_code) else "")).strip() or None
+            cleaned_extra_cases.append((normalized_desc, normalized_modality, normalized_rad, normalized_study_code))
 
     generated_case_ids = generate_case_ids(1 + len(cleaned_extra_cases), institution_id=inst_id)
     case_id = generated_case_ids[0]
-    original_name = attachment.filename
-    
-    file_bytes = await attachment.read()
-    
-    # Try blob storage first, fallback to local
-    stored_path = None
-    if BLOB_STORAGE_ENABLED:
-        blob_name = upload_to_blob(case_id, file_bytes, original_name, org_id)
-        if blob_name:
-            stored_path = blob_name
-    
-    # Fallback: store locally if blob upload failed or disabled
-    if not stored_path:
-        safe_name = f"{case_id}_{Path(original_name).name}"
-        stored_path = str(UPLOAD_DIR / safe_name)
-        with open(stored_path, "wb") as f:
-            f.write(file_bytes)
+    original_name, file_bytes = prepared_attachments[0]
+    stored_path = store_case_attachment_file(case_id, original_name, file_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
 
     created_at = utc_now_iso()
 
@@ -7720,74 +9249,169 @@ async def submit_case(
     # Build insert conditionally based on columns that exist
     has_dob_col = table_has_column("cases", "patient_dob")
     has_modality_col = table_has_column("cases", "modality")
-    case_modality = modality.strip().upper() if modality else None
-    if has_dob_col and has_modality_col:
-        conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, study_description.strip(), case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
-        )
-    elif has_dob_col:
-        conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, study_description.strip(), admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
-        )
-    elif has_modality_col:
-        conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, study_description.strip(), case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
-        )
-    else:
-        conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, study_description.strip(), admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id),
-        )
+    has_study_code_col = table_has_column("cases", "study_code")
+    has_preset_col = table_has_column("cases", "study_description_preset_id")
+    has_review_col = table_has_column("cases", "exam_catalogue_requires_review")
+    has_exception_reason_col = table_has_column("cases", "exam_catalogue_exception_reason")
+    has_exception_at_col = table_has_column("cases", "exam_catalogue_exception_at")
+    has_exception_by_col = table_has_column("cases", "exam_catalogue_exception_by")
+    has_exception_by_id_col = table_has_column("cases", "exam_catalogue_exception_by_id")
+    case_insert_columns = ["id", "created_at", "patient_first_name", "patient_surname", "patient_referral_id"]
+    case_insert_values: list = [case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip()]
+    if has_dob_col:
+        case_insert_columns.append("patient_dob")
+        case_insert_values.append(patient_dob.strip() or None)
+    case_insert_columns.extend(["institution_id", "study_description"])
+    case_insert_values.extend([inst_id, selected_study_description])
+    if has_preset_col:
+        case_insert_columns.append("study_description_preset_id")
+        case_insert_values.append(selected_preset_id)
+    if has_study_code_col:
+        case_insert_columns.append("study_code")
+        case_insert_values.append(selected_study_code)
+    if has_modality_col:
+        case_insert_columns.append("modality")
+        case_insert_values.append(case_modality)
+    case_insert_columns.extend(["admin_notes", "radiologist", "uploaded_filename", "stored_filepath", "status", "vetted_at", "org_id"])
+    case_insert_values.extend([admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id])
+    if has_review_col:
+        case_insert_columns.append("exam_catalogue_requires_review")
+        case_insert_values.append(resolved_exam["requires_review"])
+    if has_exception_reason_col:
+        case_insert_columns.append("exam_catalogue_exception_reason")
+        case_insert_values.append(resolved_exam["exception_reason"])
+    if has_exception_at_col:
+        case_insert_columns.append("exam_catalogue_exception_at")
+        case_insert_values.append(resolved_exam["exception_at"])
+    if has_exception_by_col:
+        case_insert_columns.append("exam_catalogue_exception_by")
+        case_insert_values.append(resolved_exam["exception_by"])
+    if has_exception_by_id_col:
+        case_insert_columns.append("exam_catalogue_exception_by_id")
+        case_insert_values.append(resolved_exam["exception_by_id"])
+    placeholders = ", ".join(["?"] * len(case_insert_columns))
+    conn.execute(
+        f"INSERT INTO cases ({', '.join(case_insert_columns)}) VALUES ({placeholders})",
+        tuple(case_insert_values),
+    )
     conn.commit()
     conn.close()
 
+    add_case_attachment_record(
+        case_id,
+        org_id,
+        original_name,
+        stored_path,
+        uploaded_by=user.get("username") or "admin",
+        is_primary=True,
+    )
+    for upload_name, extra_bytes in prepared_attachments[1:]:
+        extra_path = store_case_attachment_file(case_id, upload_name, extra_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
+        add_case_attachment_record(
+            case_id,
+            org_id,
+            upload_name,
+            extra_path,
+            uploaded_by=user.get("username") or "admin",
+            is_primary=False,
+        )
+    sync_case_primary_attachment(case_id)
+
+    insert_case_event(
+        case_id=case_id,
+        org_id=org_id,
+        event_type="CREATED",
+        user=user,
+        comment=admin_notes.strip() or None,
+    )
+    if resolved_exam["exception_requested"]:
+        insert_case_event(
+            case_id=case_id,
+            org_id=org_id,
+            event_type="EXAM_CATALOGUE_EXCEPTION",
+            user=user,
+            comment=f"Temporary uncatalogued exam created. Reason: {resolved_exam['exception_reason']}",
+        )
+    if resolved_exam["exception_requested"]:
+        insert_case_event(
+            case_id=case_id,
+            org_id=org_id,
+            event_type="EXAM_CATALOGUE_EXCEPTION",
+            user=user,
+            comment=f"Temporary uncatalogued exam created. Reason: {resolved_exam['exception_reason']}",
+        )
+
     # Create additional cases for extra studies (same patient/institution/attachment)
     if cleaned_extra_cases:
-        for idx, (extra_desc, extra_modality_value, extra_rad) in enumerate(cleaned_extra_cases, start=1):
+        for idx, (extra_desc, extra_modality_value, extra_rad, extra_study_code_value) in enumerate(cleaned_extra_cases, start=1):
             extra_case_id = generated_case_ids[idx]
             # Copy attachment for the extra case
-            extra_stored_path = stored_path
-            if stored_path and original_name:
-                if BLOB_STORAGE_ENABLED and not stored_path.startswith("/"):
-                    # Blob storage: copy blob
-                    blob_bytes = download_from_blob(stored_path)
-                    if blob_bytes:
-                        extra_blob_name = upload_to_blob(extra_case_id, blob_bytes, original_name, org_id)
-                        if extra_blob_name:
-                            extra_stored_path = extra_blob_name
-                else:
-                    # Local fallback: copy file
-                    extra_safe_name = f"{extra_case_id}_{Path(original_name).name}"
-                    extra_stored_path = str(UPLOAD_DIR / extra_safe_name)
-                    shutil.copy2(stored_path, extra_stored_path)
+            extra_stored_path = None
+            if file_bytes and original_name:
+                extra_stored_path = store_case_attachment_file(extra_case_id, original_name, file_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
             conn2 = get_db()
             
             # Build insert conditionally based on columns that exist
-            if has_dob_col and has_modality_col:
-                conn2.execute(
-                    "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (extra_case_id, utc_now_iso(), patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, extra_desc, extra_modality_value, admin_notes.strip(), extra_rad, original_name, extra_stored_path, "pending", None, org_id),
-                )
-            elif has_dob_col:
-                conn2.execute(
-                    "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (extra_case_id, utc_now_iso(), patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, extra_desc, admin_notes.strip(), extra_rad, original_name, extra_stored_path, "pending", None, org_id),
-                )
-            elif has_modality_col:
-                conn2.execute(
-                    "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (extra_case_id, utc_now_iso(), patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, extra_desc, extra_modality_value, admin_notes.strip(), extra_rad, original_name, extra_stored_path, "pending", None, org_id),
-                )
-            else:
-                conn2.execute(
-                    "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (extra_case_id, utc_now_iso(), patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, extra_desc, admin_notes.strip(), extra_rad, original_name, extra_stored_path, "pending", None, org_id),
-                )
+            extra_insert_columns = list(case_insert_columns)
+            extra_insert_values = [
+                extra_case_id,
+                utc_now_iso(),
+                patient_first_name.strip(),
+                patient_surname.strip(),
+                patient_referral_id.strip(),
+            ]
+            if has_dob_col:
+                extra_insert_values.append(patient_dob.strip() or None)
+            extra_insert_values.extend([inst_id, extra_desc])
+            if has_preset_col:
+                extra_insert_values.append(int(str(extra_study_description_preset_id[idx - 1]).strip()) if idx - 1 < len(extra_study_description_preset_id) and str(extra_study_description_preset_id[idx - 1]).strip().isdigit() else None)
+            if has_study_code_col:
+                extra_insert_values.append(extra_study_code_value)
+            if has_modality_col:
+                extra_insert_values.append(extra_modality_value)
+            extra_insert_values.extend([admin_notes.strip(), extra_rad, original_name, extra_stored_path, "pending", None, org_id])
+            if has_review_col:
+                extra_insert_values.append(0)
+            if has_exception_reason_col:
+                extra_insert_values.append(None)
+            if has_exception_at_col:
+                extra_insert_values.append(None)
+            if has_exception_by_col:
+                extra_insert_values.append(None)
+            if has_exception_by_id_col:
+                extra_insert_values.append(None)
+            conn2.execute(
+                f"INSERT INTO cases ({', '.join(extra_insert_columns)}) VALUES ({placeholders})",
+                tuple(extra_insert_values),
+            )
             conn2.commit()
             conn2.close()
+            add_case_attachment_record(
+                extra_case_id,
+                org_id,
+                original_name,
+                extra_stored_path,
+                uploaded_by=user.get("username") or "admin",
+                is_primary=True,
+            )
+            for upload_name, extra_bytes in prepared_attachments[1:]:
+                copied_path = store_case_attachment_file(extra_case_id, upload_name, extra_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
+                add_case_attachment_record(
+                    extra_case_id,
+                    org_id,
+                    upload_name,
+                    copied_path,
+                    uploaded_by=user.get("username") or "admin",
+                    is_primary=False,
+                )
+            sync_case_primary_attachment(extra_case_id)
+            insert_case_event(
+                case_id=extra_case_id,
+                org_id=org_id,
+                event_type="CREATED",
+                user=user,
+                comment=admin_notes.strip() or None,
+            )
 
     # Redirect to admin dashboard
     return RedirectResponse(url="/admin", status_code=303)
@@ -7896,6 +9520,9 @@ def vet_form(request: Request, case_id: str):
 
     case = dict(row)
     case = normalize_case_attachment(case)
+    case["attachment_previewable"] = is_inline_previewable(case.get("uploaded_filename"))
+    attachments = list_case_attachments(case_id, case_dict=case)
+    case.update(build_case_preview_context(case_id, case, attachments))
     base_admin_notes, reopened_admin_notes = partition_admin_notes(case.get("admin_notes"))
     case["admin_note_blocks"] = base_admin_notes
     case["reopened_note_blocks"] = reopened_admin_notes
@@ -7925,47 +9552,9 @@ def vet_form(request: Request, case_id: str):
                 comment="Case opened by practitioner",
             )
 
-    protocols = []
-    preset_id = None
-    if case.get("study_description") and case.get("modality"):
-        conn = get_db()
-        preset_row = conn.execute(
-            """
-            SELECT id
-            FROM study_description_presets
-            WHERE organization_id = ? AND modality = ? AND description = ?
-            LIMIT 1
-            """,
-            (org_id, str(case.get("modality") or "").strip().upper(), str(case.get("study_description") or "").strip()),
-        ).fetchone()
-        conn.close()
-        if preset_row:
-            preset_id = preset_row["id"] if isinstance(preset_row, dict) else preset_row[0]
-
-    if preset_id:
-        protocols = list_protocol_rows_for_study(
-            preset_id,
-            institution_id=case.get("institution_id"),
-            org_id=org_id,
-            active_only=True,
-        )
-
-    if not protocols and case.get("institution_id"):
-        conn = get_db()
-        if org_id and table_has_column("protocols", "org_id"):
-            proto_rows = conn.execute(
-                "SELECT name, instructions FROM protocols WHERE institution_id = ? AND is_active = 1 AND org_id = ? ORDER BY name",
-                (case.get("institution_id"), org_id)
-            ).fetchall()
-        else:
-            proto_rows = conn.execute(
-                "SELECT name, instructions FROM protocols WHERE institution_id = ? AND is_active = 1 ORDER BY name",
-                (case.get("institution_id"),)
-            ).fetchall()
-        conn.close()
-        protocols = [dict(p) for p in proto_rows]
-    elif not protocols:
-        protocols = [{"name": p, "instructions": ""} for p in list_protocols(active_only=True, org_id=org_id)]
+    protocols, resolved_preset_id = list_protocol_rows_for_case(case, org_id=org_id)
+    if resolved_preset_id and not case.get("study_description_preset_id"):
+        case["study_description_preset_id"] = resolved_preset_id
 
     if org_id:
         conn = get_db()
@@ -7978,10 +9567,15 @@ def vet_form(request: Request, case_id: str):
         "vet.html",
         {
             "request": request,
-            "case": case,
+            "case": {
+                **case,
+                "status_display": display_case_status(case.get("status")),
+                "decision_display": display_decision_label(case.get("decision"), fallback_status=case.get("status")),
+            },
             "decisions": DECISIONS,
             "protocols": protocols,
             "org_name": org_name,
+            "attachments": attachments,
         },
     )
 
@@ -7990,7 +9584,7 @@ def vet_form(request: Request, case_id: str):
 def vet_submit(
     request: Request,
     case_id: str,
-    protocol: str = Form(""),
+    protocol_id: str = Form(""),
     decision: str = Form(...),
     decision_comment: str = Form(""),
     contrast_required: str = Form(""),
@@ -7999,25 +9593,26 @@ def vet_submit(
     user = require_radiologist(request)
     rad_name = user.get("radiologist_name")
     org_id = user.get("org_id")
-    decision = (decision or "").strip()
+    decision = normalize_decision_label(decision)
     decision_comment = (decision_comment or "").strip()
-    protocol = (protocol or "").strip()
+    protocol_id_value = int(protocol_id) if str(protocol_id or "").strip().isdigit() else None
+    protocol = ""
     contrast_required = (contrast_required or "").strip()
     contrast_details = (contrast_details or "").strip()
 
     if decision not in DECISIONS:
         raise HTTPException(status_code=400, detail="Invalid decision")
 
-    if decision == "Reject":
+    if decision == "Rejected":
         if not decision_comment:
             raise HTTPException(status_code=400, detail="Comment is required when rejecting a case")
         protocol = ""
         contrast_required = ""
         contrast_details = ""
     else:
-        if not protocol:
+        if not protocol_id_value:
             raise HTTPException(status_code=400, detail="Protocol is required for approved cases")
-        if decision == "Approve with comment" and not decision_comment:
+        if decision == "Approved with Comment" and not decision_comment:
             raise HTTPException(status_code=400, detail="Comment is required when approving with comment")
         if contrast_required not in {"Yes", "No"}:
             raise HTTPException(status_code=400, detail="Please specify whether contrast is required")
@@ -8026,18 +9621,28 @@ def vet_submit(
 
     conn = get_db()
     if org_id:
-        row = conn.execute("SELECT radiologist FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
+        row = conn.execute("SELECT radiologist, institution_id FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
     else:
-        row = conn.execute("SELECT radiologist FROM cases WHERE id = ?", (case_id,)).fetchone()
+        row = conn.execute("SELECT radiologist, institution_id FROM cases WHERE id = ?", (case_id,)).fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Case not found")
     if row["radiologist"] != rad_name:
         conn.close()
         raise HTTPException(status_code=403, detail="Not your case")
+    institution_id = row["institution_id"]
+    if decision != "Rejected":
+        protocol_row = get_protocol_row(protocol_id_value, institution_id=institution_id, org_id=org_id)
+        if not protocol_row:
+            conn.close()
+            raise HTTPException(status_code=400, detail="Selected protocol is not available for this institution")
+        protocol = str(protocol_row.get("name") or "").strip()
+        if not protocol:
+            conn.close()
+            raise HTTPException(status_code=400, detail="Selected protocol is invalid")
 
     # Determine status based on decision
-    if decision == "Reject":
+    if decision == "Rejected":
         case_status = "rejected"
     else:
         case_status = "vetted"
@@ -8071,7 +9676,7 @@ def vet_submit(
     insert_case_event(
         case_id=case_id,
         org_id=org_id,
-        event_type="VETTED",
+        event_type="REJECTED" if decision == "Rejected" else "VETTED",
         user=user,
         decision=decision,
         protocol=protocol or None,
@@ -8084,6 +9689,35 @@ def vet_submit(
 # -------------------------
 # Attachments + PDF
 # -------------------------
+def get_case_attachment_for_user(request: Request, case_id: str, attachment_id: str) -> dict:
+    user = require_login(request)
+
+    conn = get_db()
+    case_row = conn.execute(
+        "SELECT id, radiologist, org_id, uploaded_filename, stored_filepath, created_at FROM cases WHERE id = ?",
+        (case_id,),
+    ).fetchone()
+    conn.close()
+    if not case_row:
+        raise HTTPException(status_code=404, detail="No attachment found")
+
+    case_data = case_row if isinstance(case_row, dict) else dict(case_row)
+    if user.get("role") == "radiologist" and case_data.get("radiologist") != user.get("radiologist_name"):
+        raise HTTPException(status_code=403, detail="Not your case")
+
+    org_id = user.get("org_id")
+    if org_id and not user.get("is_superuser") and case_data.get("org_id") and case_data.get("org_id") != org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    attachments = list_case_attachments(case_id, case_dict=case_data)
+    attachment = next((item for item in attachments if item.get("id") == attachment_id), None)
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    if not attachment.get("stored_filepath"):
+        raise HTTPException(status_code=410, detail="Attachment has expired and is no longer available.")
+    return attachment
+
+
 @app.get("/case/{case_id}/attachment")
 def download_attachment(request: Request, case_id: str):
     user = require_login(request)
@@ -8135,6 +9769,72 @@ def download_attachment(request: Request, case_id: str):
     # File not found
     clear_case_stored_filepath(case_id)
     raise HTTPException(status_code=410, detail="Referral file missing or expired")
+
+
+@app.get("/case/{case_id}/attachments/{attachment_id}")
+def download_specific_attachment(request: Request, case_id: str, attachment_id: str):
+    user = require_login(request)
+    if user.get("role") == "radiologist":
+        raise HTTPException(status_code=403, detail="Radiologists are not allowed to download attachments")
+    attachment = get_case_attachment_for_user(request, case_id, attachment_id)
+    stored_path = attachment.get("stored_filepath")
+    filename = (attachment.get("uploaded_filename") or Path(str(stored_path)).name).replace('"', "")
+    media_type, _ = mimetypes.guess_type(filename)
+
+    if BLOB_STORAGE_ENABLED and stored_path and not str(stored_path).startswith("/"):
+        file_bytes = download_from_blob(str(stored_path))
+        if file_bytes:
+            return StreamingResponse(
+                io.BytesIO(file_bytes),
+                media_type=media_type or "application/octet-stream",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+
+    if stored_path and os.path.exists(str(stored_path)):
+        return FileResponse(str(stored_path), filename=filename)
+
+    raise HTTPException(status_code=410, detail="Attachment missing or expired")
+
+
+@app.get("/case/{case_id}/attachments/{attachment_id}/inline")
+def view_specific_attachment_inline(request: Request, case_id: str, attachment_id: str):
+    attachment = get_case_attachment_for_user(request, case_id, attachment_id)
+    stored_path = attachment.get("stored_filepath")
+    filename = (attachment.get("uploaded_filename") or Path(str(stored_path)).name).replace('"', "")
+    media_type, _ = mimetypes.guess_type(filename)
+    headers = {"Content-Disposition": f'inline; filename="{filename}"'}
+
+    if BLOB_STORAGE_ENABLED and stored_path and not str(stored_path).startswith("/"):
+        file_bytes = download_from_blob(str(stored_path))
+        if file_bytes:
+            return StreamingResponse(
+                io.BytesIO(file_bytes),
+                media_type=media_type or "application/octet-stream",
+                headers=headers,
+            )
+
+    if stored_path and os.path.exists(str(stored_path)):
+        return FileResponse(str(stored_path), media_type=media_type or "application/octet-stream", headers=headers)
+
+    raise HTTPException(status_code=410, detail="Attachment missing or expired")
+
+
+@app.get("/case/{case_id}/attachments/{attachment_id}/preview", response_class=HTMLResponse)
+def view_specific_attachment_preview(request: Request, case_id: str, attachment_id: str):
+    attachment = get_case_attachment_for_user(request, case_id, attachment_id)
+    filename = attachment.get("uploaded_filename") or "Attachment"
+    lower_name = str(filename).lower()
+    if lower_name.endswith(".pdf"):
+        return HTMLResponse(
+            f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}iframe{{width:100%;height:100%;border:0;background:#fff}}</style></head><body><iframe src="/case/{case_id}/attachments/{attachment_id}/inline#view=FitH"></iframe></body></html>"""
+        )
+    if lower_name.endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")):
+        return HTMLResponse(
+            f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}body{{display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}}img{{max-width:100%;max-height:100%;object-fit:contain;background:#fff;border-radius:8px}}</style></head><body><img src="/case/{case_id}/attachments/{attachment_id}/inline" alt="{html.escape(filename)}"></body></html>"""
+        )
+    return HTMLResponse(
+        f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220;color:#e2e8f0;font-family:Segoe UI,Arial,sans-serif}}body{{display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}}.card{{max-width:520px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.2);border-radius:14px;padding:24px;text-align:center}}.name{{font-weight:600;color:#fff;margin-bottom:10px}}.msg{{color:#cbd5e1;line-height:1.6;margin-bottom:16px}}.btn{{display:inline-block;padding:10px 14px;border-radius:8px;background:#1f6feb;color:#fff;text-decoration:none}}</style></head><body><div class="card"><div class="name">{html.escape(filename)}</div><div class="msg">Preview is not available for this file type in the current environment.</div><a class="btn" href="/case/{case_id}/attachments/{attachment_id}/inline" target="_blank" rel="noopener">Open attachment</a></div></body></html>"""
+    )
 
 
 @app.get("/case/{case_id}/attachment/inline")
@@ -8320,7 +10020,8 @@ def case_pdf(request: Request, case_id: str, inline: bool = False, include_timel
         if org_id and not user.get("is_superuser") and case_data.get("org_id") and case_data.get("org_id") != org_id:
             raise HTTPException(status_code=403, detail="Access denied")
 
-        pdf_path = UPLOAD_DIR / f"{case_id}_vetting.pdf"
+        suffix = "_timeline" if include_timeline else ""
+        pdf_path = UPLOAD_DIR / f"{case_id}_vetting{suffix}.pdf"
 
         # Bug 8: Convert row to dict to avoid sqlite3.Row.get() issues
         if isinstance(row, dict):
@@ -8382,7 +10083,7 @@ def case_pdf(request: Request, case_id: str, inline: bool = False, include_timel
 
         institution_name = ""
         if case_data.get("institution_id"):
-            inst = get_institution(case_data.get("institution_id"), case_data.get("org_id"))
+            inst = get_institution(case_data.get("institution_id"))
             if inst:
                 institution_name = inst["name"]
 
@@ -8390,30 +10091,15 @@ def case_pdf(request: Request, case_id: str, inline: bool = False, include_timel
             return format_display_datetime(iso_string)
 
         def decision_label(case_row: dict) -> str:
-            status = str(case_row.get("status") or "").lower()
-            decision = str(case_row.get("decision") or "").strip()
-            if status == "rejected" or decision == "Reject":
-                return "Rejected"
-            if decision == "Approve with comment":
-                return "Justified with comment"
-            if decision == "Approve":
-                return "Justified"
-            if decision:
-                return decision
-            if status == "vetted":
-                return "Justified"
-            return status.title() if status else "Pending"
+            return display_decision_label(case_row.get("decision"), fallback_status=case_row.get("status"))
 
         def status_label(status_value: str | None) -> str:
-            status = str(status_value or "").lower()
-            if status == "vetted":
-                return "JUSTIFIED"
-            return status.upper() if status else "PENDING"
+            return display_case_status(status_value).upper()
 
         def event_label(event: dict) -> str:
             event_type = str(event.get("event_type") or "").upper()
-            if event_type == "SUBMITTED":
-                return "Case submitted"
+            if event_type in {"SUBMITTED", "CREATED"}:
+                return "Case created"
             if event_type == "ASSIGNED":
                 return "Assigned to practitioner"
             if event_type == "OPENED":
@@ -8421,9 +10107,13 @@ def case_pdf(request: Request, case_id: str, inline: bool = False, include_timel
             if event_type == "REOPENED":
                 return "Case reopened by admin"
             if event_type == "VETTED":
-                return "Justification recorded"
+                return "Decision recorded"
             if event_type == "REPORT_SENT":
-                return "Decision report marked as sent"
+                return "Justification sent"
+            if event_type == "REPORT_SENT_RESET":
+                return "Justification sent status reset"
+            if event_type == "EXAM_CATALOGUE_EXCEPTION":
+                return "Temporary uncatalogued exam"
             if event_type == "EDITED":
                 return "Case edited"
             return event_type.title()
@@ -8435,7 +10125,7 @@ def case_pdf(request: Request, case_id: str, inline: bool = False, include_timel
                 comment = str(event.get("comment") or "").strip()
                 if not comment:
                     continue
-                if event_type == "SUBMITTED":
+                if event_type in {"SUBMITTED", "CREATED"}:
                     entries.append({
                         "kind": "Admin note",
                         "created_at": event.get("created_at"),
@@ -8459,13 +10149,18 @@ def case_pdf(request: Request, case_id: str, inline: bool = False, include_timel
 
         protocol_notes = ""
         protocol_name = case_data.get("protocol")
-        if case_data.get("decision") != "Reject" and protocol_name:
+        if normalize_decision_label(case_data.get("decision")) != "Rejected" and protocol_name:
             try:
                 conn = get_db()
-                if case_data.get("org_id"):
+                if case_data.get("org_id") and case_data.get("institution_id"):
                     protocol_row = conn.execute(
-                        "SELECT instructions FROM protocols WHERE name = ? AND org_id = ? LIMIT 1",
-                        (protocol_name, case_data.get("org_id")),
+                        "SELECT instructions FROM protocols WHERE name = ? AND institution_id = ? AND org_id = ? LIMIT 1",
+                        (protocol_name, case_data.get("institution_id"), case_data.get("org_id")),
+                    ).fetchone()
+                elif case_data.get("institution_id"):
+                    protocol_row = conn.execute(
+                        "SELECT instructions FROM protocols WHERE name = ? AND institution_id = ? LIMIT 1",
+                        (protocol_name, case_data.get("institution_id")),
                     ).fetchone()
                 else:
                     protocol_row = conn.execute(
@@ -8692,7 +10387,7 @@ def case_pdf(request: Request, case_id: str, inline: bool = False, include_timel
         y = header_bottom_y - 14
         c.setFillColor(ink)
         c.setFont("Helvetica-Bold", 20)
-        c.drawString(left, y, "Justification Decision Report")
+        c.drawString(left, y, "Vetting Report")
         y -= 18
         c.setFillColor(muted)
         c.setFont("Helvetica", 10)
@@ -8726,9 +10421,9 @@ def case_pdf(request: Request, case_id: str, inline: bool = False, include_timel
         decision_rows = [
             ("Decision", decision_label(case_data)),
             ("Protocol", case_data.get("protocol") or "Not recorded"),
-            ("Justified By", rad_display or "Not assigned"),
+            ("Reviewed By", rad_display or "Not assigned"),
             ("Radiologist GMC", rad_gmc or "Not recorded"),
-            ("Justified At", format_datetime(case_data.get("vetted_at")) or "Not recorded"),
+            ("Recorded At", format_datetime(case_data.get("vetted_at")) or "Not recorded"),
         ]
         row_heights: list[int] = []
         for _, value in decision_rows:
@@ -8770,19 +10465,19 @@ def case_pdf(request: Request, case_id: str, inline: bool = False, include_timel
             if events:
                 for event in events:
                     event_details = ""
-                    if str(event.get("event_type") or "").upper() == "SUBMITTED":
+                    if str(event.get("event_type") or "").upper() in {"SUBMITTED", "CREATED"}:
                         event_details = ""
                     elif event.get("comment"):
                         event_details = str(event.get("comment") or "").strip()
                     elif event.get("decision"):
-                        event_details = str(event.get("decision") or "").strip()
+                        event_details = display_decision_label(event.get("decision"))
                     draw_timeline_row(
                         format_datetime(event.get("created_at")),
                         event_label(event),
                         event_details,
                     )
             else:
-                draw_timeline_row(format_datetime(case_data.get("created_at")), "Case submitted", "")
+                draw_timeline_row(format_datetime(case_data.get("created_at")), "Case created", "")
 
         footer_lines = wrap_lines(report_footer_text, int((right - left) * 0.52), font_name="Helvetica", font_size=8) or ["Confidential workflow document"]
         footer_height = max(16, len(footer_lines) * 10)
@@ -8800,12 +10495,11 @@ def case_pdf(request: Request, case_id: str, inline: bool = False, include_timel
         c.showPage()
         c.save()
 
-        pdf_filename = f"vetting_{case_id}{'_with_timeline' if include_timeline else ''}.pdf"
         if inline:
-            headers = {"Content-Disposition": f'inline; filename="{pdf_filename}"'}
+            headers = {"Content-Disposition": f'inline; filename="vetting_{case_id}{suffix}.pdf"'}
             return FileResponse(str(pdf_path), media_type="application/pdf", headers=headers)
 
-        return FileResponse(str(pdf_path), filename=pdf_filename)
+        return FileResponse(str(pdf_path), filename=f"vetting_{case_id}{suffix}.pdf")
     except HTTPException:
         raise
     except Exception as e:

@@ -5,58 +5,190 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Case Intake</title>
   <link rel="stylesheet" href="/static/css/site.css">
+  <style>
+    .intake-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:18px; }
+    .intake-grid .form-row.full { grid-column:1 / -1; }
+    .exam-picker { position:relative; }
+    .exam-results {
+      position:absolute;
+      inset:auto 0 auto 0;
+      margin-top:6px;
+      max-height:260px;
+      overflow-y:auto;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.1);
+      background:rgba(8,16,30,0.96);
+      box-shadow:0 18px 34px rgba(0,0,0,0.28);
+      display:none;
+      z-index:20;
+    }
+    .exam-results.open { display:block; }
+    .exam-item {
+      padding:12px 14px;
+      color:#f8fbff;
+      cursor:pointer;
+      border-bottom:1px solid rgba(255,255,255,0.06);
+    }
+    .exam-item:last-child { border-bottom:none; }
+    .exam-item:hover,
+    .exam-item.active { background:rgba(31,111,235,0.22); }
+    .exam-item small { display:block; color:rgba(255,255,255,0.58); margin-top:4px; }
+    .helper { margin-top:6px; font-size:12px; color:rgba(255,255,255,0.62); }
+    @media (max-width: 900px) { .intake-grid { grid-template-columns:1fr; } }
+  </style>
 </head>
 <body>
-  <div class="container" style="max-width: 900px; margin: 20px auto;">
-    <h1>Case Intake</h1>
-    <p class="small">Submit a new case to the organisation intake queue.</p>
+  <div class="internal-page-shell">
+    <div class="internal-page-header">
+      <div>
+        <h1 class="internal-page-title">Case Intake</h1>
+        <p class="internal-page-subtitle">Submit a new case to the organisation intake queue using the assigned master exam catalogue.</p>
+      </div>
+    </div>
 
     {% if error %}
-      <div class="err">{{ error }}</div>
+      <div class="err" style="margin-bottom:16px;">{{ error }}</div>
     {% endif %}
 
-    <form method="post" enctype="multipart/form-data">
-      <div class="form-grid">
-        <div class="form-row">
-          <label>Patient first name</label>
-          <input name="patient_first_name" required>
-        </div>
-        <div class="form-row">
-          <label>Patient surname</label>
-          <input name="patient_surname" required>
-        </div>
-        <div class="form-row">
-          <label>Referral ID</label>
-          <input name="patient_referral_id" required>
-        </div>
-        <div class="form-row">
-          <label>Institution</label>
-          <select name="institution_id" required>
-            <option value="">Select</option>
-            {% for inst in institutions %}
-              <option value="{{ inst.id }}">{{ inst.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
+    <section class="internal-surface">
+      <form method="post" enctype="multipart/form-data" class="form-stack" autocomplete="off">
+        <input type="hidden" name="study_description_preset_id" id="study_description_preset_id">
+        <input type="hidden" name="study_code" id="study_code">
 
-      <div class="form-row">
-        <label>Study description</label>
-        <textarea name="study_description" required></textarea>
-      </div>
+        <div class="intake-grid">
+          <div class="form-row">
+            <label>Patient first name</label>
+            <input name="patient_first_name" required>
+          </div>
+          <div class="form-row">
+            <label>Patient surname</label>
+            <input name="patient_surname" required>
+          </div>
+          <div class="form-row">
+            <label>Referral ID</label>
+            <input name="patient_referral_id" required>
+          </div>
+          <div class="form-row">
+            <label>Patient DOB</label>
+            <input name="patient_dob" type="date">
+          </div>
+          <div class="form-row">
+            <label>Institution</label>
+            <select name="institution_id">
+              <option value="">Use default institution</option>
+              {% for inst in institutions %}
+                <option value="{{ inst.id }}" {% if default_institution and default_institution.id == inst.id %}selected{% endif %}>{{ inst.name }}</option>
+              {% endfor %}
+            </select>
+            {% if default_institution %}
+            <div class="helper">Default institution: {{ default_institution.name }}</div>
+            {% endif %}
+          </div>
+          <div class="form-row">
+            <label>Modality</label>
+            <select id="modality" name="modality_filter" onchange="loadAvailableExams()">
+              <option value="">Select modality</option>
+              <option value="MRI">MRI</option>
+              <option value="CT">CT</option>
+              <option value="XR">XR</option>
+              <option value="PET">PET</option>
+              <option value="DEXA">DEXA</option>
+            </select>
+          </div>
+          <div class="form-row full exam-picker">
+            <label>Study description</label>
+            <input id="study_description" name="study_description" required placeholder="Select from the assigned exam catalogue" autocomplete="off" onfocus="showExamResults()" oninput="filterAvailableExams()" readonly>
+            <div id="study_results" class="exam-results"></div>
+          </div>
+          <div class="form-row full">
+            <label>Notes (optional)</label>
+            <textarea name="admin_notes"></textarea>
+          </div>
+          <div class="form-row full">
+            <label>Referral attachments</label>
+            <input type="file" name="attachments" multiple required>
+          </div>
+        </div>
 
-      <div class="form-row">
-        <label>Notes (optional)</label>
-        <textarea name="admin_notes"></textarea>
-      </div>
-
-      <div class="form-row">
-        <label>Referral attachment</label>
-        <input type="file" name="attachment" required>
-      </div>
-
-      <button type="submit" class="btn">Submit case</button>
-    </form>
+        <div class="internal-page-actions" style="margin-top:8px; justify-content:flex-start;">
+          <button type="submit" class="btn">Submit Case</button>
+        </div>
+      </form>
+    </section>
   </div>
+
+  <script>
+    let availableExams = [];
+
+    async function loadAvailableExams() {
+      const modality = document.getElementById('modality').value;
+      const studyInput = document.getElementById('study_description');
+      const results = document.getElementById('study_results');
+      document.getElementById('study_description_preset_id').value = '';
+      document.getElementById('study_code').value = '';
+      studyInput.value = '';
+      results.innerHTML = '';
+      results.classList.remove('open');
+      if (!modality) {
+        availableExams = [];
+        return;
+      }
+      try {
+        const response = await fetch(`/api/study-descriptions/by-modality/${encodeURIComponent(modality)}`);
+        availableExams = await response.json();
+        renderExamResults(availableExams);
+      } catch (error) {
+        availableExams = [];
+        results.innerHTML = '<div class="exam-item">Unable to load exams right now.</div>';
+        results.classList.add('open');
+      }
+    }
+
+    function renderExamResults(items) {
+      const results = document.getElementById('study_results');
+      if (!items.length) {
+        results.innerHTML = '<div class="exam-item">No exams available for this modality.</div>';
+        results.classList.add('open');
+        return;
+      }
+      results.innerHTML = items.map((item) => `
+        <div class="exam-item" onclick="selectExam(${item.id}, '${String(item.description).replace(/'/g, "\\'")}', '${String(item.study_code || '').replace(/'/g, "\\'") || ''}')">
+          ${item.label || item.description}
+          ${(item.study_code || '') ? `<small>Code ${item.study_code}</small>` : ''}
+        </div>
+      `).join('');
+      results.classList.add('open');
+    }
+
+    function showExamResults() {
+      const results = document.getElementById('study_results');
+      if (results.innerHTML.trim()) {
+        results.classList.add('open');
+      }
+    }
+
+    function filterAvailableExams() {
+      const query = document.getElementById('study_description').value.trim().toLowerCase();
+      const filtered = availableExams.filter((item) => {
+        const haystack = `${item.description || ''} ${item.study_code || ''} ${item.label || ''}`.toLowerCase();
+        return haystack.includes(query);
+      });
+      renderExamResults(filtered);
+    }
+
+    function selectExam(id, description, studyCode) {
+      document.getElementById('study_description').value = description;
+      document.getElementById('study_description_preset_id').value = id;
+      document.getElementById('study_code').value = studyCode || '';
+      document.getElementById('study_results').classList.remove('open');
+    }
+
+    document.addEventListener('click', (event) => {
+      const picker = document.querySelector('.exam-picker');
+      if (picker && !picker.contains(event.target)) {
+        document.getElementById('study_results').classList.remove('open');
+      }
+    });
+  </script>
 </body>
 </html>

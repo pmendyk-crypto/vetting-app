@@ -6,8 +6,8 @@
   <title>Edit Case | Vetting App</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    body { margin: 24px; display: flex; flex-direction: column; min-height: 100vh; }
-    .container { max-width: 1320px; margin: 0 auto; flex: 1; }
+    body { margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
+    .container { width: min(1560px, calc(100vw - 40px)); max-width: none; margin: 0 auto; flex: 1; padding: 22px 0 0; }
     .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
     .btn { display: inline-block; padding: 10px 14px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
     .btn.secondary { background: #555; }
@@ -44,16 +44,25 @@
     .logo-text p { margin: 2px 0 0 0; font-size: 12px; color: #666; }
     
     .main-content { flex: 1; }
-    .case-edit-grid { display: grid; grid-template-columns: minmax(340px, 0.95fr) minmax(0, 1.3fr); gap: 20px; align-items: start; }
-    .preview-panel { order: 1; }
-    .edit-panel { order: 2; }
+    .case-edit-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.9fr); gap: 20px; align-items: stretch; }
+    .preview-panel { order: 2; display:flex; flex-direction:column; }
+    .edit-panel { order: 1; display:flex; flex-direction:column; }
+    .attachment-list { display:flex; flex-direction:column; gap:10px; margin:12px 0 0; }
+    .attachment-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); }
+    .attachment-item-meta { min-width:0; }
+    .attachment-item-name { color:#f8fbff; font-weight:500; word-break:break-word; }
+    .attachment-item-sub { margin-top:4px; color:rgba(255,255,255,0.58); font-size:12px; }
+    .attachment-item-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    .attachment-primary { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:11px; background:rgba(31,111,235,0.18); color:#93c5fd; border:1px solid rgba(31,111,235,0.32); }
+    .preview-frame { width:100%; height:520px; border:1px solid rgba(255,255,255,0.12); border-radius:8px; background:#fff; }
     .page-footer { text-align: center; padding: 30px 20px; border-top: 1px solid #ddd; margin-top: 50px; color: #666; font-size: 13px; }
     .page-footer p { margin: 0; }
     
     .wrapper { display: flex; flex-direction: column; min-height: 100vh; }
     
     @media (max-width: 700px) {
-      body { margin: 14px; font-size: 16px; }
+      body { font-size: 16px; }
+      .container { width: calc(100vw - 24px); padding-top: 16px; }
       .topbar { flex-direction: column; align-items: flex-start; }
       .actions { width: 100%; }
       .btn { width: 100%; text-align: center; }
@@ -173,14 +182,15 @@
   <div class="wrapper">
     <div class="main-content">
   <div class="container">
-    <div class="topbar">
+    <div class="topbar internal-page-header">
       <div>
-        <h1>Edit Case {{ case["id"] }}</h1>
-        <p class="small">Status: <strong>{{ case["status"] }}</strong></p>
+        <h1 class="internal-page-title" style="font-size:28px;margin:0;">Edit Case {{ case["id"] }}</h1>
+        <p class="internal-page-subtitle">Update patient details, exam context, assignment, and attachments without leaving the worklist workflow.</p>
+        <p class="small">Status: <strong>{{ case.get("status_display") or case["status"] }}</strong></p>
       </div>
-      <div class="actions">
+      <div class="actions internal-page-actions">
         <a class="btn secondary" href="/admin/case/{{ case['id'] }}">View Case</a>
-        <a class="btn secondary" href="/admin">Back</a>
+        <a class="btn secondary" href="{{ return_to if return_to else '/admin' }}">Back</a>
       </div>
     </div>
 
@@ -193,6 +203,9 @@
       {% endif %}
       <form method="POST" enctype="multipart/form-data">
         <input type="hidden" id="org_id_hidden" value="{{ case.get('org_id') or user_org_id or '' }}">
+        <input type="hidden" name="return_to" value="{{ return_to or '' }}">
+        <input type="hidden" name="study_description_preset_id" id="study_description_preset_id" value="{{ case.get('study_description_preset_id') or '' }}">
+        <input type="hidden" name="study_code" id="study_code" value="{{ case.get('study_code') or '' }}">
         <div class="form-row">
           <div class="form-group">
             <label>First Name</label>
@@ -263,7 +276,26 @@
               placeholder="Select modality, then choose from list"
               onfocus="openProtocolModal()"
               autocomplete="off"
+              readonly
             >
+            <p class="small" id="study_code_hint" style="margin-top:6px;">{% if case.get('study_code') %}Exam code: {{ case['study_code'] }}{% else %}Exam code will populate automatically when you select a catalogue exam.{% endif %}</p>
+            {% if case.get("catalogue_review_required") %}
+            <p class="small" style="margin-top:6px; color:#fbbf24;">Catalogue review required{% if case.get("catalogue_review_display") %}: {{ case.get("catalogue_review_display") }}{% endif %}</p>
+            {% endif %}
+            {% if can_create_uncatalogued_exam %}
+            <div style="margin-top:10px; padding:10px 12px; border:1px solid rgba(245,158,11,0.28); border-radius:10px; background:rgba(245,158,11,0.08);">
+              <label style="display:flex; align-items:flex-start; gap:10px; margin:0;">
+                <input type="checkbox" id="uncatalogued_exam_requested" name="uncatalogued_exam_requested" value="1" onchange="toggleUncataloguedExamMode()" {% if case.get("catalogue_review_required") %}checked{% endif %}>
+                <span>
+                  <strong>Create Temporary Uncatalogued Exam</strong><br>
+                  <small style="color:rgba(255,255,255,0.72);">Owner/super-admin only. Requires a reason and flags the case for later catalogue review.</small>
+                </span>
+              </label>
+              <div id="uncatalogued_exam_reason_wrap" style="display:{% if case.get('catalogue_review_required') %}block{% else %}none{% endif %}; margin-top:10px;">
+                <textarea name="uncatalogued_exam_reason" id="uncatalogued_exam_reason" placeholder="Reason for using a temporary uncatalogued exam..." rows="2">{% if case.get("catalogue_review_required") %}{{ case.get("exam_catalogue_exception_reason") or "" }}{% endif %}</textarea>
+              </div>
+            </div>
+            {% endif %}
           </div>
         </div>
 
@@ -276,47 +308,69 @@
 
         <div class="form-row full">
           <div class="form-group">
-            <label>Reattach Referral File (optional)</label>
-            <input type="file" name="attachment">
-            <p class="small" style="margin-top:6px;">
-              {% if case['uploaded_filename'] %}
-                Current file: <strong>{{ case['uploaded_filename'] }}</strong>
-                {% if not case['stored_filepath'] %}(expired){% endif %}
-              {% else %}
-                No referral file currently attached.
-              {% endif %}
-            </p>
+            <label>Add Referral / Supporting Documents</label>
+            <input type="file" name="attachments" multiple>
+            <p class="small" style="margin-top:6px;">You can attach multiple documents. Existing files stay attached unless you remove them below.</p>
+            {% if attachments %}
+            <div class="attachment-list">
+              {% for attachment in attachments %}
+              <div class="attachment-item">
+                <div class="attachment-item-meta">
+                  <div class="attachment-item-name">
+                    {{ attachment.uploaded_filename }}
+                    {% if attachment.is_primary %}<span class="attachment-primary">Primary preview</span>{% endif %}
+                  </div>
+                  <div class="attachment-item-sub">
+                    Added {{ attachment.created_at_display or 'recently' }}
+                    {% if not attachment.available %} · File expired{% endif %}
+                  </div>
+                </div>
+                <div class="attachment-item-actions">
+                  {% if attachment.available %}
+                  <button
+                    type="button"
+                    class="btn secondary attachment-preview-trigger"
+                    data-preview-url="/case/{{ case['id'] }}/attachments/{{ attachment.id }}/preview"
+                    data-preview-name="{{ attachment.uploaded_filename }}"
+                    style="padding:8px 12px;"
+                  >View</button>
+                  {% endif %}
+                  <label style="display:flex;align-items:center;gap:8px;color:rgba(255,255,255,0.85);font-size:13px;">
+                    <input type="checkbox" name="remove_attachment_ids" value="{{ attachment.id }}">
+                    Remove
+                  </label>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <p class="small" style="margin-top:6px;">No referral files currently attached.</p>
+            {% endif %}
           </div>
         </div>
 
         <div class="actions">
           <button type="submit" class="btn">Save Changes</button>
-          <a class="btn secondary" href="/admin/case/{{ case['id'] }}">Cancel</a>
+          <a class="btn secondary" href="{{ return_to if return_to else ('/admin/case/' ~ case['id']) }}">Cancel</a>
         </div>
       </form>
     </div>
 
     <div class="card preview-panel">
       <h3 style="margin-top:0;">Referral Preview</h3>
-      {% if case['uploaded_filename'] %}
+      {% if case['preview_available'] %}
         <p class="small" style="margin-top:0;">
-          Current file: <strong>{{ case['uploaded_filename'] }}</strong>
-          {% if not case['stored_filepath'] %}(expired){% endif %}
+          Currently viewing: <strong id="caseEditPreviewName">{{ case['preview_name'] }}</strong>
         </p>
-        {% if case['stored_filepath'] %}
         <div style="margin-bottom:12px;">
-          <a class="btn secondary" href="/case/{{ case['id'] }}/attachment" style="display:inline-block;">Download Current Referral</a>
+          <a id="caseEditOpenLink" class="btn secondary" href="{{ case['inline_url'] }}" target="_blank" rel="noopener" style="display:inline-block;">Open in New Tab</a>
         </div>
-        {% endif %}
-        {% if case['stored_filepath'] %}
-          <div style="min-height:420px;">
-            <iframe src="/case/{{ case['id'] }}/attachment/preview" style="width:100%;height:420px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#fff;"></iframe>
-          </div>
-        {% else %}
-          <div style="display:flex;align-items:center;justify-content:center;min-height:140px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.5);text-align:center;padding:20px;">
-            Referral attachment has expired and is no longer available.
-          </div>
-        {% endif %}
+        <iframe id="caseEditPreviewFrame" src="{{ case['preview_url'] }}" class="preview-frame"></iframe>
+      {% elif case['uploaded_filename'] %}
+        <div style="display:flex;align-items:center;justify-content:center;min-height:180px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.5);text-align:center;padding:20px;flex-direction:column;gap:8px;">
+          <span>Referral attachment has expired and is no longer available.</span>
+          <span class="small">If another attachment is available, use View from the attached documents list.</span>
+        </div>
       {% else %}
         <p class="small" style="margin:0;">No referral attachment uploaded.</p>
       {% endif %}
@@ -330,18 +384,35 @@
     <div class="protocol-modal-card">
       <div class="protocol-modal-header">
         <div>
-          <div class="protocol-modal-title">Study Description Protocols</div>
+          <div class="protocol-modal-title">Available Exams</div>
           <div class="protocol-modal-meta" id="protocolMeta"></div>
         </div>
         <button class="protocol-modal-close" type="button" onclick="closeProtocolModal()">Close</button>
       </div>
-      <input class="protocol-modal-search" type="text" id="protocolSearch" placeholder="Search protocols" oninput="filterProtocolModal()">
+      <input class="protocol-modal-search" type="text" id="protocolSearch" placeholder="Search exams" oninput="filterProtocolModal()">
       <div class="protocol-modal-list" id="protocolList"></div>
     </div>
   </div>
 
   <script>
     let allDescriptions = [];
+
+    document.querySelectorAll('.attachment-preview-trigger').forEach((button) => {
+      button.addEventListener('click', () => {
+        const frame = document.getElementById('caseEditPreviewFrame');
+        const name = document.getElementById('caseEditPreviewName');
+        const openLink = document.getElementById('caseEditOpenLink');
+        if (frame && button.dataset.previewUrl) {
+          frame.src = button.dataset.previewUrl;
+        }
+        if (name && button.dataset.previewName) {
+          name.textContent = button.dataset.previewName;
+        }
+        if (openLink && button.dataset.previewUrl) {
+          openLink.href = button.dataset.previewUrl.replace(/\/preview$/, '/inline');
+        }
+      });
+    });
 
     function resolveOrgId() {
       const hidden = document.getElementById('org_id_hidden');
@@ -404,7 +475,7 @@
       const search = document.getElementById('protocolSearch');
 
       if (!modality) {
-        meta.textContent = 'Select a modality to load protocols.';
+        meta.textContent = 'Select a modality to load exams.';
         list.innerHTML = '<div class="protocol-modal-empty">No modality selected.</div>';
         modal.classList.add('open');
         return;
@@ -428,11 +499,11 @@
     function renderProtocolModalList(items) {
       const list = document.getElementById('protocolList');
       if (!items || items.length === 0) {
-        list.innerHTML = '<div class="protocol-modal-empty">No protocols found for this modality.</div>';
+        list.innerHTML = '<div class="protocol-modal-empty">No exams found for this modality.</div>';
         return;
       }
       list.innerHTML = items.map(item =>
-        `<div class="protocol-modal-item" onclick="selectProtocol('${item.description.replace(/'/g, "\\'")}')">${item.description}</div>`
+        `<div class="protocol-modal-item" onclick="selectProtocol(${item.id}, '${item.description.replace(/'/g, "\\'")}', '${(item.study_code || '').replace(/'/g, "\\'")}')">${item.label || item.description}</div>`
       ).join('');
     }
 
@@ -444,10 +515,41 @@
       renderProtocolModalList(filtered);
     }
 
-    function selectProtocol(description) {
+    function selectProtocol(presetId, description, studyCode) {
       document.getElementById('study_description').value = description;
+      document.getElementById('study_description_preset_id').value = presetId || '';
+      document.getElementById('study_code').value = studyCode || '';
+      document.getElementById('study_code_hint').textContent = studyCode ? `Exam code: ${studyCode}` : 'Exam code will populate automatically when you select a catalogue exam.';
       closeProtocolModal();
     }
+
+    function toggleUncataloguedExamMode() {
+      const enabled = !!document.getElementById('uncatalogued_exam_requested')?.checked;
+      const studyInput = document.getElementById('study_description');
+      const reasonWrap = document.getElementById('uncatalogued_exam_reason_wrap');
+      const reasonField = document.getElementById('uncatalogued_exam_reason');
+      if (reasonWrap) {
+        reasonWrap.style.display = enabled ? 'block' : 'none';
+      }
+      if (reasonField) {
+        reasonField.required = enabled;
+      }
+      if (studyInput) {
+        if (enabled) {
+          studyInput.removeAttribute('readonly');
+          studyInput.placeholder = 'Enter a temporary uncatalogued exam description';
+        } else {
+          studyInput.setAttribute('readonly', 'readonly');
+          studyInput.placeholder = 'Select modality, then choose from list';
+        }
+      }
+      if (enabled) {
+        document.getElementById('study_description_preset_id').value = '';
+        document.getElementById('study_code').value = '';
+      }
+    }
+
+    toggleUncataloguedExamMode();
   </script>
   <script src="/static/js/session.js"></script>
 </body>

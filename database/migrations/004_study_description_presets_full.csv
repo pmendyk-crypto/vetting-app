@@ -1,1284 +1,1284 @@
-modality,description
-CT,CT Abdo and pelvis with IV and oral Cont
-CT,CT Abdomen
-CT,CT Abdomen and pelvis
-CT,CT Abdomen and pelvis oral contrast only
-CT,CT Abdomen and pelvis with contrast
-CT,CT Abdomen perfusion study
-CT,CT Abdomen with & without contrast
-CT,CT Abdomen with contrast
-CT,CT Acromioclavicular joint Both
-CT,CT Acromioclavicular joint Lt
-CT,CT Acromioclavicular joint Rt
-CT,CT Adrenal Both
-CT,CT Adrenal with contrast Both
-CT,CT Adrenals With Contrast
-CT,CT Adrenals with & without contrast
-CT,CT Adrenals with contrast washout Both
-CT,CT Angio aorta coronary arteries
-CT,CT Angio aortic arch and carotid Both
-CT,CT Angio bicaval valve implantation Plan
-CT,CT Angio coronary artery graft
-CT,CT Angio triple phase for TAVI workup
-CT,CT Angiogram
-CT,CT Angiogram abdomen
-CT,CT Angiogram abdominal wall vessels
-CT,CT Angiogram aorta
-CT,CT Angiogram bronchial artery Both
-CT,CT Angiogram bronchial artery Left
-CT,CT Angiogram bronchial artery Right
-CT,CT Angiogram intracranial
-CT,CT Angiogram lower limb Both
-CT,CT Angiogram lower limb Lt
-CT,CT Angiogram lower limb Rt
-CT,CT Angiogram mesenteric artery
-CT,CT Angiogram pulmonary
-CT,CT Angiogram pulmonary abdomen pelvis A
-CT,CT Angiogram renal
-CT,CT Angiogram renal and abdominal
-CT,CT Angiogram spine
-CT,CT Angiogram subclavian Both
-CT,CT Angiogram subclavian Left
-CT,CT Angiogram subclavian Right
-CT,CT Angiogram upper limb Both
-CT,CT Angiogram upper limb Lt
-CT,CT Angiogram upper limb Rt
-CT,CT Angiography for TAVI workup
-CT,CT Angiography thorax and abdomen
-CT,CT Ankle Both
-CT,CT Ankle Lt
-CT,CT Ankle Rt
-CT,CT Aorta abdominal
-CT,CT Aorta abdominal with contrast
-CT,CT Aorta thoracic
-CT,CT Aorta thoracic with contrast
-CT,CT Aorta whole
-CT,CT Aorta whole with contrast
-CT,CT Arthrogram ankle Both
-CT,CT Arthrogram ankle Lt
-CT,CT Arthrogram ankle Rt
-CT,CT Arthrogram cervical facet joint
-CT,CT Arthrogram elbow Both
-CT,CT Arthrogram elbow Lt
-CT,CT Arthrogram elbow Rt
-CT,CT Arthrogram hip Both
-CT,CT Arthrogram hip Lt
-CT,CT Arthrogram hip Rt
-CT,CT Arthrogram knee Both
-CT,CT Arthrogram knee Lt
-CT,CT Arthrogram knee Rt
-CT,CT Arthrogram lumbar facet joint
-CT,CT Arthrogram metacarpophalangeal joint
-CT,CT Arthrogram metatarsophalangeal joint
-CT,CT Arthrogram mid tarsal Both
-CT,CT Arthrogram mid tarsal Lt
-CT,CT Arthrogram mid tarsal Rt
-CT,CT Arthrogram sacroiliac joint Both
-CT,CT Arthrogram sacroiliac joint Left
-CT,CT Arthrogram sacroiliac joint Right
-CT,CT Arthrogram shoulder Both
-CT,CT Arthrogram shoulder Lt
-CT,CT Arthrogram shoulder Rt
-CT,CT Arthrogram subtalar Both
-CT,CT Arthrogram subtalar Lt
-CT,CT Arthrogram subtalar Rt
-CT,CT Arthrogram temporomandibular Jt Both
-CT,CT Arthrogram temporomandibular joint Lt
-CT,CT Arthrogram temporomandibular joint Rt
-CT,CT Arthrogram thoracic facet joint
-CT,CT Arthrogram wrist Both
-CT,CT Arthrogram wrist Lt
-CT,CT Arthrogram wrist Rt
-CT,CT Arthroplasty planning lower limb B
-CT,CT Arthroplasty planning lower limb Lt
-CT,CT Arthroplasty planning lower limb Rt
-CT,CT Axilla Both
-CT,CT Axilla Left
-CT,CT Axilla Right
-CT,CT Base of skull
-CT,CT Base of skull with contrast
-CT,CT Bone densitometry
-CT,CT Brachial Plexus With Contrast
-CT,CT Brachial plexus
-CT,CT Brain neck temporal bones Cont Both
-CT,CT Brain neck thorax Abdo and pelvis
-CT,CT Brain perfusion study
-CT,CT Brain volume
-CT,CT Brain volume with contrast
-CT,CT Bronchoscopy virtual
-CT,CT Calcaneus Both
-CT,CT Calcaneus Lt
-CT,CT Calcaneus Rt
-CT,CT Cardiac Cor artery calcium scoring
-CT,CT Cardiac angiogram coronary
-CT,CT Cardiac gated
-CT,CT Cardiac gated complex congenital Cont
-CT,CT Cardiac gated function with contrast
-CT,CT Cardiac gated with contrast
-CT,CT Cardiac multiple gated acquisition
-CT,CT Cerebral ventriculography
-CT,CT Chest high resolution
-CT,CT Chest high resolution with contrast
-CT,CT Chest with contrast
-CT,CT Cholangiogram
-CT,CT Cisternography
-CT,CT Clavicle Both
-CT,CT Clavicle Lt
-CT,CT Clavicle Rt
-CT,CT Coccyx
-CT,CT Cochlea Both
-CT,CT Cochlea Left
-CT,CT Cochlea Right
-CT,CT Cochlear implant
-CT,CT Colon
-CT,CT Colon with contrast
-CT,CT Colonography low dose
-CT,CT Colonoscopy virtual
-CT,CT Contrast enema
-CT,CT Cor angiogram fractional flow reserve
-CT,CT Cranioplasty planning
-CT,CT Cystogram
-CT,CT Dacrocystogram Both
-CT,CT Dacrocystogram Lt
-CT,CT Dacrocystogram Rt
-CT,CT Dual phase kidney with contrast Both
-CT,CT Dynamic arthrogram
-CT,CT Dynamic trachea
-CT,CT Elbow Both
-CT,CT Elbow Lt
-CT,CT Elbow Rt
-CT,CT Enteroclysis
-CT,CT Enterography
-CT,CT Face
-CT,CT Face With Contrast
-CT,CT Facial bones
-CT,CT Facial bones with contrast
-CT,CT Fingers Both
-CT,CT Fingers Lt
-CT,CT Fingers Rt
-CT,CT Floor of mouth
-CT,CT Floor of mouth with contrast
-CT,CT Foot Both
-CT,CT Foot Lt
-CT,CT Foot Rt
-CT,CT Forearm Both
-CT,CT Forearm Lt
-CT,CT Forearm Rt
-CT,CT Forearm with contrast Both
-CT,CT Forearm with contrast Lt
-CT,CT Forearm with contrast Rt
-CT,CT Forefoot Both
-CT,CT Forefoot Lt
-CT,CT Forefoot Rt
-CT,CT Forensic
-CT,CT Gated coronary venogram with contrast
-CT,CT Gated thoracic aorta with contrast
-CT,CT Groin Both
-CT,CT Groin Left
-CT,CT Groin Right
-CT,CT Hand Both
-CT,CT Hand Lt
-CT,CT Hand Rt
-CT,CT Head
-CT,CT Head With Contrast
-CT,CT Head abdomen and pelvis
-CT,CT Head abdomen pelvis with contrast
-CT,CT Head and face
-CT,CT Head and neck
-CT,CT Head and neck with contrast
-CT,CT Head and orbits
-CT,CT Head and orbits with contrast
-CT,CT Head and thorax
-CT,CT Head and thorax with contrast
-CT,CT Head neck Abdo pelvis with contrast
-CT,CT Head neck abdomen and pelvis
-CT,CT Head neck thorax Abdo and pelvis Cont
-CT,CT Head neck thorax abdomen and pelvis
-CT,CT Head neck thorax abdomen contrast
-CT,CT Head neck thorax and abdomen
-CT,CT Head thorax Abdo pelvis with contrast
-CT,CT Head thorax abdomen and pelvis
-CT,CT Head thorax abdomen with contrast
-CT,CT Head thorax and abdomen
-CT,CT Head with & without contrast
-CT,CT Heart with contrast
-CT,CT Hip Both
-CT,CT Hip Lt
-CT,CT Hip Rt
-CT,CT Hip With Contrast Lt
-CT,CT Hip With Contrast Rt
-CT,CT Hip with contrast Both
-CT,CT Hips With Contrast
-CT,CT IAM with air contrast
-CT,CT IAM with contrast
-CT,CT IAM with intrathecal contrast
-CT,CT Internal Auditory Meatii
-CT,CT Internal auditory meatus Both
-CT,CT Intravenous pyelogram triple phase
-CT,CT Kidney triple phase Both
-CT,CT Kidney triple phase Left
-CT,CT Kidney triple phase Right
-CT,CT Knee Both
-CT,CT Knee Lt
-CT,CT Knee Rt
-CT,CT Larynx
-CT,CT Larynx With Contrast
-CT,CT Laser assisted decompression disc
-CT,CT Left atrial appendage with contrast
-CT,CT Leg length measurement
-CT,CT Liver
-CT,CT Liver Lesion Ablation (Ethanol)
-CT,CT Liver dual phase
-CT,CT Liver four phase scan with contrast
-CT,CT Liver lesion ablation
-CT,CT Liver lesion ablation RF
-CT,CT Liver lesion ablation ethanol
-CT,CT Liver lesion ablation laser
-CT,CT Liver perfusion study
-CT,CT Liver portogram
-CT,CT Liver triple phase
-CT,CT Liver with contrast
-CT,CT Low dose skeletal survey
-CT,CT Low dose thorax
-CT,CT Lower Leg With Contrast Lt
-CT,CT Lower Leg With Contrast Rt
-CT,CT Lower leg Both
-CT,CT Lower leg Lt
-CT,CT Lower leg Rt
-CT,CT Lower leg with contrast Both
-CT,CT Lower limb with contrast Both
-CT,CT Lower limbs with contrast
-CT,CT Lumbar sympathectomy
-CT,CT Mandible
-CT,CT Mandible and maxilla
-CT,CT Mastoid Both
-CT,CT Maxilla
-CT,CT Maximum intensity projection study
-CT,CT Mediastinum
-CT,CT Mediastinum with contrast
-CT,CT Middle ear
-CT,CT Midfoot Both
-CT,CT Midfoot Lt
-CT,CT Midfoot Rt
-CT,CT Neck
-CT,CT Neck With Contrast
-CT,CT Neck and thorax
-CT,CT Neck and thorax with contrast
-CT,CT Neck perfusion study
-CT,CT Neck thorax Abdo pelvis IV oral Cont
-CT,CT Neck thorax abdomen and pelvis
-CT,CT Neck thorax abdomen pelvis with Cont
-CT,CT Neck thorax and abdomen
-CT,CT Neck thorax and abdomen with contrast
-CT,CT Neck with & without contrast
-CT,CT Nephrostogram Both
-CT,CT Nephrostogram Left
-CT,CT Nephrostogram Right
-CT,CT Oesophagus with contrast
-CT,CT Orbit Both
-CT,CT Orbit with contrast Both
-CT,CT Osteoid Osteoma Ablation (Ethanol)
-CT,CT Osteoid osteoma ablation
-CT,CT Osteoid osteoma ablation RF
-CT,CT Osteoid osteoma ablation ethanol
-CT,CT Osteoid osteoma ablation laser
-CT,CT Pancreas
-CT,CT Pancreas dual phase
-CT,CT Pancreas triple phase
-CT,CT Pancreas with contrast
-CT,CT Parotid
-CT,CT Parotids with contrast
-CT,CT Patella tracking
-CT,CT Pelvis
-CT,CT Pelvis With Contrast
-CT,CT Pelvis perfusion study
-CT,CT Pelvis with & without contrast
-CT,CT Peritoneogram
-CT,CT Petrous bones
-CT,CT Pituitary
-CT,CT Pituitary With Contrast
-CT,CT Pleural phase thorax with contrast
-CT,CT Portal venogram thorax Abdo pelvis
-CT,CT Portal venogram thorax abdomen
-CT,CT Portal venography abdomen and pelvis
-CT,CT Post endovascular Aneur repair check
-CT,CT Post mortem
-CT,CT Post nasal space
-CT,CT Post nasal space with contrast
-CT,CT Posterior Fossa With Contrast
-CT,CT Posterior fossa
-CT,CT Prospective ECG gated coronary Angio
-CT,CT Renal Both
-CT,CT Renal With Contrast
-CT,CT Renal with contrast Both
-CT,CT Retrospective ECG gated Cor angiogram
-CT,CT Sacroiliac joint Both
-CT,CT Sacroiliac joint Left
-CT,CT Sacroiliac joint Right
-CT,CT Sacroiliac joint injection Both
-CT,CT Sacroiliac joint injection Left
-CT,CT Sacroiliac joint injection Right
-CT,CT Salivary Glands With Contrast
-CT,CT Salivary glands
-CT,CT Scanogram for leg length
-CT,CT Scanogram spine
-CT,CT Scaphoid Both
-CT,CT Scaphoid Left
-CT,CT Scaphoid Right
-CT,CT Scapula Both
-CT,CT Scapula Lt
-CT,CT Scapula Rt
-CT,CT Shoulder Both
-CT,CT Shoulder Lt
-CT,CT Shoulder Rt
-CT,CT Shoulder with contrast Both
-CT,CT Shoulder with contrast Left
-CT,CT Shoulder with contrast Right
-CT,CT Sinogram
-CT,CT Sinogram abdomen
-CT,CT Sinogram lower limb Both
-CT,CT Sinogram lower limb Left
-CT,CT Sinogram lower limb Right
-CT,CT Sinogram upper limb Both
-CT,CT Sinogram upper limb Left
-CT,CT Sinogram upper limb Right
-CT,CT Sinuses
-CT,CT Sinuses With Contrast
-CT,CT Skeletal survey
-CT,CT Solid organ injury
-CT,CT Spine C T L S with contrast
-CT,CT Spine Cervical With Contrast
-CT,CT Spine Lumbar With Contrast
-CT,CT Spine Thoracic With Contrast
-CT,CT Spine cervical
-CT,CT Spine cervical discogram
-CT,CT Spine cervical myelogram
-CT,CT Spine lumbar
-CT,CT Spine lumbar discogram
-CT,CT Spine lumbar myelogram
-CT,CT Spine sacral
-CT,CT Spine sacral with contrast
-CT,CT Spine thoracic
-CT,CT Spine thoracic myelogram
-CT,CT Stereotaxis
-CT,CT Sternoclavicular joint Both
-CT,CT Sternum
-CT,CT Stomach with contrast
-CT,CT Submandibular Areas
-CT,CT Submandibular areas with contrast
-CT,CT Subtalar joints Both
-CT,CT Subtalar joints Lt
-CT,CT Subtalar joints Rt
-CT,CT Temporal bone with contrast Both
-CT,CT Temporal bone with contrast Left
-CT,CT Temporal bone with contrast Right
-CT,CT Temporal bones
-CT,CT Temporomandibular joint Both
-CT,CT Thoracic and lumbar spine
-CT,CT Thorax
-CT,CT Thorax Abdo pelvis oral and IV Cont
-CT,CT Thorax Abdo pelvis oral contrast only
-CT,CT Thorax abdomen and pelvis
-CT,CT Thorax abdomen pelvis with contrast
-CT,CT Thorax and abdomen
-CT,CT Thorax and abdomen with contrast
-CT,CT Thorax perfusion study
-CT,CT Thorax with contrast
-CT,CT Thumb Both
-CT,CT Thumb Lt
-CT,CT Thumb Rt
-CT,CT Toes Both
-CT,CT Toes Lt
-CT,CT Toes Rt
-CT,CT Transplanted liver
-CT,CT Transplanted liver with contrast
-CT,CT Transplanted small bowel
-CT,CT Triple phase abdomen and pelvis Cont
-CT,CT Triple phase adrenals with Cont Both
-CT,CT Triple phase kidney with contrast B
-CT,CT Tubogram
-CT,CT Upper Leg (Thigh) With Contrast Lt
-CT,CT Upper Leg (Thigh) With Contrast Rt
-CT,CT Upper arm Both
-CT,CT Upper arm Lt
-CT,CT Upper arm Rt
-CT,CT Upper arm with contrast Both
-CT,CT Upper arm with contrast Lt
-CT,CT Upper arm with contrast Rt
-CT,CT Upper leg Both
-CT,CT Upper leg Lt
-CT,CT Upper leg Rt
-CT,CT Upper leg with contrast Both
-CT,CT Upper leg with contrast Lt
-CT,CT Upper leg with contrast Rt
-CT,CT Urinary tract
-CT,CT Urinary tract with contrast
-CT,CT Urogram excretory phase with contrast
-CT,CT Venogram
-CT,CT Venogram cerebral
-CT,CT Venogram intracranial
-CT,CT Venogram lower limb Both
-CT,CT Venogram lower limb Left
-CT,CT Venogram lower limb Right
-CT,CT Venography pulmonary
-CT,CT Whole body
-CT,CT Whole body with contrast
-CT,CT Whole spine
-CT,CT Whole spine myelogram
-CT,CT Wrist Both
-CT,CT Wrist Lt
-CT,CT Wrist Rt
-CT,Virtual CT colonoscopy with contrast
-DEXA,Bone densitometry DXA
-DEXA,DEXA Scan of femur Both
-DEXA,DEXA Scan of femur Left
-DEXA,DEXA Scan of femur Right
-DEXA,DEXA Scan of forearm Both
-DEXA,DEXA Scan of forearm Left
-DEXA,DEXA Scan of forearm Right
-DEXA,DXA Bone densitometry lateral spine
-DEXA,DXA Vertebral morphometry
-DEXA,DXA Whole body
-MRI,Diffusion tensor MR brain
-MRI,Diffusion tensor MR cerebral nerve tract
-MRI,MR Venography pulmonary
-MRI,MRA Aorta abdominal
-MRI,MRA Aorta thoracic
-MRI,MRA Aorta whole
-MRI,MRA Axillary femoral artery bypass
-MRI,MRA Cardiac coronary arteries
-MRI,MRA Carotid Both
-MRI,MRA Coronary bypass graft
-MRI,MRA Head
-MRI,MRA Head and neck
-MRI,MRA Head and neck with contrast
-MRI,MRA Head with contrast
-MRI,MRA Hepatic transplant
-MRI,MRA Iliac artery
-MRI,MRA Lower limb Both
-MRI,MRA Lower limb Left
-MRI,MRA Lower limb Right
-MRI,MRA Mesenteric artery
-MRI,MRA Neck
-MRI,MRA Neck with contrast
-MRI,MRA Pelvis
-MRI,MRA Pulmonary arteries
-MRI,MRA Renal Both
-MRI,MRA Renal and visceral
-MRI,MRA Renal transplant
-MRI,MRA Spine with contrast
-MRI,MRA Subclavian artery Both
-MRI,MRA Subclavian artery Left
-MRI,MRA Subclavian artery Right
-MRI,MRA Transplanted small bowel
-MRI,MRA Upper limb Both
-MRI,MRA Upper limb Lt
-MRI,MRA Upper limb Rt
-MRI,MRA Visceral
-MRI,MRA Whole body
-MRI,MRCP
-MRI,MRCP and secretin study
-MRI,MRCP with Gadolinium
-MRI,MRCP with contrast
-MRI,MRI Abdomen
-MRI,MRI Abdomen With Gadolinium
-MRI,MRI Abdomen and pelvis
-MRI,MRI Abdomen and pelvis with contrast
-MRI,MRI Abdomen with contrast
-MRI,MRI Acetabulum Both
-MRI,MRI Acetabulum Left
-MRI,MRI Acetabulum Right
-MRI,MRI Achilles tendon Both
-MRI,MRI Achilles tendon Left
-MRI,MRI Achilles tendon Right
-MRI,MRI Acromioclavicular joint Both
-MRI,MRI Acromioclavicular joint Lt
-MRI,MRI Acromioclavicular joint Rt
-MRI,MRI Adrenal Both
-MRI,MRI Adrenal with contrast Both
-MRI,MRI Adrenals
-MRI,MRI Adrenals With Gadolinium
-MRI,MRI All fingers with contrast Both
-MRI,MRI All fingers with contrast Lt
-MRI,MRI All fingers with contrast Rt
-MRI,MRI Anal sphincter
-MRI,MRI Ankle  With Gadolinium Lt
-MRI,MRI Ankle  With Gadolinium Rt
-MRI,MRI Ankle Both
-MRI,MRI Ankle Lt
-MRI,MRI Ankle Rt
-MRI,MRI Ankle with contrast Both
-MRI,MRI Ankle with contrast Lt
-MRI,MRI Ankle with contrast Rt
-MRI,MRI Aorta
-MRI,MRI Aorta abdominal with contrast
-MRI,MRI Aorta thoracic with contrast
-MRI,MRI Aorta with contrast
-MRI,MRI Arterial spin labelling of brain
-MRI,MRI Arthrogram ankle Both
-MRI,MRI Arthrogram ankle Lt
-MRI,MRI Arthrogram ankle Rt
-MRI,MRI Arthrogram carpometacarpal joint B
-MRI,MRI Arthrogram carpometacarpal joint Lt
-MRI,MRI Arthrogram carpometacarpal joint Rt
-MRI,MRI Arthrogram elbow Both
-MRI,MRI Arthrogram elbow Lt
-MRI,MRI Arthrogram elbow Rt
-MRI,MRI Arthrogram facet joint
-MRI,MRI Arthrogram hip Both
-MRI,MRI Arthrogram hip Lt
-MRI,MRI Arthrogram hip Rt
-MRI,MRI Arthrogram interphalangeal joint
-MRI,MRI Arthrogram knee Both
-MRI,MRI Arthrogram knee Lt
-MRI,MRI Arthrogram knee Rt
-MRI,MRI Arthrogram metacarpophalangeal joint
-MRI,MRI Arthrogram metatarsophalangeal joint
-MRI,MRI Arthrogram mid tarsal Both
-MRI,MRI Arthrogram mid tarsal Lt
-MRI,MRI Arthrogram mid tarsal Rt
-MRI,MRI Arthrogram shoulder Both
-MRI,MRI Arthrogram shoulder Lt
-MRI,MRI Arthrogram shoulder Rt
-MRI,MRI Arthrogram subtalar Both
-MRI,MRI Arthrogram subtalar Lt
-MRI,MRI Arthrogram subtalar Rt
-MRI,MRI Arthrogram temporomandibular Jt Both
-MRI,MRI Arthrogram temporomandibular Jt Lt
-MRI,MRI Arthrogram temporomandibular Jt Rt
-MRI,MRI Arthrogram wrist Both
-MRI,MRI Arthrogram wrist Lt
-MRI,MRI Arthrogram wrist Rt
-MRI,MRI Arthroplasty planning lower limb B
-MRI,MRI Arthroplasty planning lower limb Lt
-MRI,MRI Arthroplasty planning lower limb Rt
-MRI,MRI Axilla Both
-MRI,MRI Axilla Lt
-MRI,MRI Axilla Rt
-MRI,MRI Axilla With Gadolinium Lt
-MRI,MRI Axilla With Gadolinium Rt
-MRI,MRI Axilla with contrast Both
-MRI,MRI Axilla with contrast Lt
-MRI,MRI Axilla with contrast Rt
-MRI,MRI Axillae With Gadolinium
-MRI,MRI Bowel
-MRI,MRI Brachial Plexus With Gadolinium
-MRI,MRI Brachial plexus
-MRI,MRI Brachial plexus with contrast
-MRI,MRI Brain and cervical cord
-MRI,MRI Brain volume
-MRI,MRI Brain volume with contrast
-MRI,MRI Brain with contrast intraoperative
-MRI,MRI Breast & FNA Lt
-MRI,MRI Breast & FNA Rt
-MRI,MRI Breast Both
-MRI,MRI Breast Lt
-MRI,MRI Breast Rt
-MRI,MRI Breast implant Both
-MRI,MRI Breast screening Both
-MRI,MRI Breast screening Left
-MRI,MRI Breast screening Right
-MRI,MRI Breast with contrast Both
-MRI,MRI Breast with contrast Lt
-MRI,MRI Breast with contrast Rt
-MRI,MRI Breasts With Gadolinium
-MRI,MRI Buttock Both
-MRI,MRI Buttock Lt
-MRI,MRI Buttock Rt
-MRI,MRI Calcaneus Both
-MRI,MRI Calcaneus Lt
-MRI,MRI Calcaneus Rt
-MRI,MRI Card Morph Func stress with contrast
-MRI,MRI Card Morph Func velocity stress Cont
-MRI,MRI Card Morph Func velocity with Cont
-MRI,MRI Card morphology Func velocity stress
-MRI,MRI Card morphology Func with contrast
-MRI,MRI Card morphology function stress
-MRI,MRI Card morphology function velocity
-MRI,MRI Cardiac and hepatic iron load
-MRI,MRI Cardiac complex congenital
-MRI,MRI Cardiac iron load
-MRI,MRI Cardiac morphology function
-MRI,MRI Cardiac myocardial viability
-MRI,MRI Cardiac perfusion
-MRI,MRI Cardiac rest perfusion
-MRI,MRI Cardiac stress function study
-MRI,MRI Cardiac stress perfusion
-MRI,MRI Cardiac valvular function study
-MRI,MRI Cardiac ventricular volume study
-MRI,MRI Cerebrospinal fluid flow
-MRI,MRI Cervix
-MRI,MRI Cervix endocavity RF coil
-MRI,MRI Cervix with contrast
-MRI,MRI Chemical shift imaging
-MRI,MRI Clavicle Both
-MRI,MRI Clavicle Lt
-MRI,MRI Clavicle Rt
-MRI,MRI Colon
-MRI,MRI Colon with contrast
-MRI,MRI Cranio-Facial
-MRI,MRI Cranio-Facial With Gadolinium
-MRI,MRI Craniofacial
-MRI,MRI Craniofacial with contrast
-MRI,MRI Defaecating proctogram
-MRI,MRI Diffusion weighted
-MRI,MRI Diffusion weighted IAM Both
-MRI,MRI Diffusion weighted IAM Left
-MRI,MRI Diffusion weighted IAM Right
-MRI,MRI Diffusion weighted brain
-MRI,MRI Diffusion weighted breast Both
-MRI,MRI Diffusion weighted breast Left
-MRI,MRI Diffusion weighted breast Right
-MRI,MRI Diffusion weighted liver
-MRI,MRI Diffusion weighted prostate
-MRI,MRI Elastography
-MRI,MRI Elbow Both
-MRI,MRI Elbow Lt
-MRI,MRI Elbow Rt
-MRI,MRI Elbow With Gadolinium Lt
-MRI,MRI Elbow With Gadolinium Rt
-MRI,MRI Elbow with contrast Both
-MRI,MRI Elbow with contrast Lt
-MRI,MRI Elbow with contrast Rt
-MRI,MRI Enteroclysis
-MRI,MRI External auditory meatus contrast Lt
-MRI,MRI External auditory meatus contrast Rt
-MRI,MRI External auditory meatus with Cont B
-MRI,MRI Face
-MRI,MRI Face with contrast
-MRI,MRI Facial nerve
-MRI,MRI Fast field-cycling
-MRI,MRI Femur (Thigh) With Gadolinium Lt
-MRI,MRI Femur (Thigh) With Gadolinium Rt
-MRI,MRI Femur Both
-MRI,MRI Femur Lt
-MRI,MRI Femur Rt
-MRI,MRI Femur with contrast Both
-MRI,MRI Femur with contrast Lt
-MRI,MRI Femur with contrast Rt
-MRI,MRI Fetus
-MRI,MRI Fetus Brain
-MRI,MRI Fetus spine
-MRI,MRI Fingers Both
-MRI,MRI Fingers Lt
-MRI,MRI Fingers Rt
-MRI,MRI Floor of Mouth With Gadolinium
-MRI,MRI Floor of mouth
-MRI,MRI Floor of mouth with contrast
-MRI,MRI Foot Both
-MRI,MRI Foot Lt
-MRI,MRI Foot Rt
-MRI,MRI Foot With Gadolinium Lt
-MRI,MRI Foot With Gadolinium Rt
-MRI,MRI Foot with contrast Both
-MRI,MRI Foot with contrast Lt
-MRI,MRI Foot with contrast Rt
-MRI,MRI Forearm Both
-MRI,MRI Forearm Lt
-MRI,MRI Forearm Rt
-MRI,MRI Forearm With Gadolinium Lt
-MRI,MRI Forearm With Gadolinium Rt
-MRI,MRI Forearm with contrast Both
-MRI,MRI Forearm with contrast Lt
-MRI,MRI Forearm with contrast Rt
-MRI,MRI Forefoot Both
-MRI,MRI Forefoot Lt
-MRI,MRI Forefoot Rt
-MRI,MRI Functional imaging
-MRI,MRI Groin Both
-MRI,MRI Groin Left
-MRI,MRI Groin Right
-MRI,MRI Hand Both
-MRI,MRI Hand Lt
-MRI,MRI Hand Rt
-MRI,MRI Hand With Gadolinium Lt
-MRI,MRI Hand With Gadolinium Rt
-MRI,MRI Hand with contrast Both
-MRI,MRI Hand with contrast Lt
-MRI,MRI Hand with contrast Rt
-MRI,MRI Head
-MRI,MRI Head Cont proton therapy planning
-MRI,MRI Head With Gadolinium
-MRI,MRI Head With/without Gadolinium
-MRI,MRI Head and neck dynamic with contrast
-MRI,MRI Head brain perfusion study
-MRI,MRI Head spectroscopy
-MRI,MRI Head stereotactic planning
-MRI,MRI Head with contrast
-MRI,MRI Heart
-MRI,MRI Heart with contrast
-MRI,MRI Hepatic iron load
-MRI,MRI Hindfoot Both
-MRI,MRI Hindfoot Lt
-MRI,MRI Hindfoot Rt
-MRI,MRI Hip Both
-MRI,MRI Hip Lt
-MRI,MRI Hip Lt with Gadolinium
-MRI,MRI Hip Rt
-MRI,MRI Hip Rt with Gadolinium
-MRI,MRI Hip with contrast Both
-MRI,MRI Hip with contrast Lt
-MRI,MRI Hip with contrast Rt
-MRI,MRI Hips + Gadolinium
-MRI,MRI IAM
-MRI,MRI IAM With Gadolinium
-MRI,MRI IAM with contrast Both
-MRI,MRI Internal auditory meatus Both
-MRI,MRI Knee Both
-MRI,MRI Knee Lt
-MRI,MRI Knee Lt with Gadolinium
-MRI,MRI Knee Rt
-MRI,MRI Knee Rt with Gadolinium
-MRI,MRI Knee dynamic
-MRI,MRI Knee dynamic Both
-MRI,MRI Knee dynamic Left
-MRI,MRI Knee dynamic Right
-MRI,MRI Knee with contrast Both
-MRI,MRI Knee with contrast Lt
-MRI,MRI Knee with contrast Rt
-MRI,MRI Larynx
-MRI,MRI Larynx with contrast
-MRI,MRI Liver
-MRI,MRI Liver With Gadolinium
-MRI,MRI Liver and spleen
-MRI,MRI Liver and spleen with contrast
-MRI,MRI Liver with SPIO
-MRI,MRI Liver with contrast
-MRI,MRI Liver with hepatobiliary contrast
-MRI,MRI Liver with manganese
-MRI,MRI Lower leg Both
-MRI,MRI Lower leg Lt
-MRI,MRI Lower leg Rt
-MRI,MRI Lower leg with contrast Both
-MRI,MRI Lower leg with contrast Lt
-MRI,MRI Lower leg with contrast Rt
-MRI,MRI Lower limb Both
-MRI,MRI Lower limb Left
-MRI,MRI Lower limb Right
-MRI,MRI Lower limb with contrast Both
-MRI,MRI Lower limb with contrast Left
-MRI,MRI Lower limb with contrast Right
-MRI,MRI Lumbar spine and pelvis
-MRI,MRI Lumbar spine and pelvis with Cont
-MRI,MRI Lumbar spine and sacroiliac joints
-MRI,MRI Lumbar spine with contrast
-MRI,MRI Lumbosacral plexus
-MRI,MRI Lumbosacral plexus with contrast
-MRI,MRI Lymphogram
-MRI,MRI Mandible
-MRI,MRI Mastoid Both
-MRI,MRI Mastoid Left
-MRI,MRI Mastoid Right
-MRI,MRI Mastoid with contrast Both
-MRI,MRI Mastoid with contrast Left
-MRI,MRI Mastoid with contrast Right
-MRI,MRI Mediastinum
-MRI,MRI Midfoot Both
-MRI,MRI Midfoot Lt
-MRI,MRI Midfoot Rt
-MRI,MRI Multiparametric prostate
-MRI,MRI Multiple pregnancy
-MRI,MRI Neck
-MRI,MRI Neck Cont proton therapy planning
-MRI,MRI Neck With Gadolinium
-MRI,MRI Neck with contrast
-MRI,MRI Oesophagus
-MRI,MRI Oral cavity
-MRI,MRI Oral cavity with contrast
-MRI,MRI Orbit Both
-MRI,MRI Orbit with contrast Both
-MRI,MRI Orbits
-MRI,MRI Orbits with Gadolinium
-MRI,MRI Pancreas
-MRI,MRI Pancreas with contrast
-MRI,MRI Parathyroid
-MRI,MRI Parotid
-MRI,MRI Parotid gland with contrast
-MRI,MRI Patella tracking
-MRI,MRI Pathology specimen
-MRI,MRI Pelvimetry
-MRI,MRI Pelvis
-MRI,MRI Pelvis Cont proton therapy planning
-MRI,MRI Pelvis Gynae with contrast
-MRI,MRI Pelvis SIJ Both
-MRI,MRI Pelvis SIJ with contrast Both
-MRI,MRI Pelvis SIJ's
-MRI,MRI Pelvis and hip Both
-MRI,MRI Pelvis and prostate with contrast
-MRI,MRI Pelvis and rectum with contrast
-MRI,MRI Pelvis bladder
-MRI,MRI Pelvis dynamic
-MRI,MRI Pelvis endocavity
-MRI,MRI Pelvis gynaecological
-MRI,MRI Pelvis obstetric
-MRI,MRI Pelvis prostate
-MRI,MRI Pelvis rectum
-MRI,MRI Pelvis with Gadolinium
-MRI,MRI Pelvis with contrast
-MRI,MRI Penis
-MRI,MRI Perfusion weighted
-MRI,MRI Perianal fistula with contrast
-MRI,MRI Perineum
-MRI,MRI Perineum with contrast
-MRI,MRI Phosphorus spectroscopy body
-MRI,MRI Phosphorus spectroscopy head
-MRI,MRI Pituitary
-MRI,MRI Pituitary with Gadolinium
-MRI,MRI Pituitary with contrast
-MRI,MRI Post mortem
-MRI,MRI Post nasal space
-MRI,MRI Posterior fossa
-MRI,MRI Posterior fossa with contrast
-MRI,MRI Proctogram
-MRI,MRI Prostate endocavity RF coil
-MRI,MRI Prostate spectroscopy
-MRI,MRI Prostate with contrast
-MRI,MRI Pulmonary perfusion scan
-MRI,MRI Renal Both
-MRI,MRI Renal with contrast Both
-MRI,MRI Renal with contrast Left
-MRI,MRI Renal with contrast Right
-MRI,MRI Rib
-MRI,MRI Salivary glands
-MRI,MRI Salivary glands with contrast
-MRI,MRI Scaphoid Both
-MRI,MRI Scaphoid Left
-MRI,MRI Scaphoid Right
-MRI,MRI Scapula Both
-MRI,MRI Scapula Lt
-MRI,MRI Scapula Rt
-MRI,MRI Sciatic nerve
-MRI,MRI Scrotum
-MRI,MRI Shoulder Both
-MRI,MRI Shoulder Lt
-MRI,MRI Shoulder Lt with Gadolinium
-MRI,MRI Shoulder Rt
-MRI,MRI Shoulder Rt with Gadolinium
-MRI,MRI Shoulder with contrast Both
-MRI,MRI Shoulder with contrast Lt
-MRI,MRI Shoulder with contrast Rt
-MRI,MRI Shoulders
-MRI,MRI Sinuses
-MRI,MRI Sinuses with Gadolinium
-MRI,MRI Sinuses with contrast
-MRI,MRI Skeletal survey
-MRI,MRI Skull base
-MRI,MRI Small Bowel Study
-MRI,MRI Small bowel with contrast
-MRI,MRI Soft tissue limb
-MRI,MRI Spectroscopy
-MRI,MRI Spinal cord
-MRI,MRI Spinal cord with contrast
-MRI,MRI Spine Cervical With Gadolinium
-MRI,MRI Spine Cont proton therapy planning
-MRI,MRI Spine Lumbar/Sacral With Gadolinium
-MRI,MRI Spine Thoracic With Gadolinium
-MRI,MRI Spine Whole With Gadolinium
-MRI,MRI Spine cervical
-MRI,MRI Spine cervical myelogram
-MRI,MRI Spine cervical with contrast
-MRI,MRI Spine cervicothoracic
-MRI,MRI Spine cervicothoracic with contrast
-MRI,MRI Spine coccyx
-MRI,MRI Spine coccyx with contrast
-MRI,MRI Spine lumbar
-MRI,MRI Spine lumbar and sacral
-MRI,MRI Spine lumbar myelogram
-MRI,MRI Spine lumbar sacral with contrast
-MRI,MRI Spine sacrum
-MRI,MRI Spine sacrum with contrast
-MRI,MRI Spine thoracic
-MRI,MRI Spine thoracic lumbar with contrast
-MRI,MRI Spine thoracic myelogram
-MRI,MRI Spine thoracic with contrast
-MRI,MRI Spine thoracolumbar
-MRI,MRI Spine whole
-MRI,MRI Spine whole with contrast
-MRI,MRI Stereo guided laser Abl lesion brain
-MRI,MRI Sternoclavicular Jt with Cont Both
-MRI,MRI Sternoclavicular joint Both
-MRI,MRI Sternum
-MRI,MRI Submandibular gland
-MRI,MRI Submandibular gland with contrast
-MRI,MRI Subthalamic nucleus
-MRI,MRI Susceptibility imaging
-MRI,MRI T2 mapping
-MRI,MRI TMJ with contrast Both
-MRI,MRI TMJ with contrast Left
-MRI,MRI TMJ with contrast Right
-MRI,MRI Temporal lobe
-MRI,MRI Temporomandibular joint Both
-MRI,MRI Temporomandibular joint Left
-MRI,MRI Temporomandibular joint Right
-MRI,MRI Thigh Both
-MRI,MRI Thigh Left
-MRI,MRI Thigh Right
-MRI,MRI Thigh with contrast Both
-MRI,MRI Thigh with contrast Left
-MRI,MRI Thigh with contrast Right
-MRI,MRI Thoracic inlet and outlet
-MRI,MRI Thoracic inlet with contrast
-MRI,MRI Thoracic outlet with contrast
-MRI,MRI Thorax
-MRI,MRI Thorax Cont proton therapy planning
-MRI,MRI Thorax With Gadolinium
-MRI,MRI Thorax abdo and pelvis with contrast
-MRI,MRI Thorax abdomen and pelvis
-MRI,MRI Thorax with contrast
-MRI,MRI Thumb Both
-MRI,MRI Thumb Lt
-MRI,MRI Thumb Rt
-MRI,MRI Thyroid
-MRI,MRI Tib & Fib (Lower Leg) With Gd Lt
-MRI,MRI Tib & Fib (Lower Leg) With Gd Rt
-MRI,MRI Tongue
-MRI,MRI Tongue with contrast
-MRI,MRI Transplanted liver
-MRI,MRI Transplanted small bowel
-MRI,MRI Trigeminal nerve
-MRI,MRI Trigeminal nerve with contrast
-MRI,MRI Upper Arm With Gadolinium Lt
-MRI,MRI Upper Arm With Gadolinium Rt
-MRI,MRI Upper arm Both
-MRI,MRI Upper arm Lt
-MRI,MRI Upper arm Rt
-MRI,MRI Upper arm with contrast Both
-MRI,MRI Upper arm with contrast Lt
-MRI,MRI Upper arm with contrast Rt
-MRI,MRI Upper limb Both
-MRI,MRI Upper limb Left
-MRI,MRI Upper limb Right
-MRI,MRI Upper limb with contrast Both
-MRI,MRI Upper limb with contrast Left
-MRI,MRI Upper limb with contrast Right
-MRI,MRI Urinary bladder
-MRI,MRI Urinary bladder with contrast
-MRI,MRI Urogram
-MRI,MRI Venogram neck
-MRI,MRI Venography jugular vein Both
-MRI,MRI Venography jugular vein Left
-MRI,MRI Venography jugular vein Right
-MRI,MRI Vessel wall
-MRI,MRI Vessel wall with contrast
-MRI,MRI Whole body
-MRI,MRI Whole body with contrast
-MRI,MRI Wrist Both
-MRI,MRI Wrist Lt
-MRI,MRI Wrist Rt
-MRI,MRI Wrist With Gadolinium Lt
-MRI,MRI Wrist With Gadolinium Rt
-MRI,MRI Wrist dynamic Both
-MRI,MRI Wrist dynamic Left
-MRI,MRI Wrist dynamic Right
-MRI,MRI Wrist dynamic with contrast Both
-MRI,MRI Wrist dynamic with contrast Left
-MRI,MRI Wrist dynamic with contrast Right
-MRI,MRI Wrist with contrast Both
-MRI,MRI Wrist with contrast Lt
-MRI,MRI Wrist with contrast Rt
-MRI,MRV Abdomen and pelvis
-MRI,MRV Cerebral veins
-MRI,MRV Cranial
-MRI,MRV Iliac vein Both
-MRI,MRV Iliac vein Left
-MRI,MRV Iliac vein Right
-MRI,MRV Inferior vena cava
-MRI,MRV Lower limb Both
-MRI,MRV Pelvis
-MRI,MRV Portal vein
-MRI,MRV Subclavian vein Both
-MRI,MRV Subclavian vein Left
-MRI,MRV Subclavian vein Right
-MRI,MRV Superior vena cava
-MRI,MRV Upper limb Both
-MRI,MRV Upper limb Lt
-MRI,MRV Upper limb Rt
-MRI,MRV Venogram
-MRI,Magnetic resonance angiography
-PET,NM 11C metomidate PET CT
-PET,NM 18F NaF gated cardiac PET CT
-PET,NM 18F NaF whole body PET CT
-PET,NM 18F fluciclovine whole body PET CT
-PET,NM 18F fluoromisonidazole WB PET CT
-PET,NM 18F fluorothymidine whole body PET CT
-PET,NM Base of brain to mid-thigh FDG PET CT
-PET,NM Brain FDG PET CT
-PET,NM Brain PET FDG
-PET,NM Brain florbetaben (18F) PET CT
-PET,NM Brain florbetapir (18F) PET CT
-PET,NM Brain flutemetamol (18F) PET CT
-PET,NM Breast PET MRI Both
-PET,NM Breast PET MRI Left
-PET,NM Breast PET MRI Right
-PET,NM Breast PET MRI with contrast Both
-PET,NM Breast PET MRI with contrast Left
-PET,NM Breast PET MRI with contrast Right
-PET,NM C11 acetate whole body PET CT
-PET,NM C11 choline PET CT
-PET,NM C11 choline whole body PET CT
-PET,NM Cardiac rest FDG PET CT
-PET,NM Cardiac rest N13 PET CT
-PET,NM Cardiac rest PET FDG
-PET,NM Cardiac rest PET NH3
-PET,NM Cardiac rest PET Rb81
-PET,NM Cardiac rest PET Rb82
-PET,NM Cardiac rest Rb81 PET CT
-PET,NM Cardiac rest gated FDG PET CT
-PET,NM Cardiac rest gated N13 PET CT
-PET,NM Cardiac rest gated PET FDG
-PET,NM Cardiac rest gated PET NH3
-PET,NM Cardiac stress PET CT FDG
-PET,NM Cardiac stress PET Rb81
-PET,NM Cardiac stress PET Rb82
-PET,NM Cardiac stress Rb81 PET CT
-PET,NM Cardiac viability scan FDG PET CT
-PET,NM Cardiac viability scan PET FDG
-PET,NM Carotid artery PET MRI Both
-PET,NM Carotid artery PET MRI Left
-PET,NM Carotid artery PET MRI Right
-PET,NM Carotid artery PET MRI with Cont B
-PET,NM Carotid artery PET MRI with Cont Lt
-PET,NM Carotid artery PET MRI with Cont Rt
-PET,NM Choline brain PET F18
-PET,NM Choline local PET F18
-PET,NM Choline local view PET C11
-PET,NM Choline whole body PET C11
-PET,NM Choline whole body PET F18
-PET,NM F18 PSMA whole body PET CT
-PET,NM F18 choline PET CT
-PET,NM F18 choline whole body PET CT
-PET,NM Ga68 DOTANOC PET CT whole body
-PET,NM Ga68 DOTATATE whole body PET
-PET,NM Ga68 DOTATATE whole body PET CT
-PET,NM Ga68 DOTATOC PET CT whole body
-PET,NM Ga68 PSMA PET CT whole body
-PET,NM Head PET MRI
-PET,NM Head PET MRI with contrast
-PET,NM Head and neck PET CT FDG
-PET,NM Liver PET MRI
-PET,NM Liver PET MRI with contrast
-PET,NM Methionine tumour PET CT
-PET,NM Methionine tumour WB PET CT
-PET,NM Methionine tumour imaging WB PET
-PET,NM Methionine tumour imaging local PET
-PET,NM Skull to mid-thigh F18 PSMA PET CT
-PET,NM Skull to mid-thigh FDG PET CT for CS
-PET,NM Skull to mid-thigh Ga68 PSMA PET CT
-PET,NM Skull vertex to mid-thigh FDG PET CT
-PET,NM Whole body FDG PET CT
-PET,NM Whole body PET FDG
-PET,NM Whole body PET MRI
-PET,NM Whole body and delayed view PET FDG
-PET,NM Y90 liver PET CT
-PET,PET FDG Breasts
-PET,PET FDG Cardiac viability scan
-PET,PET FDG Whole body
-PET,Positron emission tomography with CT
-XR,XR AP pelvis for hip surveillance
-XR,XR Abdomen
-XR,XR Abdomen with contrast
-XR,XR Acetabulum Both
-XR,XR Acetabulum Lt
-XR,XR Acetabulum Rt
-XR,XR Acromioclavicular joint Both
-XR,XR Acromioclavicular joint Lt
-XR,XR Acromioclavicular joint Rt
-XR,XR Ankle Both
-XR,XR Ankle Lt
-XR,XR Ankle Rt
-XR,XR Ankle joint stress both
-XR,XR Ankle joint with stress Both
-XR,XR Ankle joint with stress Left
-XR,XR Ankle joint with stress Right
-XR,XR Bladder
-XR,XR Breast Stereotactic Guided Wire Lt
-XR,XR Breast Stereotactic Guided Wire Rt
-XR,XR Breast tomosynthesis Both
-XR,XR Breast tomosynthesis Left
-XR,XR Breast tomosynthesis Right
-XR,XR Breasts Stereotactic Guided Wire
-XR,XR Calcaneus Both
-XR,XR Calcaneus Lt
-XR,XR Calcaneus Rt
-XR,XR Carpal tunnel Both
-XR,XR Carpal tunnel Lt
-XR,XR Carpal tunnel Rt
-XR,XR Carpometacarpal Jt with stress Both
-XR,XR Carpometacarpal joint with stress Lt
-XR,XR Carpometacarpal joint with stress Rt
-XR,XR Cephalogram
-XR,XR Cephalogram Posteroanterior
-XR,XR Cephalogram lateral
-XR,XR Cerebro-spinal fluid shunt
-XR,XR Cervical spine
-XR,XR Cervical spine flexion and extension
-XR,XR Cervicothoracic junction
-XR,XR Chest
-XR,XR Chest AP view
-XR,XR Chest PA view
-XR,XR Chest and abdomen
-XR,XR Chest lateral
-XR,XR Clavicle Both
-XR,XR Clavicle Lt
-XR,XR Clavicle Rt
-XR,XR Coccyx
-XR,XR Cochlear implant Both
-XR,XR Cochlear implant Left
-XR,XR Cochlear implant Right
-XR,XR Colonic transit study
-XR,XR Elbow Both
-XR,XR Elbow Lt
-XR,XR Elbow Rt
-XR,XR Elbow for bone age Both
-XR,XR Elbow for bone age Left
-XR,XR Elbow for bone age Right
-XR,XR Facial Bones
-XR,XR Femur (thigh) Lt
-XR,XR Femur (thigh) Rt
-XR,XR Femur Both
-XR,XR Femur Lt
-XR,XR Femur Rt
-XR,XR Finger index Lt
-XR,XR Finger index Rt
-XR,XR Finger little Lt
-XR,XR Finger little Rt
-XR,XR Finger middle Lt
-XR,XR Finger middle Rt
-XR,XR Finger ring Lt
-XR,XR Finger ring Rt
-XR,XR Fingers Lt
-XR,XR Fingers Rt
-XR,XR Foot Both
-XR,XR Foot Lt
-XR,XR Foot Rt
-XR,XR Foot and ankle Both
-XR,XR Foot and ankle Left
-XR,XR Foot and ankle Right
-XR,XR Forefoot Both
-XR,XR Forefoot Lt
-XR,XR Forefoot Rt
-XR,XR Foreign body demonstration
-XR,XR Hand Both
-XR,XR Hand Lt
-XR,XR Hand Rt
-XR,XR Hand and wrist Both
-XR,XR Hand and wrist Left
-XR,XR Hand and wrist Right
-XR,XR Hand and wrist for bone age
-XR,XR Hand and wrist for metacarpal index
-XR,XR Hindfoot Both
-XR,XR Hindfoot Lt
-XR,XR Hindfoot Rt
-XR,XR Hip Both
-XR,XR Hip Lt
-XR,XR Hip Rt
-XR,XR Humerus Both
-XR,XR Humerus Lt
-XR,XR Humerus Rt
-XR,XR Ilium
-XR,XR Intravenous Cholangiogram
-XR,XR Intravenous Urogram (IVU)
-XR,XR Intravenous urogram
-XR,XR Kidney Both
-XR,XR Kidney Lt
-XR,XR Kidney Rt
-XR,XR Kidney ureter bladder
-XR,XR Knee Both
-XR,XR Knee Lt
-XR,XR Knee Rt
-XR,XR Larynx
-XR,XR Leg length measurement Both
-XR,XR Leg length measurement Lt
-XR,XR Leg length measurement Rt
-XR,XR Lower limb Both
-XR,XR Lower limb Left
-XR,XR Lower limb Right
-XR,XR Lumbar spine
-XR,XR Lumbar spine and pelvis
-XR,XR Lumbar spine and sacroiliac joint
-XR,XR Mandible
-XR,XR Mandibular Obliq lateral occlusal Lt
-XR,XR Mandibular Obliq lateral occlusal Rt
-XR,XR Mastoid Both
-XR,XR Mastoids
-XR,XR Midfoot Both
-XR,XR Midfoot Lt
-XR,XR Midfoot Rt
-XR,XR Nasal bones
-XR,XR Nasogastric tube position
-XR,XR Neck soft tissue
-XR,XR Orbit Both
-XR,XR Orbit foreign body demonstration Both
-XR,XR Paranasal sinuses
-XR,XR Patella Both
-XR,XR Patella Lt
-XR,XR Patella Rt
-XR,XR Pathological specimen
-XR,XR Pelvimetry
-XR,XR Pelvis
-XR,XR Pelvis and hip Left
-XR,XR Pelvis and hip Right
-XR,XR Penis
-XR,XR Post nasal space
-XR,XR Radius and ulna Both
-XR,XR Radius and ulna Lt
-XR,XR Radius and ulna Rt
-XR,XR Ribs Lt
-XR,XR Ribs Rt
-XR,XR Sacroiliac joint Both
-XR,XR Sacrum
-XR,XR Sacrum and coccyx
-XR,XR Salivary glands
-XR,XR Scaphoid Both
-XR,XR Scaphoid Lt
-XR,XR Scaphoid Rt
-XR,XR Scapula Both
-XR,XR Scapula Lt
-XR,XR Scapula Rt
-XR,XR Sesamoid bone foot Both
-XR,XR Sesamoid bone foot Left
-XR,XR Sesamoid bone foot Right
-XR,XR Shoulder Both
-XR,XR Shoulder Lt
-XR,XR Shoulder Rt
-XR,XR Shoulders
-XR,XR Skeletal Survey General
-XR,XR Skeletal survey
-XR,XR Skeletal survey chest oblique ribs
-XR,XR Skeletal survey myeloma
-XR,XR Skeletal survey non-accidental injury
-XR,XR Skeletal survey post mortem
-XR,XR Skull
-XR,XR Skull pituitary fossa
-XR,XR Soft tissue specimen
-XR,XR Sternoclavicular joint Both
-XR,XR Sternum
-XR,XR Subtalar joint Both
-XR,XR Subtalar joint Lt
-XR,XR Subtalar joint Rt
-XR,XR Temporomandibular joint Both
-XR,XR Temporomandibular joint Lt
-XR,XR Temporomandibular joint Rt
-XR,XR Thoracic and lumbar spine
-XR,XR Thoracic inlet
-XR,XR Thoracic spine
-XR,XR Thoracolumbar spine
-XR,XR Thumb Both
-XR,XR Thumb Lt
-XR,XR Thumb Rt
-XR,XR Tibia and fibula Both
-XR,XR Tibia and fibula Lt
-XR,XR Tibia and fibula Rt
-XR,XR Toe great Lt
-XR,XR Toe great Rt
-XR,XR Toes Lt
-XR,XR Toes Rt
-XR,XR Tomogram
-XR,XR Whole Spine (Scoliosis)
-XR,XR Whole spine
-XR,XR Wrist Both
-XR,XR Wrist Lt
-XR,XR Wrist Rt
-XR,XR Zygoma Both
-XR,XR Zygoma Lt
-XR,XR Zygoma Rt
+modality,study description,Exam code
+CT,CT Abdo and pelvis with IV and oral Cont,CAPIOC
+CT,CT Abdomen,CABDO
+CT,CT Abdomen and pelvis,CABPE
+CT,CT Abdomen and pelvis oral contrast only,CAPLVC
+CT,CT Abdomen and pelvis with contrast,CABPEC
+CT,CT Abdomen perfusion study,CABDP
+CT,CT Abdomen with & without contrast,CABWC
+CT,CT Abdomen with contrast,CABDC
+CT,CT Acromioclavicular joint Both,CACJB
+CT,CT Acromioclavicular joint Lt,CACJL
+CT,CT Acromioclavicular joint Rt,CACJR
+CT,CT Adrenal Both,CADRB
+CT,CT Adrenal with contrast Both,CADRBC
+CT,CT Adrenals With Contrast,CADRC
+CT,CT Adrenals with & without contrast,CADWC
+CT,CT Adrenals with contrast washout Both,CWADBC
+CT,CT Angio aorta coronary arteries,CAOCO
+CT,CT Angio aortic arch and carotid Both,CACDB
+CT,CT Angio bicaval valve implantation Plan,CTABV
+CT,CT Angio coronary artery graft,CCORGC
+CT,CT Angio triple phase for TAVI workup,CTATP
+CT,CT Angiogram,CART
+CT,CT Angiogram abdomen,CAABDO
+CT,CT Angiogram abdominal wall vessels,CAABVO
+CT,CT Angiogram aorta,CAAAG
+CT,CT Angiogram bronchial artery Both,CANBB
+CT,CT Angiogram bronchial artery Left,CANBL
+CT,CT Angiogram bronchial artery Right,CANBR
+CT,CT Angiogram intracranial,CAICN
+CT,CT Angiogram lower limb Both,CALLB
+CT,CT Angiogram lower limb Lt,CALLL
+CT,CT Angiogram lower limb Rt,CALLR
+CT,CT Angiogram mesenteric artery,CAMES
+CT,CT Angiogram pulmonary,CAPUG
+CT,CT Angiogram pulmonary abdomen pelvis A,CAPAP
+CT,CT Angiogram renal,CANRE
+CT,CT Angiogram renal and abdominal,CAREA
+CT,CT Angiogram spine,CSPINY
+CT,CT Angiogram subclavian Both,CASCB
+CT,CT Angiogram subclavian Left,CASCL
+CT,CT Angiogram subclavian Right,CASCR
+CT,CT Angiogram upper limb Both,CAULB
+CT,CT Angiogram upper limb Lt,CAULL
+CT,CT Angiogram upper limb Rt,CAULR
+CT,CT Angiography for TAVI workup,CTAVI
+CT,CT Angiography thorax and abdomen,CATHA
+CT,CT Ankle Both,CANKB
+CT,CT Ankle Lt,CANKL
+CT,CT Ankle Rt,CANKR
+CT,CT Aorta abdominal,CABAO
+CT,CT Aorta abdominal with contrast,CABAOC
+CT,CT Aorta thoracic,CAOTH
+CT,CT Aorta thoracic with contrast,CAOTHC
+CT,CT Aorta whole,CAOWH
+CT,CT Aorta whole with contrast,CAOWHC
+CT,CT Arthrogram ankle Both,CJANB
+CT,CT Arthrogram ankle Lt,CJANL
+CT,CT Arthrogram ankle Rt,CJANR
+CT,CT Arthrogram cervical facet joint,CJCFAC
+CT,CT Arthrogram elbow Both,CJELB
+CT,CT Arthrogram elbow Lt,CJELL
+CT,CT Arthrogram elbow Rt,CJELR
+CT,CT Arthrogram hip Both,CJHIB
+CT,CT Arthrogram hip Lt,CJHIL
+CT,CT Arthrogram hip Rt,CJHIR
+CT,CT Arthrogram knee Both,CJKNB
+CT,CT Arthrogram knee Lt,CJKNL
+CT,CT Arthrogram knee Rt,CJKNR
+CT,CT Arthrogram lumbar facet joint,CJLFAC
+CT,CT Arthrogram metacarpophalangeal joint,CJMCP
+CT,CT Arthrogram metatarsophalangeal joint,CJMTP
+CT,CT Arthrogram mid tarsal Both,CJMTB
+CT,CT Arthrogram mid tarsal Lt,CJMTL
+CT,CT Arthrogram mid tarsal Rt,CJMTR
+CT,CT Arthrogram sacroiliac joint Both,CSAIBC
+CT,CT Arthrogram sacroiliac joint Left,CSAILC
+CT,CT Arthrogram sacroiliac joint Right,CSAIRC
+CT,CT Arthrogram shoulder Both,CJSHB
+CT,CT Arthrogram shoulder Lt,CJSHL
+CT,CT Arthrogram shoulder Rt,CJSHR
+CT,CT Arthrogram subtalar Both,CJSTB
+CT,CT Arthrogram subtalar Lt,CJSTL
+CT,CT Arthrogram subtalar Rt,CJSTR
+CT,CT Arthrogram temporomandibular Jt Both,CJTMB
+CT,CT Arthrogram temporomandibular joint Lt,CJTML
+CT,CT Arthrogram temporomandibular joint Rt,CJTMR
+CT,CT Arthrogram thoracic facet joint,CJTFAC
+CT,CT Arthrogram wrist Both,CJWRB
+CT,CT Arthrogram wrist Lt,CJWRL
+CT,CT Arthrogram wrist Rt,CJWRR
+CT,CT Arthroplasty planning lower limb B,CAPLB
+CT,CT Arthroplasty planning lower limb Lt,CAPLL
+CT,CT Arthroplasty planning lower limb Rt,CAPLR
+CT,CT Axilla Both,CAXIB
+CT,CT Axilla Left,CAXIL
+CT,CT Axilla Right,CAXIR
+CT,CT Base of skull,CBSSK
+CT,CT Base of skull with contrast,CBSSKC
+CT,CT Bone densitometry,CDEXA
+CT,CT Brachial Plexus With Contrast,CBPLC
+CT,CT Brachial plexus,CBPLX
+CT,CT Brain neck temporal bones Cont Both,CBNTBC
+CT,CT Brain neck thorax Abdo and pelvis,CBNTA
+CT,CT Brain perfusion study,CSKPE
+CT,CT Brain volume,CBRVO
+CT,CT Brain volume with contrast,CBRVOC
+CT,CT Bronchoscopy virtual,CVBRY
+CT,CT Calcaneus Both,CCALB
+CT,CT Calcaneus Lt,CCALL
+CT,CT Calcaneus Rt,CCALR
+CT,CT Cardiac Cor artery calcium scoring,CCASC
+CT,CT Cardiac angiogram coronary,CACRY
+CT,CT Cardiac gated,CCAGA
+CT,CT Cardiac gated complex congenital Cont,CCGCCC
+CT,CT Cardiac gated function with contrast,CCAGFC
+CT,CT Cardiac gated with contrast,CCAGAC
+CT,CT Cardiac multiple gated acquisition,CMUGA
+CT,CT Cerebral ventriculography,CCERV
+CT,CT Chest high resolution,CCHHR
+CT,CT Chest high resolution with contrast,CHRCHC
+CT,CT Chest with contrast,CCHEC
+CT,CT Cholangiogram,CBILI
+CT,CT Cisternography,CCISTT
+CT,CT Clavicle Both,CCLAB
+CT,CT Clavicle Lt,CCLAL
+CT,CT Clavicle Rt,CCLAR
+CT,CT Coccyx,CCOCX
+CT,CT Cochlea Both,CCOCB
+CT,CT Cochlea Left,CCOCL
+CT,CT Cochlea Right,CCOCR
+CT,CT Cochlear implant,CCOIM
+CT,CT Colon,CCOLO
+CT,CT Colon with contrast,CCOLOC
+CT,CT Colonography low dose,CVCLD
+CT,CT Colonoscopy virtual,CVCOY
+CT,CT Contrast enema,CENEM
+CT,CT Cor angiogram fractional flow reserve,CCGFF
+CT,CT Cranioplasty planning,CCPP
+CT,CT Cystogram,CCYSTY
+CT,CT Dacrocystogram Both,CDCGB
+CT,CT Dacrocystogram Lt,CDCGL
+CT,CT Dacrocystogram Rt,CDCGR
+CT,CT Dual phase kidney with contrast Both,CDPKBC
+CT,CT Dynamic arthrogram,CDYNA
+CT,CT Dynamic trachea,CDYNT
+CT,CT Elbow Both,CELBB
+CT,CT Elbow Lt,CELBL
+CT,CT Elbow Rt,CELBR
+CT,CT Enteroclysis,CELYS
+CT,CT Enterography,CENTE
+CT,CT Face,CFACES
+CT,CT Face With Contrast,CFACC
+CT,CT Facial bones,CFACE
+CT,CT Facial bones with contrast,CFABOC
+CT,CT Fingers Both,CFINB
+CT,CT Fingers Lt,CFINL
+CT,CT Fingers Rt,CFINR
+CT,CT Floor of mouth,CFLMO
+CT,CT Floor of mouth with contrast,CFLMOC
+CT,CT Foot Both,CFOOB
+CT,CT Foot Lt,CFOOL
+CT,CT Foot Rt,CFOOR
+CT,CT Forearm Both,CFARB
+CT,CT Forearm Lt,CFARL
+CT,CT Forearm Rt,CFARR
+CT,CT Forearm with contrast Both,CFARBC
+CT,CT Forearm with contrast Lt,CFARLC
+CT,CT Forearm with contrast Rt,CFARRC
+CT,CT Forefoot Both,CFFOB
+CT,CT Forefoot Lt,CFFOL
+CT,CT Forefoot Rt,CFFOR
+CT,CT Forensic,CFORE
+CT,CT Gated coronary venogram with contrast,CGCOVC
+CT,CT Gated thoracic aorta with contrast,CGTHAC
+CT,CT Groin Both,CGROB
+CT,CT Groin Left,CGROL
+CT,CT Groin Right,CGRIR
+CT,CT Hand Both,CHANB
+CT,CT Hand Lt,CHANL
+CT,CT Hand Rt,CHANR
+CT,CT Head,CSKUH
+CT,CT Head With Contrast,CSKUC
+CT,CT Head abdomen and pelvis,CHAP
+CT,CT Head abdomen pelvis with contrast,CHAPC
+CT,CT Head and face,CHEFA
+CT,CT Head and neck,CSKNE
+CT,CT Head and neck with contrast,CHENEC
+CT,CT Head and orbits,CORBH
+CT,CT Head and orbits with contrast,CORBHC
+CT,CT Head and thorax,CHTH
+CT,CT Head and thorax with contrast,CHTHC
+CT,CT Head neck Abdo pelvis with contrast,CHNAPC
+CT,CT Head neck abdomen and pelvis,CHNAP
+CT,CT Head neck thorax Abdo and pelvis Cont,CHNTPC
+CT,CT Head neck thorax abdomen and pelvis,CHNTAP
+CT,CT Head neck thorax abdomen contrast,CHNTAC
+CT,CT Head neck thorax and abdomen,CHNTA
+CT,CT Head thorax Abdo pelvis with contrast,CHTAPC
+CT,CT Head thorax abdomen and pelvis,CHTAP
+CT,CT Head thorax abdomen with contrast,CHTHAC
+CT,CT Head thorax and abdomen,CHTA
+CT,CT Head with & without contrast,CSKWC
+CT,CT Heart with contrast,CCARDC
+CT,CT Hip Both,CHIPB
+CT,CT Hip Lt,CHIPL
+CT,CT Hip Rt,CHIPR
+CT,CT Hip With Contrast Lt,CHICL
+CT,CT Hip With Contrast Rt,CHICR
+CT,CT Hip with contrast Both,CHIPBC
+CT,CT Hips With Contrast,CHIPC
+CT,CT IAM with air contrast,CAAMBC
+CT,CT IAM with contrast,CIAMBC
+CT,CT IAM with intrathecal contrast,CIAMBT
+CT,CT Internal Auditory Meatii,CIAMS
+CT,CT Internal auditory meatus Both,CIAMB
+CT,CT Intravenous pyelogram triple phase,CIVTP
+CT,CT Kidney triple phase Both,CKITB
+CT,CT Kidney triple phase Left,CTKIL
+CT,CT Kidney triple phase Right,CTKIR
+CT,CT Knee Both,CKNEB
+CT,CT Knee Lt,CKNEL
+CT,CT Knee Rt,CKNER
+CT,CT Larynx,CLARY
+CT,CT Larynx With Contrast,CLARC
+CT,CT Laser assisted decompression disc,CLADDA
+CT,CT Left atrial appendage with contrast,CLAAPC
+CT,CT Leg length measurement,CLONG
+CT,CT Liver,CLIVE
+CT,CT Liver Lesion Ablation (Ethanol),CLMAAE
+CT,CT Liver dual phase,CLIVD
+CT,CT Liver four phase scan with contrast,CLIVFC
+CT,CT Liver lesion ablation,CLMAAA
+CT,CT Liver lesion ablation RF,CLMAFA
+CT,CT Liver lesion ablation ethanol,CLMAEA
+CT,CT Liver lesion ablation laser,CLMASA
+CT,CT Liver perfusion study,CLIVPO
+CT,CT Liver portogram,CLIVP
+CT,CT Liver triple phase,CLIVT
+CT,CT Liver with contrast,CLIVC
+CT,CT Low dose skeletal survey,CLDSK
+CT,CT Low dose thorax,CLDTH
+CT,CT Lower Leg With Contrast Lt,CLLLC
+CT,CT Lower Leg With Contrast Rt,CLLRC
+CT,CT Lower leg Both,CLOLB
+CT,CT Lower leg Lt,CLOLL
+CT,CT Lower leg Rt,CLOLR
+CT,CT Lower leg with contrast Both,CLOLBC
+CT,CT Lower limb with contrast Both,CLLIBC
+CT,CT Lower limbs with contrast,CLLBC
+CT,CT Lumbar sympathectomy,CLUSYY
+CT,CT Mandible,CMAND
+CT,CT Mandible and maxilla,CMAMX
+CT,CT Mastoid Both,CMSTB
+CT,CT Maxilla,CMAXI
+CT,CT Maximum intensity projection study,CMIPY
+CT,CT Mediastinum,CMEDM
+CT,CT Mediastinum with contrast,CMEDC
+CT,CT Middle ear,CMIDE
+CT,CT Midfoot Both,CMFOB
+CT,CT Midfoot Lt,CMFOL
+CT,CT Midfoot Rt,CMFOR
+CT,CT Neck,CNECK
+CT,CT Neck With Contrast,CNECC
+CT,CT Neck and thorax,CNECH
+CT,CT Neck and thorax with contrast,CNECHC
+CT,CT Neck perfusion study,CNECP
+CT,CT Neck thorax Abdo pelvis IV oral Cont,CNTAPC
+CT,CT Neck thorax abdomen and pelvis,CNCAP
+CT,CT Neck thorax abdomen pelvis with Cont,CNCAPC
+CT,CT Neck thorax and abdomen,CNCHA
+CT,CT Neck thorax and abdomen with contrast,CNCAC
+CT,CT Neck with & without contrast,CNEWC
+CT,CT Nephrostogram Both,CNPGB
+CT,CT Nephrostogram Left,CNPGL
+CT,CT Nephrostogram Right,CNPGR
+CT,CT Oesophagus with contrast,COESOC
+CT,CT Orbit Both,CORBB
+CT,CT Orbit with contrast Both,CORBBC
+CT,CT Osteoid Osteoma Ablation (Ethanol),COOAAE
+CT,CT Osteoid osteoma ablation,COOAAA
+CT,CT Osteoid osteoma ablation RF,COOAFA
+CT,CT Osteoid osteoma ablation ethanol,COOAEA
+CT,CT Osteoid osteoma ablation laser,COOALA
+CT,CT Pancreas,CPANS
+CT,CT Pancreas dual phase,CPAND
+CT,CT Pancreas triple phase,CPANT
+CT,CT Pancreas with contrast,CPANC
+CT,CT Parotid,CSAPA
+CT,CT Parotids with contrast,CSAPAC
+CT,CT Patella tracking,CPATT
+CT,CT Pelvis,CPELV
+CT,CT Pelvis With Contrast,CPELC
+CT,CT Pelvis perfusion study,CPELP
+CT,CT Pelvis with & without contrast,CPEWC
+CT,CT Peritoneogram,CPERI
+CT,CT Petrous bones,CPETR
+CT,CT Pituitary,CPITF
+CT,CT Pituitary With Contrast,CPITC
+CT,CT Pleural phase thorax with contrast,CPPTHC
+CT,CT Portal venogram thorax Abdo pelvis,CPTAP
+CT,CT Portal venogram thorax abdomen,CPVTA
+CT,CT Portal venography abdomen and pelvis,CPVAP
+CT,CT Post endovascular Aneur repair check,CEVAC
+CT,CT Post mortem,CPMTM
+CT,CT Post nasal space,CPNAS
+CT,CT Post nasal space with contrast,CPNAC
+CT,CT Posterior Fossa With Contrast,CPFIC
+CT,CT Posterior fossa,CPOSF
+CT,CT Prospective ECG gated coronary Angio,CPEGC
+CT,CT Renal Both,CKIDB
+CT,CT Renal With Contrast,CKIDC
+CT,CT Renal with contrast Both,CKIDBC
+CT,CT Retrospective ECG gated Cor angiogram,CREGC
+CT,CT Sacroiliac joint Both,CSAIB
+CT,CT Sacroiliac joint Left,CSIJL
+CT,CT Sacroiliac joint Right,CSIJR
+CT,CT Sacroiliac joint injection Both,CJSIBJ
+CT,CT Sacroiliac joint injection Left,CJSILJ
+CT,CT Sacroiliac joint injection Right,CJSIRJ
+CT,CT Salivary Glands With Contrast,CSIAC
+CT,CT Salivary glands,CSIAW
+CT,CT Scanogram for leg length,CSCAN
+CT,CT Scanogram spine,CSCAS
+CT,CT Scaphoid Both,CSCAB
+CT,CT Scaphoid Left,CSCAL
+CT,CT Scaphoid Right,CSCAR
+CT,CT Scapula Both,CSCPB
+CT,CT Scapula Lt,CSCPL
+CT,CT Scapula Rt,CSCPR
+CT,CT Shoulder Both,CSHRB
+CT,CT Shoulder Lt,CSHRL
+CT,CT Shoulder Rt,CSHRR
+CT,CT Shoulder with contrast Both,CSHRBC
+CT,CT Shoulder with contrast Left,CSHOLC
+CT,CT Shoulder with contrast Right,CSHORC
+CT,CT Sinogram,CSINO
+CT,CT Sinogram abdomen,CSABD
+CT,CT Sinogram lower limb Both,CSLLB
+CT,CT Sinogram lower limb Left,CSLLL
+CT,CT Sinogram lower limb Right,CSLLR
+CT,CT Sinogram upper limb Both,CSULB
+CT,CT Sinogram upper limb Left,CSULL
+CT,CT Sinogram upper limb Right,CSULR
+CT,CT Sinuses,CSINU
+CT,CT Sinuses With Contrast,CSINC
+CT,CT Skeletal survey,CSKES
+CT,CT Solid organ injury,CSORG
+CT,CT Spine C T L S with contrast,CWSPC
+CT,CT Spine Cervical With Contrast,CCSPC
+CT,CT Spine Lumbar With Contrast,CLSPC
+CT,CT Spine Thoracic With Contrast,CTHSC
+CT,CT Spine cervical,CCSPN
+CT,CT Spine cervical discogram,CCSPDC
+CT,CT Spine cervical myelogram,CCSPNT
+CT,CT Spine lumbar,CLSPN
+CT,CT Spine lumbar discogram,CLSPDC
+CT,CT Spine lumbar myelogram,CLSPNT
+CT,CT Spine sacral,CSACM
+CT,CT Spine sacral with contrast,CSACMC
+CT,CT Spine thoracic,CTSPN
+CT,CT Spine thoracic myelogram,CTHSPT
+CT,CT Stereotaxis,CSTET
+CT,CT Sternoclavicular joint Both,CSCJB
+CT,CT Sternum,CSTRM
+CT,CT Stomach with contrast,CSTOMC
+CT,CT Submandibular Areas,CSASM
+CT,CT Submandibular areas with contrast,CSASMC
+CT,CT Subtalar joints Both,CHFOB
+CT,CT Subtalar joints Lt,CHFOL
+CT,CT Subtalar joints Rt,CHFOR
+CT,CT Temporal bone with contrast Both,CTBNBC
+CT,CT Temporal bone with contrast Left,CTBNLC
+CT,CT Temporal bone with contrast Right,CTBNRC
+CT,CT Temporal bones,CTEMP
+CT,CT Temporomandibular joint Both,CTMJB
+CT,CT Thoracic and lumbar spine,CTLSPN
+CT,CT Thorax,CCHES
+CT,CT Thorax Abdo pelvis oral and IV Cont,CTAPIC
+CT,CT Thorax Abdo pelvis oral contrast only,CTABPC
+CT,CT Thorax abdomen and pelvis,CCHAP
+CT,CT Thorax abdomen pelvis with contrast,CCHAPC
+CT,CT Thorax and abdomen,CCABD
+CT,CT Thorax and abdomen with contrast,CCABDC
+CT,CT Thorax perfusion study,CCHEP
+CT,CT Thorax with contrast,CCHESC
+CT,CT Thumb Both,CTHUB
+CT,CT Thumb Lt,CTHUL
+CT,CT Thumb Rt,CTHUR
+CT,CT Toes Both,CTOEB
+CT,CT Toes Lt,CTOEL
+CT,CT Toes Rt,CTOER
+CT,CT Transplanted liver,CTLVT
+CT,CT Transplanted liver with contrast,CTLVTC
+CT,CT Transplanted small bowel,CTSBT
+CT,CT Triple phase abdomen and pelvis Cont,CTPAP
+CT,CT Triple phase adrenals with Cont Both,CTPABC
+CT,CT Triple phase kidney with contrast B,CTPKBC
+CT,CT Tubogram,CTUBOC
+CT,CT Upper Leg (Thigh) With Contrast Lt,CTHLC
+CT,CT Upper Leg (Thigh) With Contrast Rt,CTHRC
+CT,CT Upper arm Both,CUPAB
+CT,CT Upper arm Lt,CUPAL
+CT,CT Upper arm Rt,CUPAR
+CT,CT Upper arm with contrast Both,CUPABC
+CT,CT Upper arm with contrast Lt,CUPALC
+CT,CT Upper arm with contrast Rt,CUPARC
+CT,CT Upper leg Both,CTHIB
+CT,CT Upper leg Lt,CTHIL
+CT,CT Upper leg Rt,CTHIR
+CT,CT Upper leg with contrast Both,CTHIBC
+CT,CT Upper leg with contrast Lt,CTHILC
+CT,CT Upper leg with contrast Rt,CTHIRC
+CT,CT Urinary tract,CURIT
+CT,CT Urinary tract with contrast,CURITC
+CT,CT Urogram excretory phase with contrast,CUROGC
+CT,CT Venogram,CVENO
+CT,CT Venogram cerebral,CVECE
+CT,CT Venogram intracranial,CVEIC
+CT,CT Venogram lower limb Both,CVGLB
+CT,CT Venogram lower limb Left,CVGLL
+CT,CT Venogram lower limb Right,CVGLR
+CT,CT Venography pulmonary,CPULV
+CT,CT Whole body,CBODW
+CT,CT Whole body with contrast,CBODWC
+CT,CT Whole spine,CWSPN
+CT,CT Whole spine myelogram,CMSPWT
+CT,CT Wrist Both,CWRIB
+CT,CT Wrist Lt,CWRIL
+CT,CT Wrist Rt,CWRIR
+CT,Virtual CT colonoscopy with contrast,CVCOYC
+DEXA,Bone densitometry DXA,XDEXA
+DEXA,DEXA Scan of femur Both,XDXFB
+DEXA,DEXA Scan of femur Left,XDXFL
+DEXA,DEXA Scan of femur Right,XDXFR
+DEXA,DEXA Scan of forearm Both,XFDXB
+DEXA,DEXA Scan of forearm Left,XFDXL
+DEXA,DEXA Scan of forearm Right,XFDXR
+DEXA,DXA Bone densitometry lateral spine,XBDLS
+DEXA,DXA Vertebral morphometry,XVDXA
+DEXA,DXA Whole body,XBDXW
+MRI,Diffusion tensor MR brain,MDTBN
+MRI,Diffusion tensor MR cerebral nerve tract,MDTNT
+MRI,MR Venography pulmonary,MPULV
+MRI,MRA Aorta abdominal,MAAOA
+MRI,MRA Aorta thoracic,MAAOT
+MRI,MRA Aorta whole,MAAOW
+MRI,MRA Axillary femoral artery bypass,MAXFE
+MRI,MRA Cardiac coronary arteries,MACOA
+MRI,MRA Carotid Both,MCARB
+MRI,MRA Coronary bypass graft,MACBG
+MRI,MRA Head,MAICA
+MRI,MRA Head and neck,MRAHN
+MRI,MRA Head and neck with contrast,MRAHNC
+MRI,MRA Head with contrast,MAICAC
+MRI,MRA Hepatic transplant,MRALT
+MRI,MRA Iliac artery,MAILA
+MRI,MRA Lower limb Both,MALLB
+MRI,MRA Lower limb Left,MALLL
+MRI,MRA Lower limb Right,MALLR
+MRI,MRA Mesenteric artery,MMESE
+MRI,MRA Neck,MACTV
+MRI,MRA Neck with contrast,MANECC
+MRI,MRA Pelvis,MRAPE
+MRI,MRA Pulmonary arteries,MAPUA
+MRI,MRA Renal Both,MAREB
+MRI,MRA Renal and visceral,MAREV
+MRI,MRA Renal transplant,MARET
+MRI,MRA Spine with contrast,MSPINC
+MRI,MRA Subclavian artery Both,MSUAB
+MRI,MRA Subclavian artery Left,MSUAL
+MRI,MRA Subclavian artery Right,MSUAR
+MRI,MRA Transplanted small bowel,MRASI
+MRI,MRA Upper limb Both,MAULB
+MRI,MRA Upper limb Lt,MAULL
+MRI,MRA Upper limb Rt,MAULR
+MRI,MRA Visceral,MAGUT
+MRI,MRA Whole body,MAWBW
+MRI,MRCP,MMRCP
+MRI,MRCP and secretin study,MRCPS
+MRI,MRCP with Gadolinium,MMRCC
+MRI,MRCP with contrast,MMRCPC
+MRI,MRI Abdomen,MABDO
+MRI,MRI Abdomen With Gadolinium,MABDC
+MRI,MRI Abdomen and pelvis,MABPE
+MRI,MRI Abdomen and pelvis with contrast,MABPEC
+MRI,MRI Abdomen with contrast,MABDOC
+MRI,MRI Acetabulum Both,MACEB
+MRI,MRI Acetabulum Left,MACEL
+MRI,MRI Acetabulum Right,MACER
+MRI,MRI Achilles tendon Both,MACTB
+MRI,MRI Achilles tendon Left,MACTL
+MRI,MRI Achilles tendon Right,MACTR
+MRI,MRI Acromioclavicular joint Both,MACJB
+MRI,MRI Acromioclavicular joint Lt,MACJL
+MRI,MRI Acromioclavicular joint Rt,MACJR
+MRI,MRI Adrenal Both,MADRB
+MRI,MRI Adrenal with contrast Both,MADRBC
+MRI,MRI Adrenals,MADRE
+MRI,MRI Adrenals With Gadolinium,MADRC
+MRI,MRI All fingers with contrast Both,MFINBC
+MRI,MRI All fingers with contrast Lt,MFINLC
+MRI,MRI All fingers with contrast Rt,MFINRC
+MRI,MRI Anal sphincter,MANSP
+MRI,MRI Ankle  With Gadolinium Lt,MANCL
+MRI,MRI Ankle  With Gadolinium Rt,MANCR
+MRI,MRI Ankle Both,MANKB
+MRI,MRI Ankle Lt,MANKL
+MRI,MRI Ankle Rt,MANKR
+MRI,MRI Ankle with contrast Both,MANKBC
+MRI,MRI Ankle with contrast Lt,MANKLC
+MRI,MRI Ankle with contrast Rt,MANKRC
+MRI,MRI Aorta,MAORT
+MRI,MRI Aorta abdominal with contrast,MAOADC
+MRI,MRI Aorta thoracic with contrast,MAOTHC
+MRI,MRI Aorta with contrast,MAORTC
+MRI,MRI Arterial spin labelling of brain,MASLH
+MRI,MRI Arthrogram ankle Both,MJANB
+MRI,MRI Arthrogram ankle Lt,MJANL
+MRI,MRI Arthrogram ankle Rt,MJANR
+MRI,MRI Arthrogram carpometacarpal joint B,MCMJB
+MRI,MRI Arthrogram carpometacarpal joint Lt,MCMJL
+MRI,MRI Arthrogram carpometacarpal joint Rt,MCMJR
+MRI,MRI Arthrogram elbow Both,MJELB
+MRI,MRI Arthrogram elbow Lt,MJELL
+MRI,MRI Arthrogram elbow Rt,MJELR
+MRI,MRI Arthrogram facet joint,MJFAC
+MRI,MRI Arthrogram hip Both,MJHIB
+MRI,MRI Arthrogram hip Lt,MJHIL
+MRI,MRI Arthrogram hip Rt,MJHIR
+MRI,MRI Arthrogram interphalangeal joint,MJDIP
+MRI,MRI Arthrogram knee Both,MJKNB
+MRI,MRI Arthrogram knee Lt,MJKNL
+MRI,MRI Arthrogram knee Rt,MJKNR
+MRI,MRI Arthrogram metacarpophalangeal joint,MJMCP
+MRI,MRI Arthrogram metatarsophalangeal joint,MJMTP
+MRI,MRI Arthrogram mid tarsal Both,MJMTB
+MRI,MRI Arthrogram mid tarsal Lt,MJMTL
+MRI,MRI Arthrogram mid tarsal Rt,MJMTR
+MRI,MRI Arthrogram shoulder Both,MJSHB
+MRI,MRI Arthrogram shoulder Lt,MJSHL
+MRI,MRI Arthrogram shoulder Rt,MJSHR
+MRI,MRI Arthrogram subtalar Both,MJSTB
+MRI,MRI Arthrogram subtalar Lt,MJSTL
+MRI,MRI Arthrogram subtalar Rt,MJSTR
+MRI,MRI Arthrogram temporomandibular Jt Both,MJTMB
+MRI,MRI Arthrogram temporomandibular Jt Lt,MJTML
+MRI,MRI Arthrogram temporomandibular Jt Rt,MJTMR
+MRI,MRI Arthrogram wrist Both,MJWRB
+MRI,MRI Arthrogram wrist Lt,MJWRL
+MRI,MRI Arthrogram wrist Rt,MJWRR
+MRI,MRI Arthroplasty planning lower limb B,MAPLB
+MRI,MRI Arthroplasty planning lower limb Lt,MAPLL
+MRI,MRI Arthroplasty planning lower limb Rt,MAPLR
+MRI,MRI Axilla Both,MAXIB
+MRI,MRI Axilla Lt,MAXIL
+MRI,MRI Axilla Rt,MAXIR
+MRI,MRI Axilla With Gadolinium Lt,MAXLC
+MRI,MRI Axilla With Gadolinium Rt,MAXRC
+MRI,MRI Axilla with contrast Both,MAXIBC
+MRI,MRI Axilla with contrast Lt,MAXILC
+MRI,MRI Axilla with contrast Rt,MAXIRC
+MRI,MRI Axillae With Gadolinium,MAXBC
+MRI,MRI Bowel,MINTN
+MRI,MRI Brachial Plexus With Gadolinium,MBRPC
+MRI,MRI Brachial plexus,MBRPX
+MRI,MRI Brachial plexus with contrast,MBRPXC
+MRI,MRI Brain and cervical cord,MBRCC
+MRI,MRI Brain volume,MBRVO
+MRI,MRI Brain volume with contrast,MBRVOC
+MRI,MRI Brain with contrast intraoperative,MBINOC
+MRI,MRI Breast & FNA Lt,MMAMLA
+MRI,MRI Breast & FNA Rt,MMAMRA
+MRI,MRI Breast Both,MMAMB
+MRI,MRI Breast Lt,MMAML
+MRI,MRI Breast Rt,MAMMR
+MRI,MRI Breast implant Both,MBREB
+MRI,MRI Breast screening Both,MBRSB
+MRI,MRI Breast screening Left,MBRSL
+MRI,MRI Breast screening Right,MBRSR
+MRI,MRI Breast with contrast Both,MMAMBC
+MRI,MRI Breast with contrast Lt,MMAMLC
+MRI,MRI Breast with contrast Rt,MMAMRC
+MRI,MRI Breasts With Gadolinium,MMAMC
+MRI,MRI Buttock Both,MBUTB
+MRI,MRI Buttock Lt,MBUTL
+MRI,MRI Buttock Rt,MBUTR
+MRI,MRI Calcaneus Both,MCALB
+MRI,MRI Calcaneus Lt,MCALL
+MRI,MRI Calcaneus Rt,MCALR
+MRI,MRI Card Morph Func stress with contrast,MCMFSC
+MRI,MRI Card Morph Func velocity stress Cont,MMFVSC
+MRI,MRI Card Morph Func velocity with Cont,MCMFVC
+MRI,MRI Card morphology Func velocity stress,MCMFV
+MRI,MRI Card morphology Func with contrast,MCAMFC
+MRI,MRI Card morphology function stress,MCMFS
+MRI,MRI Card morphology function velocity,MCMPV
+MRI,MRI Cardiac and hepatic iron load,MCHIL
+MRI,MRI Cardiac complex congenital,MCCMS
+MRI,MRI Cardiac iron load,MIRCA
+MRI,MRI Cardiac morphology function,MCMOP
+MRI,MRI Cardiac myocardial viability,MCVIA
+MRI,MRI Cardiac perfusion,MCORP
+MRI,MRI Cardiac rest perfusion,MCRPS
+MRI,MRI Cardiac stress function study,MCSFS
+MRI,MRI Cardiac stress perfusion,MCSPS
+MRI,MRI Cardiac valvular function study,MCVFS
+MRI,MRI Cardiac ventricular volume study,MCVVS
+MRI,MRI Cerebrospinal fluid flow,MCSFF
+MRI,MRI Cervix,MCERV
+MRI,MRI Cervix endocavity RF coil,MCXEN
+MRI,MRI Cervix with contrast,MCERVC
+MRI,MRI Chemical shift imaging,MCSI
+MRI,MRI Clavicle Both,MCLAB
+MRI,MRI Clavicle Lt,MCLAL
+MRI,MRI Clavicle Rt,MCLAR
+MRI,MRI Colon,MCOLO
+MRI,MRI Colon with contrast,MCOLOC
+MRI,MRI Cranio-Facial,MFACE
+MRI,MRI Cranio-Facial With Gadolinium,MFACC
+MRI,MRI Craniofacial,MFACI
+MRI,MRI Craniofacial with contrast,MFACIC
+MRI,MRI Defaecating proctogram,MDEFP
+MRI,MRI Diffusion weighted,MDIFF
+MRI,MRI Diffusion weighted IAM Both,MDIMB
+MRI,MRI Diffusion weighted IAM Left,MDIML
+MRI,MRI Diffusion weighted IAM Right,MDIMR
+MRI,MRI Diffusion weighted brain,MDWBN
+MRI,MRI Diffusion weighted breast Both,MDWBB
+MRI,MRI Diffusion weighted breast Left,MDWBL
+MRI,MRI Diffusion weighted breast Right,MDWBR
+MRI,MRI Diffusion weighted liver,MDWLI
+MRI,MRI Diffusion weighted prostate,MDWPT
+MRI,MRI Elastography,MELAS
+MRI,MRI Elbow Both,MELBB
+MRI,MRI Elbow Lt,MELBL
+MRI,MRI Elbow Rt,MELBR
+MRI,MRI Elbow With Gadolinium Lt,MELCL
+MRI,MRI Elbow With Gadolinium Rt,MELCR
+MRI,MRI Elbow with contrast Both,MELBBC
+MRI,MRI Elbow with contrast Lt,MELBLC
+MRI,MRI Elbow with contrast Rt,MELBRC
+MRI,MRI Enteroclysis,MENTE
+MRI,MRI External auditory meatus contrast Lt,MEAMLC
+MRI,MRI External auditory meatus contrast Rt,MEAMRC
+MRI,MRI External auditory meatus with Cont B,MEAMBC
+MRI,MRI Face,MFAC
+MRI,MRI Face with contrast,MFACEC
+MRI,MRI Facial nerve,MFACN
+MRI,MRI Fast field-cycling,MRFFC
+MRI,MRI Femur (Thigh) With Gadolinium Lt,MTHCL
+MRI,MRI Femur (Thigh) With Gadolinium Rt,MTHCR
+MRI,MRI Femur Both,MTHIB
+MRI,MRI Femur Lt,MTHIL
+MRI,MRI Femur Rt,MTHIR
+MRI,MRI Femur with contrast Both,MTHIBC
+MRI,MRI Femur with contrast Lt,MTHILC
+MRI,MRI Femur with contrast Rt,MTHIRC
+MRI,MRI Fetus,MFOET
+MRI,MRI Fetus Brain,MFBRA
+MRI,MRI Fetus spine,MFSPI
+MRI,MRI Fingers Both,MFINB
+MRI,MRI Fingers Lt,MFINL
+MRI,MRI Fingers Rt,MFINR
+MRI,MRI Floor of Mouth With Gadolinium,MFLMC
+MRI,MRI Floor of mouth,MFLMO
+MRI,MRI Floor of mouth with contrast,MFLMOC
+MRI,MRI Foot Both,MFOOB
+MRI,MRI Foot Lt,MFOOL
+MRI,MRI Foot Rt,MFOOR
+MRI,MRI Foot With Gadolinium Lt,MFOCL
+MRI,MRI Foot With Gadolinium Rt,MFOCR
+MRI,MRI Foot with contrast Both,MFOOBC
+MRI,MRI Foot with contrast Lt,MFOOLC
+MRI,MRI Foot with contrast Rt,MFOORC
+MRI,MRI Forearm Both,MFARB
+MRI,MRI Forearm Lt,MFARL
+MRI,MRI Forearm Rt,MFARR
+MRI,MRI Forearm With Gadolinium Lt,MFOLC
+MRI,MRI Forearm With Gadolinium Rt,MFORC
+MRI,MRI Forearm with contrast Both,MFARBC
+MRI,MRI Forearm with contrast Lt,MFARLC
+MRI,MRI Forearm with contrast Rt,MFARRC
+MRI,MRI Forefoot Both,MFFOB
+MRI,MRI Forefoot Lt,MFFOL
+MRI,MRI Forefoot Rt,MFFOR
+MRI,MRI Functional imaging,MFUNC
+MRI,MRI Groin Both,MGROB
+MRI,MRI Groin Left,MGROL
+MRI,MRI Groin Right,MGROR
+MRI,MRI Hand Both,MHANB
+MRI,MRI Hand Lt,MHANL
+MRI,MRI Hand Rt,MHANR
+MRI,MRI Hand With Gadolinium Lt,MHACL
+MRI,MRI Hand With Gadolinium Rt,MHACR
+MRI,MRI Hand with contrast Both,MHANBC
+MRI,MRI Hand with contrast Lt,MHANLC
+MRI,MRI Hand with contrast Rt,MHANRC
+MRI,MRI Head,MSKUH
+MRI,MRI Head Cont proton therapy planning,MHPTPC
+MRI,MRI Head With Gadolinium,MSKUC
+MRI,MRI Head With/without Gadolinium,MSKCH
+MRI,MRI Head and neck dynamic with contrast,MDYHNC
+MRI,MRI Head brain perfusion study,MSKPE
+MRI,MRI Head spectroscopy,MSKUS
+MRI,MRI Head stereotactic planning,MBRASR
+MRI,MRI Head with contrast,MSKUHC
+MRI,MRI Heart,MCARD
+MRI,MRI Heart with contrast,MCARDC
+MRI,MRI Hepatic iron load,MILHE
+MRI,MRI Hindfoot Both,MHFOB
+MRI,MRI Hindfoot Lt,MHFOL
+MRI,MRI Hindfoot Rt,MHFOR
+MRI,MRI Hip Both,MHIPB
+MRI,MRI Hip Lt,MHIPL
+MRI,MRI Hip Lt with Gadolinium,MHICL
+MRI,MRI Hip Rt,MHIPR
+MRI,MRI Hip Rt with Gadolinium,MHICR
+MRI,MRI Hip with contrast Both,MHIPBC
+MRI,MRI Hip with contrast Lt,MHIPLC
+MRI,MRI Hip with contrast Rt,MHIPRC
+MRI,MRI Hips + Gadolinium,MHICB
+MRI,MRI IAM,MIAMS
+MRI,MRI IAM With Gadolinium,MIAMC
+MRI,MRI IAM with contrast Both,MIAMBC
+MRI,MRI Internal auditory meatus Both,MIAMB
+MRI,MRI Knee Both,MKNEB
+MRI,MRI Knee Lt,MKNEL
+MRI,MRI Knee Lt with Gadolinium,MKNCL
+MRI,MRI Knee Rt,MKNER
+MRI,MRI Knee Rt with Gadolinium,MKNCR
+MRI,MRI Knee dynamic,MKDYS
+MRI,MRI Knee dynamic Both,MDYKB
+MRI,MRI Knee dynamic Left,MDYKL
+MRI,MRI Knee dynamic Right,MDYKR
+MRI,MRI Knee with contrast Both,MKNEBC
+MRI,MRI Knee with contrast Lt,MKNELC
+MRI,MRI Knee with contrast Rt,MKNERC
+MRI,MRI Larynx,MLARY
+MRI,MRI Larynx with contrast,MLARYC
+MRI,MRI Liver,MRLIV
+MRI,MRI Liver With Gadolinium,MLIVC
+MRI,MRI Liver and spleen,MLIVE
+MRI,MRI Liver and spleen with contrast,MLIVSC
+MRI,MRI Liver with SPIO,MLIVI
+MRI,MRI Liver with contrast,MLIVEC
+MRI,MRI Liver with hepatobiliary contrast,MLIVH
+MRI,MRI Liver with manganese,MLIVM
+MRI,MRI Lower leg Both,MLOLB
+MRI,MRI Lower leg Lt,MLOLL
+MRI,MRI Lower leg Rt,MLOLR
+MRI,MRI Lower leg with contrast Both,MLOLBC
+MRI,MRI Lower leg with contrast Lt,MLOLLC
+MRI,MRI Lower leg with contrast Rt,MLOLRC
+MRI,MRI Lower limb Both,MLULB
+MRI,MRI Lower limb Left,MLULL
+MRI,MRI Lower limb Right,MLULR
+MRI,MRI Lower limb with contrast Both,MLULBC
+MRI,MRI Lower limb with contrast Left,MLULLC
+MRI,MRI Lower limb with contrast Right,MLULRC
+MRI,MRI Lumbar spine and pelvis,MLSPE
+MRI,MRI Lumbar spine and pelvis with Cont,MLSPEC
+MRI,MRI Lumbar spine and sacroiliac joints,MLSIJ
+MRI,MRI Lumbar spine with contrast,MLUSPC
+MRI,MRI Lumbosacral plexus,MLUSA
+MRI,MRI Lumbosacral plexus with contrast,MLUSAC
+MRI,MRI Lymphogram,MLYMP
+MRI,MRI Mandible,MMAND
+MRI,MRI Mastoid Both,MMASB
+MRI,MRI Mastoid Left,MMASL
+MRI,MRI Mastoid Right,MMASR
+MRI,MRI Mastoid with contrast Both,MMASBC
+MRI,MRI Mastoid with contrast Left,MMASLC
+MRI,MRI Mastoid with contrast Right,MMASRC
+MRI,MRI Mediastinum,MMEDI
+MRI,MRI Midfoot Both,MMFOB
+MRI,MRI Midfoot Lt,MMFOL
+MRI,MRI Midfoot Rt,MMFOR
+MRI,MRI Multiparametric prostate,MMPMP
+MRI,MRI Multiple pregnancy,MMULP
+MRI,MRI Neck,MNECK
+MRI,MRI Neck Cont proton therapy planning,MNPTPC
+MRI,MRI Neck With Gadolinium,MNECC
+MRI,MRI Neck with contrast,MNECKC
+MRI,MRI Oesophagus,MOESO
+MRI,MRI Oral cavity,MORCA
+MRI,MRI Oral cavity with contrast,MORCAC
+MRI,MRI Orbit Both,MORBB
+MRI,MRI Orbit with contrast Both,MORBBC
+MRI,MRI Orbits,MORBS
+MRI,MRI Orbits with Gadolinium,MORBC
+MRI,MRI Pancreas,MABPA
+MRI,MRI Pancreas with contrast,MPANCC
+MRI,MRI Parathyroid,MPTHY
+MRI,MRI Parotid,MPARD
+MRI,MRI Parotid gland with contrast,MPAGDC
+MRI,MRI Patella tracking,MPATT
+MRI,MRI Pathology specimen,MPATH
+MRI,MRI Pelvimetry,MPLVY
+MRI,MRI Pelvis,MPELV
+MRI,MRI Pelvis Cont proton therapy planning,MPPTPC
+MRI,MRI Pelvis Gynae with contrast,MPEGYC
+MRI,MRI Pelvis SIJ Both,MSIJB
+MRI,MRI Pelvis SIJ with contrast Both,MSIJBC
+MRI,MRI Pelvis SIJ's,MSIJS
+MRI,MRI Pelvis and hip Both,MPEHB
+MRI,MRI Pelvis and prostate with contrast,MPLVPC
+MRI,MRI Pelvis and rectum with contrast,MPEREC
+MRI,MRI Pelvis bladder,MBLPE
+MRI,MRI Pelvis dynamic,MPELD
+MRI,MRI Pelvis endocavity,MPEEC
+MRI,MRI Pelvis gynaecological,MPEGY
+MRI,MRI Pelvis obstetric,MOBST
+MRI,MRI Pelvis prostate,MPEST
+MRI,MRI Pelvis rectum,MRECT
+MRI,MRI Pelvis with Gadolinium,MPELC
+MRI,MRI Pelvis with contrast,MPELVC
+MRI,MRI Penis,MPENS
+MRI,MRI Perfusion weighted,MPERF
+MRI,MRI Perianal fistula with contrast,MANFIC
+MRI,MRI Perineum,MPERI
+MRI,MRI Perineum with contrast,MPERIC
+MRI,MRI Phosphorus spectroscopy body,MPSBW
+MRI,MRI Phosphorus spectroscopy head,MPSHE
+MRI,MRI Pituitary,MPITF
+MRI,MRI Pituitary with Gadolinium,MPITC
+MRI,MRI Pituitary with contrast,MPITFC
+MRI,MRI Post mortem,MPMTM
+MRI,MRI Post nasal space,MPNAS
+MRI,MRI Posterior fossa,MPOFO
+MRI,MRI Posterior fossa with contrast,MPOFOC
+MRI,MRI Proctogram,MPROC
+MRI,MRI Prostate endocavity RF coil,MPREN
+MRI,MRI Prostate spectroscopy,MPROS
+MRI,MRI Prostate with contrast,MPROSC
+MRI,MRI Pulmonary perfusion scan,MCHEQ
+MRI,MRI Renal Both,MKIDB
+MRI,MRI Renal with contrast Both,MKIDBC
+MRI,MRI Renal with contrast Left,MKIDLC
+MRI,MRI Renal with contrast Right,MKIDRC
+MRI,MRI Rib,MRIB
+MRI,MRI Salivary glands,MSIAG
+MRI,MRI Salivary glands with contrast,MSIAGC
+MRI,MRI Scaphoid Both,MSCAB
+MRI,MRI Scaphoid Left,MSCAL
+MRI,MRI Scaphoid Right,MSCAR
+MRI,MRI Scapula Both,MSCPB
+MRI,MRI Scapula Lt,MSCPL
+MRI,MRI Scapula Rt,MSCPR
+MRI,MRI Sciatic nerve,MSCIN
+MRI,MRI Scrotum,MSCRO
+MRI,MRI Shoulder Both,MSHRB
+MRI,MRI Shoulder Lt,MSHLL
+MRI,MRI Shoulder Lt with Gadolinium,MSHCL
+MRI,MRI Shoulder Rt,MSHLR
+MRI,MRI Shoulder Rt with Gadolinium,MSHCR
+MRI,MRI Shoulder with contrast Both,MSHRBC
+MRI,MRI Shoulder with contrast Lt,MSHRLC
+MRI,MRI Shoulder with contrast Rt,MSHRRC
+MRI,MRI Shoulders,MSHLB
+MRI,MRI Sinuses,MSINU
+MRI,MRI Sinuses with Gadolinium,MSINC
+MRI,MRI Sinuses with contrast,MSINUC
+MRI,MRI Skeletal survey,MSKES
+MRI,MRI Skull base,MSKBA
+MRI,MRI Small Bowel Study,MSBOW
+MRI,MRI Small bowel with contrast,MSMBOC
+MRI,MRI Soft tissue limb,MSTLI
+MRI,MRI Spectroscopy,MSPEC
+MRI,MRI Spinal cord,MSPIC
+MRI,MRI Spinal cord with contrast,MSPICC
+MRI,MRI Spine Cervical With Gadolinium,MCSPC
+MRI,MRI Spine Cont proton therapy planning,MSPTPC
+MRI,MRI Spine Lumbar/Sacral With Gadolinium,MLSPC
+MRI,MRI Spine Thoracic With Gadolinium,MTSPC
+MRI,MRI Spine Whole With Gadolinium,MWSPC
+MRI,MRI Spine cervical,MCSPN
+MRI,MRI Spine cervical myelogram,MCSPNT
+MRI,MRI Spine cervical with contrast,MCSPNC
+MRI,MRI Spine cervicothoracic,MCTSP
+MRI,MRI Spine cervicothoracic with contrast,MCTSPC
+MRI,MRI Spine coccyx,MCOCX
+MRI,MRI Spine coccyx with contrast,MCOCXC
+MRI,MRI Spine lumbar,MLUSP
+MRI,MRI Spine lumbar and sacral,MLSPN
+MRI,MRI Spine lumbar myelogram,MLSPNT
+MRI,MRI Spine lumbar sacral with contrast,MLSPNC
+MRI,MRI Spine sacrum,MSACM
+MRI,MRI Spine sacrum with contrast,MSACMC
+MRI,MRI Spine thoracic,MTSPN
+MRI,MRI Spine thoracic lumbar with contrast,MTHLUC
+MRI,MRI Spine thoracic myelogram,MTSPNT
+MRI,MRI Spine thoracic with contrast,MTSPNC
+MRI,MRI Spine thoracolumbar,MTLSP
+MRI,MRI Spine whole,MSPNW
+MRI,MRI Spine whole with contrast,MSPNWC
+MRI,MRI Stereo guided laser Abl lesion brain,MBRLSA
+MRI,MRI Sternoclavicular Jt with Cont Both,MSCJBC
+MRI,MRI Sternoclavicular joint Both,MSCJB
+MRI,MRI Sternum,MSTRM
+MRI,MRI Submandibular gland,MSUMG
+MRI,MRI Submandibular gland with contrast,MSUGDC
+MRI,MRI Subthalamic nucleus,MSTHN
+MRI,MRI Susceptibility imaging,MSUSI
+MRI,MRI T2 mapping,MT2M
+MRI,MRI TMJ with contrast Both,MTMJBC
+MRI,MRI TMJ with contrast Left,MTMJLC
+MRI,MRI TMJ with contrast Right,MTMJRC
+MRI,MRI Temporal lobe,MTEMP
+MRI,MRI Temporomandibular joint Both,MTMJB
+MRI,MRI Temporomandibular joint Left,MTMJL
+MRI,MRI Temporomandibular joint Right,MTMJR
+MRI,MRI Thigh Both,MTHGB
+MRI,MRI Thigh Left,MTHGL
+MRI,MRI Thigh Right,MTHGR
+MRI,MRI Thigh with contrast Both,MTHGBC
+MRI,MRI Thigh with contrast Left,MTHGLC
+MRI,MRI Thigh with contrast Right,MTHGRC
+MRI,MRI Thoracic inlet and outlet,MTHIN
+MRI,MRI Thoracic inlet with contrast,MTHINC
+MRI,MRI Thoracic outlet with contrast,MTHOUC
+MRI,MRI Thorax,MCHES
+MRI,MRI Thorax Cont proton therapy planning,MTPTPC
+MRI,MRI Thorax With Gadolinium,MCHEC
+MRI,MRI Thorax abdo and pelvis with contrast,MCHAPC
+MRI,MRI Thorax abdomen and pelvis,MCHAP
+MRI,MRI Thorax with contrast,MCHESC
+MRI,MRI Thumb Both,MTHUB
+MRI,MRI Thumb Lt,MTHUL
+MRI,MRI Thumb Rt,MTHUR
+MRI,MRI Thyroid,MTHYD
+MRI,MRI Tib & Fib (Lower Leg) With Gd Lt,MLLCL
+MRI,MRI Tib & Fib (Lower Leg) With Gd Rt,MLLCR
+MRI,MRI Tongue,MTONG
+MRI,MRI Tongue with contrast,MTONGC
+MRI,MRI Transplanted liver,MRILT
+MRI,MRI Transplanted small bowel,MRISI
+MRI,MRI Trigeminal nerve,MTRNE
+MRI,MRI Trigeminal nerve with contrast,MTRNEC
+MRI,MRI Upper Arm With Gadolinium Lt,MUPLC
+MRI,MRI Upper Arm With Gadolinium Rt,MUPRC
+MRI,MRI Upper arm Both,MUPAB
+MRI,MRI Upper arm Lt,MUPAL
+MRI,MRI Upper arm Rt,MUPAR
+MRI,MRI Upper arm with contrast Both,MUPABC
+MRI,MRI Upper arm with contrast Lt,MUPALC
+MRI,MRI Upper arm with contrast Rt,MUPARC
+MRI,MRI Upper limb Both,MULIB
+MRI,MRI Upper limb Left,MULIL
+MRI,MRI Upper limb Right,MULIR
+MRI,MRI Upper limb with contrast Both,MULIBC
+MRI,MRI Upper limb with contrast Left,MULILC
+MRI,MRI Upper limb with contrast Right,MULIRC
+MRI,MRI Urinary bladder,MBLAD
+MRI,MRI Urinary bladder with contrast,MBLADC
+MRI,MRI Urogram,MUROG
+MRI,MRI Venogram neck,MVNEC
+MRI,MRI Venography jugular vein Both,MVJGB
+MRI,MRI Venography jugular vein Left,MVJGL
+MRI,MRI Venography jugular vein Right,MVJGR
+MRI,MRI Vessel wall,MWALV
+MRI,MRI Vessel wall with contrast,MVEWAC
+MRI,MRI Whole body,MWBOD
+MRI,MRI Whole body with contrast,MBODWC
+MRI,MRI Wrist Both,MWRIB
+MRI,MRI Wrist Lt,MWRIL
+MRI,MRI Wrist Rt,MWRIR
+MRI,MRI Wrist With Gadolinium Lt,MWRCL
+MRI,MRI Wrist With Gadolinium Rt,MWRCR
+MRI,MRI Wrist dynamic Both,MDWRB
+MRI,MRI Wrist dynamic Left,MDWRL
+MRI,MRI Wrist dynamic Right,MDWRR
+MRI,MRI Wrist dynamic with contrast Both,MDWRBC
+MRI,MRI Wrist dynamic with contrast Left,MDWRLC
+MRI,MRI Wrist dynamic with contrast Right,MDWRRC
+MRI,MRI Wrist with contrast Both,MWRIBC
+MRI,MRI Wrist with contrast Lt,MWRILC
+MRI,MRI Wrist with contrast Rt,MWRIRC
+MRI,MRV Abdomen and pelvis,MVABP
+MRI,MRV Cerebral veins,MVSKU
+MRI,MRV Cranial,MVICV
+MRI,MRV Iliac vein Both,MILIB
+MRI,MRV Iliac vein Left,MILIL
+MRI,MRV Iliac vein Right,MILIR
+MRI,MRV Inferior vena cava,MVIVC
+MRI,MRV Lower limb Both,MVLLB
+MRI,MRV Pelvis,MVPEL
+MRI,MRV Portal vein,MVPOV
+MRI,MRV Subclavian vein Both,MSCVB
+MRI,MRV Subclavian vein Left,MSCVL
+MRI,MRV Subclavian vein Right,MSCVR
+MRI,MRV Superior vena cava,MVSVC
+MRI,MRV Upper limb Both,MVULB
+MRI,MRV Upper limb Lt,MVULL
+MRI,MRV Upper limb Rt,MVULR
+MRI,MRV Venogram,MVENO
+MRI,Magnetic resonance angiography,MANGI
+PET,NM 11C metomidate PET CT,NCMET
+PET,NM 18F NaF gated cardiac PET CT,NNAFH
+PET,NM 18F NaF whole body PET CT,NNAFW
+PET,NM 18F fluciclovine whole body PET CT,NFACW
+PET,NM 18F fluoromisonidazole WB PET CT,NFMIW
+PET,NM 18F fluorothymidine whole body PET CT,NFLTW
+PET,NM Base of brain to mid-thigh FDG PET CT,NBMTF
+PET,NM Brain FDG PET CT,NCBRA
+PET,NM Brain PET FDG,NBRAIO
+PET,NM Brain florbetaben (18F) PET CT,NBRFN
+PET,NM Brain florbetapir (18F) PET CT,NBRFP
+PET,NM Brain flutemetamol (18F) PET CT,NBRFT
+PET,NM Breast PET MRI Both,NPMBB
+PET,NM Breast PET MRI Left,NPMBL
+PET,NM Breast PET MRI Right,NPMBR
+PET,NM Breast PET MRI with contrast Both,NPMBBC
+PET,NM Breast PET MRI with contrast Left,NPMBLC
+PET,NM Breast PET MRI with contrast Right,NPMBRC
+PET,NM C11 acetate whole body PET CT,NCACW
+PET,NM C11 choline PET CT,NCC11
+PET,NM C11 choline whole body PET CT,NCC11W
+PET,NM Cardiac rest FDG PET CT,NCCRF
+PET,NM Cardiac rest N13 PET CT,NCCRN
+PET,NM Cardiac rest PET FDG,NCARDO
+PET,NM Cardiac rest PET NH3,NCNRNO
+PET,NM Cardiac rest PET Rb81,NCRRNO
+PET,NM Cardiac rest PET Rb82,NRRB82
+PET,NM Cardiac rest Rb81 PET CT,NCCRE
+PET,NM Cardiac rest gated FDG PET CT,NCCAG
+PET,NM Cardiac rest gated N13 PET CT,NCCNG
+PET,NM Cardiac rest gated PET FDG,NCARGO
+PET,NM Cardiac rest gated PET NH3,NCNRGO
+PET,NM Cardiac stress PET CT FDG,NCFDG
+PET,NM Cardiac stress PET Rb81,NCARSO
+PET,NM Cardiac stress PET Rb82,NSRB82
+PET,NM Cardiac stress Rb81 PET CT,NCCAS
+PET,NM Cardiac viability scan FDG PET CT,NCCAV
+PET,NM Cardiac viability scan PET FDG,NCARVO
+PET,NM Carotid artery PET MRI Both,NPMCB
+PET,NM Carotid artery PET MRI Left,NPMCL
+PET,NM Carotid artery PET MRI Right,NPMCR
+PET,NM Carotid artery PET MRI with Cont B,NPMCBC
+PET,NM Carotid artery PET MRI with Cont Lt,NPMCLC
+PET,NM Carotid artery PET MRI with Cont Rt,NPMCRC
+PET,NM Choline brain PET F18,NBRF18
+PET,NM Choline local PET F18,NPCHPO
+PET,NM Choline local view PET C11,NC11SO
+PET,NM Choline whole body PET C11,NC11WO
+PET,NM Choline whole body PET F18,NF18WO
+PET,NM F18 PSMA whole body PET CT,NFPSW
+PET,NM F18 choline PET CT,NCPCH
+PET,NM F18 choline whole body PET CT,NCF18W
+PET,NM Ga68 DOTANOC PET CT whole body,NDTNW
+PET,NM Ga68 DOTATATE whole body PET,NGADWO
+PET,NM Ga68 DOTATATE whole body PET CT,NCGDW
+PET,NM Ga68 DOTATOC PET CT whole body,NDTTW
+PET,NM Ga68 PSMA PET CT whole body,NPSMW
+PET,NM Head PET MRI,NPMRH
+PET,NM Head PET MRI with contrast,NPMRHC
+PET,NM Head and neck PET CT FDG,NFDGH
+PET,NM Liver PET MRI,NLVPM
+PET,NM Liver PET MRI with contrast,NLVPMC
+PET,NM Methionine tumour PET CT,NCMTU
+PET,NM Methionine tumour WB PET CT,NCMETW
+PET,NM Methionine tumour imaging WB PET,NMETWO
+PET,NM Methionine tumour imaging local PET,NMETSO
+PET,NM Skull to mid-thigh F18 PSMA PET CT,NFPST
+PET,NM Skull to mid-thigh FDG PET CT for CS,NSMCS
+PET,NM Skull to mid-thigh Ga68 PSMA PET CT,NSMTP
+PET,NM Skull vertex to mid-thigh FDG PET CT,NSMTF
+PET,NM Whole body FDG PET CT,NCGENW
+PET,NM Whole body PET FDG,NGENWO
+PET,NM Whole body PET MRI,NPMRW
+PET,NM Whole body and delayed view PET FDG,NFDGWO
+PET,NM Y90 liver PET CT,NCLVP
+PET,PET FDG Breasts,PMAMM
+PET,PET FDG Cardiac viability scan,PCARD
+PET,PET FDG Whole body,PGENW
+PET,Positron emission tomography with CT,NPET
+XR,XR AP pelvis for hip surveillance,XPVHS
+XR,XR Abdomen,XABDO
+XR,XR Abdomen with contrast,XABDOC
+XR,XR Acetabulum Both,XACEB
+XR,XR Acetabulum Lt,XACEL
+XR,XR Acetabulum Rt,XACER
+XR,XR Acromioclavicular joint Both,XACJB
+XR,XR Acromioclavicular joint Lt,XACJL
+XR,XR Acromioclavicular joint Rt,XACJR
+XR,XR Ankle Both,XANKB
+XR,XR Ankle Lt,XANKL
+XR,XR Ankle Rt,XANKR
+XR,XR Ankle joint stress both,XANKJS
+XR,XR Ankle joint with stress Both,XAJSB
+XR,XR Ankle joint with stress Left,XAJSL
+XR,XR Ankle joint with stress Right,XAJSR
+XR,XR Bladder,XBLAD
+XR,XR Breast Stereotactic Guided Wire Lt,XMASWL
+XR,XR Breast Stereotactic Guided Wire Rt,XMASWR
+XR,XR Breast tomosynthesis Both,XBRTB
+XR,XR Breast tomosynthesis Left,XBRTL
+XR,XR Breast tomosynthesis Right,XBRTR
+XR,XR Breasts Stereotactic Guided Wire,XMASWB
+XR,XR Calcaneus Both,XCALB
+XR,XR Calcaneus Lt,XCALL
+XR,XR Calcaneus Rt,XCALR
+XR,XR Carpal tunnel Both,XCATB
+XR,XR Carpal tunnel Lt,XCATL
+XR,XR Carpal tunnel Rt,XCATR
+XR,XR Carpometacarpal Jt with stress Both,XWRSB
+XR,XR Carpometacarpal joint with stress Lt,XWRSL
+XR,XR Carpometacarpal joint with stress Rt,XWRSR
+XR,XR Cephalogram,XCEP
+XR,XR Cephalogram Posteroanterior,XPCEP
+XR,XR Cephalogram lateral,XLCEP
+XR,XR Cerebro-spinal fluid shunt,XCSFS
+XR,XR Cervical spine,XCSPN
+XR,XR Cervical spine flexion and extension,XCSFE
+XR,XR Cervicothoracic junction,XCTJN
+XR,XR Chest,XCHES
+XR,XR Chest AP view,XCHSA
+XR,XR Chest PA view,XCHSP
+XR,XR Chest and abdomen,XCHAB
+XR,XR Chest lateral,XXCHE
+XR,XR Clavicle Both,XCLAB
+XR,XR Clavicle Lt,XCLAL
+XR,XR Clavicle Rt,XCLAR
+XR,XR Coccyx,XCOCX
+XR,XR Cochlear implant Both,XCOIB
+XR,XR Cochlear implant Left,XCOIL
+XR,XR Cochlear implant Right,XCOIR
+XR,XR Colonic transit study,XCOLT
+XR,XR Elbow Both,XELBB
+XR,XR Elbow Lt,XELBL
+XR,XR Elbow Rt,XELBR
+XR,XR Elbow for bone age Both,XELBBY
+XR,XR Elbow for bone age Left,XELBLY
+XR,XR Elbow for bone age Right,XELBRY
+XR,XR Facial Bones,XFACE
+XR,XR Femur (thigh) Lt,XTHIL
+XR,XR Femur (thigh) Rt,XTHIR
+XR,XR Femur Both,XFEMB
+XR,XR Femur Lt,XFEML
+XR,XR Femur Rt,XFEMR
+XR,XR Finger index Lt,XFIIL
+XR,XR Finger index Rt,XFIIR
+XR,XR Finger little Lt,XFILL
+XR,XR Finger little Rt,XFILR
+XR,XR Finger middle Lt,XFIML
+XR,XR Finger middle Rt,XFIMR
+XR,XR Finger ring Lt,XFIRL
+XR,XR Finger ring Rt,XFIRR
+XR,XR Fingers Lt,XFINL
+XR,XR Fingers Rt,XFINR
+XR,XR Foot Both,XFOOB
+XR,XR Foot Lt,XFOOL
+XR,XR Foot Rt,XFOOR
+XR,XR Foot and ankle Both,XFANKB
+XR,XR Foot and ankle Left,XFANKL
+XR,XR Foot and ankle Right,XFANKR
+XR,XR Forefoot Both,XFFOB
+XR,XR Forefoot Lt,XFFOL
+XR,XR Forefoot Rt,XFFOR
+XR,XR Foreign body demonstration,XFBD
+XR,XR Hand Both,XHANB
+XR,XR Hand Lt,XHANL
+XR,XR Hand Rt,XHANR
+XR,XR Hand and wrist Both,XHAWB
+XR,XR Hand and wrist Left,XHAWL
+XR,XR Hand and wrist Right,XHAWR
+XR,XR Hand and wrist for bone age,XHWBA
+XR,XR Hand and wrist for metacarpal index,XHWMI
+XR,XR Hindfoot Both,XHFOB
+XR,XR Hindfoot Lt,XHFOL
+XR,XR Hindfoot Rt,XHFOR
+XR,XR Hip Both,XHIPB
+XR,XR Hip Lt,XHIPL
+XR,XR Hip Rt,XHIPR
+XR,XR Humerus Both,XUPAB
+XR,XR Humerus Lt,XUPAL
+XR,XR Humerus Rt,XUPAR
+XR,XR Ilium,XILIU
+XR,XR Intravenous Cholangiogram,XINVC
+XR,XR Intravenous Urogram (IVU),XIVUP
+XR,XR Intravenous urogram,XIVU
+XR,XR Kidney Both,XKIDB
+XR,XR Kidney Lt,XKIDL
+XR,XR Kidney Rt,XKIDR
+XR,XR Kidney ureter bladder,XKUBD
+XR,XR Knee Both,XKNEB
+XR,XR Knee Lt,XKNEL
+XR,XR Knee Rt,XKNER
+XR,XR Larynx,XLARX
+XR,XR Leg length measurement Both,XLEMB
+XR,XR Leg length measurement Lt,XLEML
+XR,XR Leg length measurement Rt,XLEMR
+XR,XR Lower limb Both,XLLIB
+XR,XR Lower limb Left,XLLIL
+XR,XR Lower limb Right,XLLIR
+XR,XR Lumbar spine,XLSPN
+XR,XR Lumbar spine and pelvis,XLSPE
+XR,XR Lumbar spine and sacroiliac joint,XLSSJ
+XR,XR Mandible,XMAND
+XR,XR Mandibular Obliq lateral occlusal Lt,XMOLLQ
+XR,XR Mandibular Obliq lateral occlusal Rt,XMOLRQ
+XR,XR Mastoid Both,XMASB
+XR,XR Mastoids,XMAST
+XR,XR Midfoot Both,XMFOB
+XR,XR Midfoot Lt,XMFOL
+XR,XR Midfoot Rt,XMFOR
+XR,XR Nasal bones,XNASA
+XR,XR Nasogastric tube position,XNASG
+XR,XR Neck soft tissue,XNEST
+XR,XR Orbit Both,XORBB
+XR,XR Orbit foreign body demonstration Both,XFBOB
+XR,XR Paranasal sinuses,XPSIN
+XR,XR Patella Both,XPATB
+XR,XR Patella Lt,XPATL
+XR,XR Patella Rt,XPATR
+XR,XR Pathological specimen,XPATH
+XR,XR Pelvimetry,XPVMY
+XR,XR Pelvis,XPELV
+XR,XR Pelvis and hip Left,XPEHL
+XR,XR Pelvis and hip Right,XPEHR
+XR,XR Penis,XPEN
+XR,XR Post nasal space,XPNSP
+XR,XR Radius and ulna Both,XFARB
+XR,XR Radius and ulna Lt,XFARL
+XR,XR Radius and ulna Rt,XFARR
+XR,XR Ribs Lt,XRIBL
+XR,XR Ribs Rt,XRIBR
+XR,XR Sacroiliac joint Both,XSIJB
+XR,XR Sacrum,XSACM
+XR,XR Sacrum and coccyx,XSACX
+XR,XR Salivary glands,XSALI
+XR,XR Scaphoid Both,XSCAB
+XR,XR Scaphoid Lt,XSCAL
+XR,XR Scaphoid Rt,XSCAR
+XR,XR Scapula Both,XSCPB
+XR,XR Scapula Lt,XSCPL
+XR,XR Scapula Rt,XSCPR
+XR,XR Sesamoid bone foot Both,XSESB
+XR,XR Sesamoid bone foot Left,XSESL
+XR,XR Sesamoid bone foot Right,XSESR
+XR,XR Shoulder Both,XSHRB
+XR,XR Shoulder Lt,XSHRL
+XR,XR Shoulder Rt,XSHRR
+XR,XR Shoulders,XSHOB
+XR,XR Skeletal Survey General,XSSGE
+XR,XR Skeletal survey,XSKSU
+XR,XR Skeletal survey chest oblique ribs,XRSSC
+XR,XR Skeletal survey myeloma,XSSMY
+XR,XR Skeletal survey non-accidental injury,XSSNA
+XR,XR Skeletal survey post mortem,XSSPM
+XR,XR Skull,XSKUB
+XR,XR Skull pituitary fossa,XSKPF
+XR,XR Soft tissue specimen,XSTSP
+XR,XR Sternoclavicular joint Both,XSCJB
+XR,XR Sternum,XSTER
+XR,XR Subtalar joint Both,XSTJB
+XR,XR Subtalar joint Lt,XSTJL
+XR,XR Subtalar joint Rt,XSTJR
+XR,XR Temporomandibular joint Both,XTMJB
+XR,XR Temporomandibular joint Lt,XTMJL
+XR,XR Temporomandibular joint Rt,XTMJR
+XR,XR Thoracic and lumbar spine,XTHLS
+XR,XR Thoracic inlet,XTHIN
+XR,XR Thoracic spine,XTSPN
+XR,XR Thoracolumbar spine,XTLSP
+XR,XR Thumb Both,XTHUB
+XR,XR Thumb Lt,XTHUL
+XR,XR Thumb Rt,XTHUR
+XR,XR Tibia and fibula Both,XLOLB
+XR,XR Tibia and fibula Lt,XLOLL
+XR,XR Tibia and fibula Rt,XLOLR
+XR,XR Toe great Lt,XTOGL
+XR,XR Toe great Rt,XTOGR
+XR,XR Toes Lt,XTOEL
+XR,XR Toes Rt,XTOER
+XR,XR Tomogram,XGTOMO
+XR,XR Whole Spine (Scoliosis),XWSPNS
+XR,XR Whole spine,XWSPN
+XR,XR Wrist Both,XWRIB
+XR,XR Wrist Lt,XWRIL
+XR,XR Wrist Rt,XWRIR
+XR,XR Zygoma Both,XZYGB
+XR,XR Zygoma Lt,XZYGL
+XR,XR Zygoma Rt,XZYGR
