@@ -418,9 +418,11 @@ def store_case_attachment_file(
 
 app = FastAPI(title="RadFlow")
 
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
