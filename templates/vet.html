@@ -432,6 +432,18 @@
             margin: 16px 0;
         }
 
+        .reopen-request-box {
+            margin-top: 18px;
+            padding: 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(245, 158, 11, 0.28);
+            background: rgba(245, 158, 11, 0.08);
+        }
+
+        .reopen-request-box textarea {
+            margin-top: 10px;
+        }
+
         /* iRefer panel */
         .irefer-overlay {
             display: none;
@@ -828,6 +840,14 @@
                     <div class="form-actions">
                         <a href="/radiologist" class="btn btn-secondary">Back to my cases</a>
                     </div>
+                    <form method="POST" action="/vet/{{ case.id }}/reopen-request" class="reopen-request-box">
+                        <strong>Need to amend this decision?</strong>
+                        <p style="margin:6px 0 0;color:rgba(255,255,255,0.72);font-size:13px;">Request a reopen with a reason. The case will move to the Reopened tab and become editable again.</p>
+                        <textarea name="reopen_notes" rows="3" required placeholder="Explain why this case needs to be reopened..."></textarea>
+                        <div class="form-actions" style="margin-top:10px;">
+                            <button type="submit" class="btn">Request Reopen</button>
+                        </div>
+                    </form>
                     {% else %}
                     {% if case.status == 'reopened' and case.reopened_note_blocks %}
                     <div class="notes-stack" style="margin-bottom: 18px;">

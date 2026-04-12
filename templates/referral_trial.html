@@ -130,7 +130,7 @@
         {% endfor %}
       {% endif %}
 
-      <form method="post" action="/submit/referral-trial/create">
+      <form method="post" action="/submit/referral-trial/create" enctype="multipart/form-data">
         <input type="hidden" name="attachment_token" value="{{ draft.attachment_token }}">
         <input type="hidden" name="attachment_original_name" value="{{ draft.attachment_original_name }}">
         <div class="form-grid">
@@ -219,7 +219,11 @@
               </div>
             </div>
             <div class="info">This uses the same owner-managed master exam catalogue as manual case submission.</div>
-            <button type="button" class="btn btn-secondary add-exam-btn" onclick="addReferralExamRow()">Add another exam</button>
+            <div style="margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.1);">
+              <strong>Additional examinations on this referral</strong>
+              <div class="info">Use this when the same referral asks for more than one examination.</div>
+              <button type="button" class="btn btn-secondary add-exam-btn" onclick="addReferralExamRow()">Add another exam</button>
+            </div>
             <div id="extraReferralExams" class="extra-exams"></div>
           </div>
           <div class="form-row full">

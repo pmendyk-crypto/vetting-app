@@ -9624,6 +9624,60 @@ def vet_submit(
     return RedirectResponse(url="/radiologist", status_code=303)
 
 
+@app.post("/vet/{case_id}/reopen-request")
+def vet_reopen_request(
+    request: Request,
+    case_id: str,
+    reopen_notes: str = Form(...),
+):
+    user = require_radiologist(request)
+    rad_name = user.get("radiologist_name")
+    org_id = user.get("org_id")
+    reopen_reason = (reopen_notes or "").strip()
+    if not reopen_reason:
+        raise HTTPException(status_code=400, detail="Reason for reopening is required")
+
+    conn = get_db()
+    if org_id:
+        row = conn.execute(
+            "SELECT id, radiologist, status, admin_notes, org_id FROM cases WHERE id = ? AND org_id = ?",
+            (case_id, org_id),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id, radiologist, status, admin_notes, org_id FROM cases WHERE id = ?",
+            (case_id,),
+        ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Case not found")
+    if row["radiologist"] != rad_name:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Not your case")
+    if str(row["status"] or "").strip().lower() not in {"vetted", "rejected"}:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Only decided cases can be reopened")
+
+    current_notes = row["admin_notes"] or ""
+    reopen_entry = f"{REOPEN_NOTE_MARKER}\n{reopen_reason}"
+    updated_notes = "\n\n".join(part for part in [current_notes.strip(), reopen_entry] if part).strip()
+    conn.execute(
+        "UPDATE cases SET status = ?, admin_notes = ? WHERE id = ?",
+        ("reopened", updated_notes, case_id),
+    )
+    conn.commit()
+    conn.close()
+
+    insert_case_event(
+        case_id=case_id,
+        org_id=org_id or row["org_id"],
+        event_type="REOPENED",
+        user=user,
+        comment=reopen_reason,
+    )
+    return RedirectResponse(url=f"/vet/{case_id}", status_code=303)
+
+
 # -------------------------
 # Attachments + PDF
 # -------------------------

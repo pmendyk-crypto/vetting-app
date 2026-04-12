@@ -54,9 +54,19 @@ body::after{
     font-size:10px;
     margin:22px auto 4px;
   }
+  .page-shell{
+    width:calc(100vw - 24px);
+  }
 }
 .container{max-width:1100px;margin:0 auto;padding:18px}
 .container.wide{max-width:1560px}
+.page-shell{
+  width:min(1560px, calc(100vw - 40px));
+  max-width:none;
+  margin-left:auto;
+  margin-right:auto;
+  box-sizing:border-box;
+}
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
 .btn{display:inline-block;padding:8px 12px;border-radius:8px;background:var(--accent);color:white;text-decoration:none}
 .btn.secondary{background:rgba(255,255,255,0.04);color:white;border:1px solid rgba(255,255,255,0.06)}
