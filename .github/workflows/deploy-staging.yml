@@ -104,7 +104,7 @@ jobs:
       - name: Check app is responding
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            https://lumosradflow-staging.azurewebsites.net/health)
+            https://lumosradflow-staging-cvbya3ccbhdxhnba.ukwest-01.azurewebsites.net/health)
           echo "Health check status: $STATUS"
           if [ "$STATUS" != "200" ]; then
             echo "Smoke test failed — app returned HTTP $STATUS"
