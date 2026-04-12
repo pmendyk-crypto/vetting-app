@@ -10596,6 +10596,19 @@ def account_page(request: Request, msg: str = "", error: str = ""):
     mfa_pending_secret = db_user.get("mfa_pending_secret") or ""
     mfa_uri = build_totp_uri(mfa_pending_secret, db_user["username"]) if mfa_pending_secret else ""
     mfa_qr_data_uri = build_totp_qr_data_uri(mfa_uri) if mfa_uri else ""
+    mfa_required_notice = (
+        '<div class="read-only" style="margin-bottom:12px;color:#fde68a;">'
+        "Your organisation currently requires MFA for this account."
+        "</div>"
+        if mfa_required else ""
+    )
+    mfa_disable_control = (
+        '<button type="submit" class="btn secondary">Disable MFA</button>'
+        if not mfa_required else
+        '<div class="read-only" style="color:#93c5fd;">'
+        "MFA is required for this account and can only be turned off by an administrator."
+        "</div>"
+    )
 
     page_html = f"""<!DOCTYPE html>
 <html>
@@ -10725,7 +10738,7 @@ def account_page(request: Request, msg: str = "", error: str = ""):
     <div class="card">
         <h3>Authenticator App MFA</h3>
         <p class="page-sub" style="margin-bottom:16px;">Use Microsoft Authenticator, Google Authenticator, or another TOTP app for a second sign-in step.</p>
-        {('<div class="read-only" style="margin-bottom:12px;color:#fde68a;">Your organisation currently requires MFA for this account.</div>' if mfa_required else '')}
+        {mfa_required_notice}
         {(
             f'''
         <div class="read-only" style="margin-bottom:12px;color:#4ade80;">Authenticator-based MFA is enabled for this account.</div>
@@ -10738,7 +10751,7 @@ def account_page(request: Request, msg: str = "", error: str = ""):
                 <label>Authenticator Code</label>
                 <input type="text" name="code" inputmode="numeric" pattern="[0-9]{{6}}" maxlength="6" placeholder="123456" required>
             </div>
-            {"<button type=\"submit\" class=\"btn secondary\">Disable MFA</button>" if not mfa_required else "<div class=\"read-only\" style=\"color:#93c5fd;\">MFA is required for this account and can only be turned off by an administrator.</div>"}
+            {mfa_disable_control}
         </form>
             '''
             if mfa_enabled else
