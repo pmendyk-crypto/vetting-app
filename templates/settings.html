@@ -7,11 +7,32 @@
     <link rel="stylesheet" href="/static/css/site.css">
     <style>
         .settings-container {
-            width: min(1560px, calc(100vw - 40px));
+            width: calc(100vw - 40px);
             max-width: none;
             margin: 0 auto;
             padding: 20px;
         }
+
+        :root { --panel-bg: rgba(20, 28, 41, 0.72); --panel-bg-soft: rgba(24, 34, 49, 0.7); --panel-border: rgba(167, 199, 255, 0.18); --panel-border-strong: rgba(191, 214, 255, 0.24); --panel-shadow: 0 18px 44px rgba(0, 0, 0, 0.18); --muted-text: rgba(255, 255, 255, 0.66); --soft-text: rgba(255, 255, 255, 0.82); --accent-blue: #61a8ff; --accent-green: #33d17a; --accent-red: #ff6b6b; }
+        .hero-panel { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 24px; box-shadow: var(--panel-shadow); position:relative; padding: 4px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:58px; margin-bottom:16px; }
+        .hero-heading { display:flex; align-items:center; gap:8px; min-width:0; flex:0 0 auto; }
+        .hero-copy h1 { margin:0; font-size:clamp(14px,2.2vw,17px); font-weight:500; letter-spacing:-0.02em; }
+        .hero-copy p { margin:0; color:var(--muted-text); font-size:9px; }
+        .top-box { min-height:44px; padding:5px 9px; border-radius:11px; border:1px solid var(--panel-border-strong); background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; text-align:center; }
+        .org-box { min-width:156px; justify-content:flex-start; text-align:left; }
+        .org-box .hero-copy h1 { font-size:clamp(14px, 2vw, 17px); }
+        .org-box .hero-copy p { font-size:9px; margin-top:0; }
+        .hero-actions { display:flex; align-items:center; justify-content:flex-end; flex:0 0 auto; padding-right:0; min-width:0; }
+        .profile-stack { display:flex; flex-direction:row; gap:8px; align-items:stretch; width:auto; flex-wrap:wrap; justify-content:flex-end; }
+        .profile-card { display:flex; align-items:center; gap:7px; text-decoration:none; color:inherit; padding:6px 9px; border-radius:10px; min-width:144px; min-height:44px; height:44px; box-sizing:border-box; background:rgba(255,255,255,0.05); border:1px solid var(--panel-border-strong); }
+        .profile-avatar { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:#fff; background:linear-gradient(135deg,#1f6feb 0%,#7c3aed 100%); flex:0 0 auto; }
+        .profile-name { color:#fff; font-size:11px; font-weight:500; }
+        .profile-role { color:var(--muted-text); text-transform:capitalize; font-size:9px; margin-top:0; }
+        .toolbar-group { position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:center; width:auto; margin-left:0; }
+        .view-tabs { display:flex; gap:6px; width:auto; background:none; padding:0; border:none; }
+        .view-tab { text-decoration:none; color:var(--soft-text); padding:5px 12px; min-height:44px; min-width:126px; border-radius:11px; font-size:14px; font-weight:500; transition:0.2s ease; display:inline-flex; align-items:center; justify-content:center; text-align:center; background:rgba(255,255,255,0.05); border:1px solid var(--panel-border-strong); }
+        .view-tab:hover { color:#fff; background:rgba(255,255,255,0.06); }
+        .view-tab.active { color:#fff; background:linear-gradient(135deg, rgba(31,111,235,0.2), rgba(97,168,255,0.1)); border:1px solid rgba(97,168,255,0.4); }
 
         .shell-panel {
             display:flex;
@@ -512,28 +533,33 @@
 <body>
   <div id="session-expiry-warning">⚠️ Your session will expire in 5 minutes due to inactivity. <a href="/login" style="color:#fde68a;font-weight:400;">Sign in again</a> to continue.</div>
     <div class="page-wrapper">
-        <div class="settings-container">
+        <div class="page-shell settings-container">
         <div class="main-content">
-        <div class="shell-panel">
-            <div class="shell-tabs">
-                <a class="shell-tab" href="/admin?view=worklist">Worklist</a>
-                <a class="shell-tab" href="/admin?view=dashboard">Dashboard</a>
-                <a class="shell-tab active" href="/settings">Settings</a>
-            </div>
-        </div>
-        <div class="settings-header">
-            <div class="settings-hero">
-                <div class="settings-hero-left">
-                    <div class="settings-hero-copy">
-                        <h1>Settings</h1>
-                        <p>{{ org_name or 'Organisation settings' }}</p>
+        <section class="hero-panel">
+            <div class="hero-heading">
+                <div class="top-box org-box">
+                    <div class="hero-copy">
+                        <h1>{{ org_name if org_name else 'Organisation Name' }}</h1>
                     </div>
                 </div>
-                <div class="settings-hero-actions">
-                    <a href="/account" class="btn btn-secondary" style="margin-top: 0;">My Account</a>
-                    <a href="/admin" class="btn btn-secondary" style="margin-top: 0;">Back</a>
+            </div>
+            <div class="toolbar-group">
+                <nav class="view-tabs">
+                    <a class="view-tab" href="/admin?view=worklist">Worklist</a>
+                    <a class="view-tab" href="/admin?view=dashboard">Dashboard</a>
+                    <a class="view-tab active" href="/settings">Settings</a>
+                </nav>
+            </div>
+            <div class="hero-actions">
+                <div class="profile-stack">
+                    {% if current_user %}<a href="/account" class="profile-card"><div class="profile-avatar">{{ current_user["username"][0] | upper }}</div><div><div class="profile-name">{{ current_user["username"] }}</div><div class="profile-role">{{ current_user["role"] }}</div></div></a>{% endif %}
+                    <a class="btn secondary" href="/logout">Logout</a>
                 </div>
             </div>
+        </section>
+        <div class="settings-header">
+            <h1>Settings</h1>
+            <p style="margin:4px 0 0;color:rgba(255,255,255,0.62);">{{ org_name or 'Organisation settings' }}</p>
         </div>
 
         <!-- Tabs Navigation -->

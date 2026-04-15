@@ -421,6 +421,29 @@
             color: rgba(255, 255, 255, 0.9);
         }
 
+        .read-only-summary {
+            background: rgba(74, 222, 128, 0.08);
+            border-color: rgba(74, 222, 128, 0.24);
+        }
+
+        .read-only-grid {
+            display: grid;
+            gap: 14px;
+            margin: 16px 0;
+        }
+
+        .reopen-request-box {
+            margin-top: 18px;
+            padding: 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(245, 158, 11, 0.28);
+            background: rgba(245, 158, 11, 0.08);
+        }
+
+        .reopen-request-box textarea {
+            margin-top: 10px;
+        }
+
         /* iRefer panel */
         .irefer-overlay {
             display: none;
@@ -789,6 +812,53 @@
                 <div class="vet-card stretch">
                     <h2>Decision</h2>
 
+                    {% if is_read_only %}
+                    <div class="info-box read-only-summary">
+                        <strong>Read-only case</strong><br>
+                        This case has already been decided and cannot be resubmitted.
+                    </div>
+                    <div class="read-only-grid">
+                        <div class="detail-row">
+                            <label>Decision</label>
+                            <p>{{ case.decision_display or case.decision or case.status_display or case.status or 'Not recorded' }}</p>
+                        </div>
+                        <div class="detail-row">
+                            <label>Protocol</label>
+                            <p>{{ case.protocol or 'Not recorded' }}</p>
+                        </div>
+                        <div class="detail-row">
+                            <label>Comment</label>
+                            <p>{{ case.decision_comment or 'No comment recorded' }}</p>
+                        </div>
+                        {% if case.vetted_at %}
+                        <div class="detail-row">
+                            <label>Recorded at</label>
+                            <p>{{ case.vetted_at | display_datetime }} (UTC)</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="form-actions">
+                        <a href="/radiologist" class="btn btn-secondary">Back to my cases</a>
+                    </div>
+                    <form method="POST" action="/vet/{{ case.id }}/reopen-request" class="reopen-request-box">
+                        <strong>Need to amend this decision?</strong>
+                        <p style="margin:6px 0 0;color:rgba(255,255,255,0.72);font-size:13px;">Request a reopen with a reason. The case will move to the Reopened tab and become editable again.</p>
+                        <textarea name="reopen_notes" rows="3" required placeholder="Explain why this case needs to be reopened..."></textarea>
+                        <div class="form-actions" style="margin-top:10px;">
+                            <button type="submit" class="btn">Request Reopen</button>
+                        </div>
+                    </form>
+                    {% else %}
+                    {% if case.status == 'reopened' and case.reopened_note_blocks %}
+                    <div class="notes-stack" style="margin-bottom: 18px;">
+                        {% for note in case.reopened_note_blocks %}
+                        <div class="admin-note-card reopened-note">
+                            <span class="admin-note-label">Reopen reason</span>
+                            <p>{{ note }}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                     <form method="POST" action="/vet/{{ case.id }}" id="vetForm">
                         <div class="form-group">
                             <label for="decision">
@@ -865,6 +935,7 @@
                         </div>
                         {% endif %}
                     </form>
+                    {% endif %}
                 </div>
             </div>
 
@@ -1030,9 +1101,10 @@
     <script>
         function showProtocolInstructions() {
             const select = document.getElementById('protocol');
+            const instructionsDiv = document.getElementById('protocolInstructions');
+            if (!select || !instructionsDiv) return;
             const selected = select.options[select.selectedIndex];
             const instructions = selected ? selected.getAttribute('data-instructions') : '';
-            const instructionsDiv = document.getElementById('protocolInstructions');
 
             if (instructions && instructions.trim()) {
                 instructionsDiv.textContent = instructions;
@@ -1044,9 +1116,11 @@
         }
 
         function toggleContrastDetails() {
-            const val = document.getElementById('contrast_required').value;
+            const contrast = document.getElementById('contrast_required');
             const grp = document.getElementById('contrastDetailsGroup');
             const txt = document.getElementById('contrast_details');
+            if (!contrast || !grp || !txt) return;
+            const val = contrast.value;
             if (val === 'Yes') {
                 grp.style.display = 'block';
                 txt.setAttribute('required', 'required');
@@ -1058,7 +1132,7 @@
         }
 
         function syncDecisionForm() {
-            const decision = document.getElementById('decision').value;
+            const decisionSelect = document.getElementById('decision');
             const comment = document.getElementById('decision_comment');
             const commentRequired = document.getElementById('commentRequired');
             const commentWarning = document.getElementById('rejectWarning');
@@ -1066,6 +1140,8 @@
             const protocolSelect = document.getElementById('protocol');
             const contrastSelect = document.getElementById('contrast_required');
             const contrastGroup = document.getElementById('contrastGroup');
+            if (!decisionSelect || !comment || !commentRequired || !commentWarning || !protocolGroup || !protocolSelect || !contrastSelect || !contrastGroup) return;
+            const decision = decisionSelect.value;
             const requiresComment = decision === 'Rejected' || decision === 'Approved with Comment';
 
             if (decision === 'Rejected') {
@@ -1100,7 +1176,8 @@
             }
         }
 
-        document.getElementById('vetForm').addEventListener('submit', function(e) {
+        const vetForm = document.getElementById('vetForm');
+        if (vetForm) vetForm.addEventListener('submit', function(e) {
             const decision = document.getElementById('decision').value;
             const comment = document.getElementById('decision_comment').value.trim();
             const protocol = document.getElementById('protocol').value;

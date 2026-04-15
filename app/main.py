@@ -211,6 +211,7 @@ def display_case_status(status_value: str | None) -> str:
         "vetted": "Approved",
         "rejected": "Rejected",
         "reopened": "Reopened",
+        "not_required": "Not Required",
     }
     return mapping.get(status, status.title() if status else "")
 
@@ -227,7 +228,9 @@ def display_case_event_label(event_type_value: str | None) -> str:
         "REOPENED": "Case Reopened",
         "EDITED": "Case Edited",
         "REPORT_SENT": "Justification Sent",
+        "JUSTIFICATION_NOT_REQUIRED": "No Justification Required",
         "REPORT_SENT_RESET": "Justification Sent Reset",
+        "DELETED": "Case Deleted",
         "EXAM_CATALOGUE_EXCEPTION": "Temporary Uncatalogued Exam",
     }
     if event_type in mapping:
@@ -264,9 +267,57 @@ def is_inline_previewable(filename: str | None) -> bool:
         return False
     previewable_exts = {
         ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp",
-        ".txt", ".csv", ".json", ".xml", ".html",
+        ".txt", ".csv", ".json", ".xml", ".html", ".htm", ".md", ".docx",
     }
     return any(name.endswith(ext) for ext in previewable_exts)
+
+
+def render_text_preview_html(file_bytes: bytes) -> HTMLResponse:
+    try:
+        text_content = file_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        text_content = file_bytes.decode("latin-1", errors="replace")
+    safe_text = html.escape(text_content)
+    return HTMLResponse(
+        f"""<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{{margin:0;background:#fff;color:#0f172a;font-family:Segoe UI,Arial,sans-serif}}pre{{margin:0;padding:18px;white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.5}}</style></head>
+<body><pre>{safe_text}</pre></body></html>"""
+    )
+
+
+def render_docx_preview_html(file_bytes: bytes, label: str = "this document") -> HTMLResponse | None:
+    try:
+        from docx import Document
+        doc = Document(io.BytesIO(file_bytes))
+        blocks: list[str] = []
+        for para in doc.paragraphs:
+            text_value = (para.text or "").strip()
+            if text_value:
+                blocks.append(f"<p>{html.escape(text_value)}</p>")
+        for table in doc.tables:
+            rows_html: list[str] = []
+            for row in table.rows:
+                cells = "".join(f"<td>{html.escape((cell.text or '').strip())}</td>" for cell in row.cells)
+                rows_html.append(f"<tr>{cells}</tr>")
+            if rows_html:
+                blocks.append(f"<table>{''.join(rows_html)}</table>")
+        if not blocks:
+            blocks.append(f"<p>No previewable text found in {html.escape(label)}.</p>")
+        return HTMLResponse(
+            """<!doctype html>
+<html><head><meta charset="utf-8"><style>
+html,body{margin:0;background:#fff;color:#0f172a;font-family:Segoe UI,Arial,sans-serif}
+.docx-wrap{padding:20px 22px;font-size:14px;line-height:1.6}
+p{margin:0 0 12px}
+table{border-collapse:collapse;width:100%;margin:10px 0 16px}
+td{border:1px solid #cbd5e1;padding:8px 10px;vertical-align:top}
+</style></head><body><div class="docx-wrap">"""
+            + "".join(blocks)
+            + "</div></body></html>"
+        )
+    except Exception as exc:
+        print(f"[attachment-preview] docx preview failed for {label}: {exc}")
+        return None
 
 
 def load_case_attachment_bytes(stored_path: str | None) -> bytes | None:
@@ -451,8 +502,9 @@ OWNER_ADMIN_USERNAME = (os.environ.get("OWNER_ADMIN_USERNAME", "P.Mendyk") or "P
 def validate_security_configuration() -> None:
     issues: list[str] = []
 
-    if IS_PRODUCTION and APP_SECRET == DEFAULT_APP_SECRET:
-        issues.append("APP_SECRET must be set to a strong unique value in production.")
+    # Task 6: Block weak secrets in every shared/non-local environment.
+    if APP_SECRET == DEFAULT_APP_SECRET and APP_ENV not in {"development", "dev"}:
+        issues.append("APP_SECRET must be set to a strong unique value outside local development.")
 
     if IS_PRODUCTION and not APP_BASE_URL.startswith("https://"):
         issues.append("APP_BASE_URL must use https:// in production.")
@@ -464,7 +516,8 @@ def validate_security_configuration() -> None:
         issues.append("Production must use Azure Blob Storage for referral attachments.")
 
     if issues:
-        raise RuntimeError("Security configuration error(s): " + " ".join(issues))
+        # Task 8: Put each security configuration issue on its own log line.
+        raise RuntimeError("Security configuration error(s):\n- " + "\n- ".join(issues))
 
 if APP_SECRET == DEFAULT_APP_SECRET:
     print("[WARNING] Using default APP_SECRET! Set APP_SECRET environment variable before any shared deployment.")
@@ -726,6 +779,11 @@ def format_display_datetime(value: str | None, fallback: str = "") -> str:
     if not dt:
         return value_str
     return dt.strftime("%d/%m/%Y %H:%M")
+
+
+def format_display_date(value: str | None, fallback: str = "") -> str:
+    display_value = format_display_datetime(value, fallback)
+    return display_value[:-6] if display_value.endswith(" 00:00") else display_value
 
 
 templates.env.filters["display_datetime"] = format_display_datetime
@@ -1290,6 +1348,7 @@ def ensure_cases_schema() -> None:
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS patient_surname TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS patient_referral_id TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS patient_dob TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS request_date TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS institution_id INTEGER")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS modality TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS org_id INTEGER")
@@ -1331,6 +1390,8 @@ def ensure_cases_schema() -> None:
         cur.execute("ALTER TABLE cases ADD COLUMN patient_referral_id TEXT")
     if "patient_dob" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN patient_dob TEXT")
+    if "request_date" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN request_date TEXT")
     if "institution_id" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN institution_id INTEGER")
     if "modality" not in cols:
@@ -1581,6 +1642,24 @@ def ensure_report_sent_schema() -> None:
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_at TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_by TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_by_id INTEGER")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS justification_not_required_at TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS justification_not_required_by TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS justification_not_required_by_id INTEGER")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS justification_not_required_reason TEXT")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS case_deletion_audit (
+                id SERIAL PRIMARY KEY,
+                case_id TEXT NOT NULL,
+                org_id INTEGER,
+                deleted_at TEXT NOT NULL,
+                deleted_by TEXT,
+                deleted_by_id INTEGER,
+                reason TEXT NOT NULL,
+                case_snapshot TEXT
+            )
+            """
+        )
         conn.commit()
         conn.close()
         return
@@ -1608,6 +1687,28 @@ def ensure_report_sent_schema() -> None:
         cur.execute("ALTER TABLE cases ADD COLUMN report_sent_by TEXT")
     if "report_sent_by_id" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN report_sent_by_id INTEGER")
+    if "justification_not_required_at" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN justification_not_required_at TEXT")
+    if "justification_not_required_by" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN justification_not_required_by TEXT")
+    if "justification_not_required_by_id" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN justification_not_required_by_id INTEGER")
+    if "justification_not_required_reason" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN justification_not_required_reason TEXT")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS case_deletion_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id TEXT NOT NULL,
+            org_id INTEGER,
+            deleted_at TEXT NOT NULL,
+            deleted_by TEXT,
+            deleted_by_id INTEGER,
+            reason TEXT NOT NULL,
+            case_snapshot TEXT
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -2184,48 +2285,8 @@ def find_matching_exam_catalogue_item(
         if desc_matches:
             return desc_matches[0]
 
+    # Task 2: Stop after no catalogue match; legacy seed code below this point was unreachable.
     return None
-
-    conn = get_db()
-    row = conn.execute("SELECT COUNT(*) AS c FROM study_description_presets").fetchone()
-    if row and row["c"]:
-        conn.close()
-        return
-
-    presets = _load_study_presets_from_migration()
-    if not presets:
-        presets = [
-            ("CT", "CT Head"),
-            ("CT", "CT Thorax"),
-            ("MRI", "MRI Brain"),
-            ("MRI", "MRI Spine lumbar"),
-            ("XR", "XR Chest"),
-            ("PET", "PET FDG Whole body"),
-            ("DEXA", "DXA Whole body"),
-        ]
-
-    now = utc_now_iso()
-    for modality, description in presets:
-        if using_postgres():
-            conn.execute(
-                """
-                INSERT INTO study_description_presets (organization_id, modality, description, created_at, updated_at, created_by)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT (organization_id, modality, description) DO NOTHING
-                """,
-                (1, modality, description, now, now, 1),
-            )
-        else:
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO study_description_presets (organization_id, modality, description, created_at, updated_at, created_by)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (1, modality, description, now, now, 1),
-            )
-
-    conn.commit()
-    conn.close()
 
 
 def list_protocols(active_only: bool = True, org_id: int | None = None) -> list[str]:
@@ -2476,6 +2537,9 @@ def get_protocol_row(protocol_id: int, institution_id: int | None = None, org_id
 
 
 def get_report_sent_summary(case_row: dict) -> tuple[bool, str]:
+    not_required_at = str(case_row.get("justification_not_required_at") or "").strip()
+    if not_required_at:
+        return True, "Not required"
     sent_at = str(case_row.get("report_sent_at") or "").strip()
     if not sent_at:
         return False, ""
@@ -2980,6 +3044,8 @@ def ensure_owner_account(
     password: str,
     email: str | None = None,
     *,
+    first_name: str = "P",
+    surname: str = "Mendyk",
     demote_other_superusers: bool = False,
 ) -> str:
     if not table_has_column("users", "is_superuser"):
@@ -2988,6 +3054,8 @@ def ensure_owner_account(
     owner_username = (username or "").strip()
     owner_password = (password or "").strip()
     owner_email = (email or "").strip() or None
+    owner_first_name = (first_name or "").strip()
+    owner_surname = (surname or "").strip()
     if not owner_username:
         raise ValueError("Owner username is required.")
     if not owner_password:
@@ -3023,7 +3091,8 @@ def ensure_owner_account(
                 surname = ?,
                 modified_at = ?
         """
-        update_params: list = [pw_hash.hex(), salt.hex(), owner_email, "P", "Mendyk", now]
+        # Task 3: Persist the owner name passed to the bootstrap helper.
+        update_params: list = [pw_hash.hex(), salt.hex(), owner_email, owner_first_name, owner_surname, now]
         if has_role_column:
             update_sql += ", role = COALESCE(role, 'admin')"
         if has_radiologist_name_column:
@@ -3058,8 +3127,9 @@ def ensure_owner_account(
         salt.hex(),
         now,
         now,
-        "P",
-        "Mendyk",
+        # Task 3: Insert the owner name passed to the bootstrap helper.
+        owner_first_name,
+        owner_surname,
     ]
     if has_role_column:
         insert_columns.append("role")
@@ -3530,6 +3600,7 @@ def slugify_org_name(name: str) -> str:
 
 
 def ensure_extended_identity_schema() -> None:
+    # Task 1: Keep one schema upgrader so national catalogue rows stay on organization_id = 0.
     if using_postgres():
         return
 
@@ -5490,7 +5561,7 @@ def list_case_modalities(org_id, is_superuser: bool):
 
 
 def build_dashboard_series(rows: list[dict]):
-    status_counts = {"pending": 0, "vetted": 0, "rejected": 0, "reopened": 0}
+    status_counts = {"pending": 0, "vetted": 0, "rejected": 0, "reopened": 0, "not_required": 0}
     over_time_counts: dict[str, dict] = {}
     institution_counts: dict[str, int] = {}
     radiologist_counts: dict[str, int] = {}
@@ -5537,6 +5608,7 @@ def build_dashboard_series(rows: list[dict]):
         {"label": "Approved", "value": status_counts["vetted"], "tone": "vetted"},
         {"label": "Rejected", "value": status_counts["rejected"], "tone": "rejected"},
         {"label": "Reopened", "value": status_counts["reopened"], "tone": "reopened"},
+        {"label": "Not Required", "value": status_counts["not_required"], "tone": "not_required"},
     ]
 
     total_cases = len(rows)
@@ -5563,7 +5635,7 @@ def build_dashboard_series(rows: list[dict]):
 
     avg_tat_seconds = int(sum(avg_tat_values) / len(avg_tat_values)) if avg_tat_values else 0
     completed_avg_tat_seconds = int(sum(completed_tat_values) / len(completed_tat_values)) if completed_tat_values else 0
-    completion_rate = round((status_counts["vetted"] / total_cases) * 100, 1) if total_cases else 0.0
+    completion_rate = round(((status_counts["vetted"] + status_counts["not_required"]) / total_cases) * 100, 1) if total_cases else 0.0
     top_institution_label = top_institutions[0][0] if top_institutions else "No data"
     top_practitioner_label = top_radiologists[0][0] if top_radiologists else "No data"
 
@@ -5674,7 +5746,7 @@ def admin_dashboard(
         )
 
     tab = (tab or "pending").strip().lower()
-    if tab not in ("all", "pending", "vetted", "rejected", "reopened"):
+    if tab not in ("all", "pending", "vetted", "rejected", "reopened", "not_required"):
         tab = "pending"
 
     # Validate sort parameters
@@ -5768,12 +5840,14 @@ def admin_dashboard(
     vetted_count = counts.get("vetted", 0)
     rejected_count = counts.get("rejected", 0)
     reopened_count = counts.get("reopened", 0)
-    total_count = pending_count + vetted_count + rejected_count + reopened_count
+    not_required_count = counts.get("not_required", 0)
+    total_count = pending_count + vetted_count + rejected_count + reopened_count + not_required_count
 
     cases: list[dict] = []
     for r in rows:
         d = dict(r)
         d["created_display"] = format_display_datetime(d.get("created_at"), "")
+        d["request_date_display"] = format_display_date(d.get("request_date"), "")
         secs = tat_seconds(d.get("created_at"), d.get("vetted_at"))
         d["tat_display"] = format_tat(secs)
         d["tat_seconds"] = secs
@@ -5791,6 +5865,7 @@ def admin_dashboard(
         d["display_case_id"] = d.get("id") or "-"
         d["status_display"] = display_case_status(d.get("status"))
         d["report_sent"], d["report_sent_display"] = get_report_sent_summary(d)
+        d["justification_not_required"] = bool(str(d.get("justification_not_required_at") or "").strip())
         d["catalogue_review_required"], d["catalogue_review_display"] = get_exam_catalogue_review_summary(d)
         cases.append(d)
 
@@ -5825,6 +5900,7 @@ def admin_dashboard(
             "vetted_count": vetted_count,
             "rejected_count": rejected_count,
             "reopened_count": reopened_count,
+            "not_required_count": not_required_count,
             "total_count": total_count,
             "dashboard_range": dashboard_range,
             "dashboard_institution": dashboard_institution or "",
@@ -5888,7 +5964,7 @@ def admin_dashboard_csv(
         )
     else:
         tab = (tab or "pending").strip().lower()
-        if tab not in ("all", "pending", "vetted", "rejected", "reopened"):
+        if tab not in ("all", "pending", "vetted", "rejected", "reopened", "not_required"):
             tab = "pending"
         clauses, params = build_admin_case_filters(
             org_id,
@@ -5941,6 +6017,7 @@ def admin_dashboard_csv(
             "Org ID",
             "Org Name",
             "Submitted At",
+            "Request Date",
             "Reopened",
             "Reopened At",
             "Reopened By",
@@ -5999,6 +6076,7 @@ def admin_dashboard_csv(
                 d.get("org_id", ""),
                 org_names.get(d.get("org_id"), ""),
                 format_csv_timestamp(submitted_at),
+                format_display_date(d.get("request_date"), ""),
                 reopened,
                 format_csv_timestamp(reopened_at),
                 reopened_by,
@@ -6522,6 +6600,7 @@ def admin_case_view(request: Request, case_id: str):
         case_dict["status_display"] = display_case_status(case_dict.get("status"))
         case_dict["decision_display"] = display_decision_label(case_dict.get("decision"))
         case_dict["report_sent"], case_dict["report_sent_display"] = get_report_sent_summary(case_dict)
+        case_dict["justification_not_required"] = bool(str(case_dict.get("justification_not_required_at") or "").strip())
         case_dict["catalogue_review_required"], case_dict["catalogue_review_display"] = get_exam_catalogue_review_summary(case_dict)
         attachments = list_case_attachments(case_id, case_dict=case_dict)
         case_dict.update(build_case_preview_context(case_id, case_dict, attachments))
@@ -6587,7 +6666,15 @@ def admin_case_mark_report_sent(request: Request, case_id: str, return_to: str =
         raise HTTPException(status_code=404, detail="Case not found")
     now = utc_now_iso()
     conn.execute(
-        "UPDATE cases SET report_sent_at = ?, report_sent_by = ?, report_sent_by_id = ? WHERE id = ?",
+        """
+        UPDATE cases
+        SET report_sent_at = ?, report_sent_by = ?, report_sent_by_id = ?,
+            justification_not_required_at = NULL,
+            justification_not_required_by = NULL,
+            justification_not_required_by_id = NULL,
+            justification_not_required_reason = NULL
+        WHERE id = ?
+        """,
         (now, user.get("username"), user.get("id"), case_id),
     )
     conn.commit()
@@ -6618,7 +6705,17 @@ def admin_case_reset_report_sent(request: Request, case_id: str, return_to: str 
         conn.close()
         raise HTTPException(status_code=404, detail="Case not found")
     conn.execute(
-        "UPDATE cases SET report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL WHERE id = ?",
+        """
+        UPDATE cases
+        SET status = CASE WHEN LOWER(COALESCE(status, '')) = 'not_required' THEN 'pending' ELSE status END,
+            vetted_at = CASE WHEN LOWER(COALESCE(status, '')) = 'not_required' THEN NULL ELSE vetted_at END,
+            report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
+            justification_not_required_at = NULL,
+            justification_not_required_by = NULL,
+            justification_not_required_by_id = NULL,
+            justification_not_required_reason = NULL
+        WHERE id = ?
+        """,
         (case_id,),
     )
     conn.commit()
@@ -6634,6 +6731,102 @@ def admin_case_reset_report_sent(request: Request, case_id: str, return_to: str 
     if safe_return_to.startswith("/admin"):
         return RedirectResponse(url=safe_return_to, status_code=303)
     return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
+
+
+@app.post("/admin/case/{case_id}/justification-not-required")
+def admin_case_mark_justification_not_required(request: Request, case_id: str, return_to: str = Form(""), justification_reason: str = Form("")):
+    user = require_admin(request)
+    reason = " ".join((justification_reason or "").split())
+    if not reason:
+        raise HTTPException(status_code=400, detail="Reason is required to mark no justification required.")
+    conn = get_db()
+    org_id = user.get("org_id")
+    if org_id and not user.get("is_superuser"):
+        row = conn.execute("SELECT id, org_id, status FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
+    else:
+        row = conn.execute("SELECT id, org_id, status FROM cases WHERE id = ?", (case_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Case not found")
+    now = utc_now_iso()
+    conn.execute(
+        """
+        UPDATE cases
+        SET status = ?,
+            vetted_at = COALESCE(vetted_at, ?),
+            report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
+            justification_not_required_at = ?,
+            justification_not_required_by = ?,
+            justification_not_required_by_id = ?,
+            justification_not_required_reason = ?
+        WHERE id = ?
+        """,
+        ("not_required", now, now, user.get("username"), user.get("id"), reason, case_id),
+    )
+    conn.commit()
+    conn.close()
+    insert_case_event(
+        case_id=case_id,
+        org_id=dict(row).get("org_id"),
+        event_type="JUSTIFICATION_NOT_REQUIRED",
+        user=user,
+        comment=f"No justification required: {reason}",
+    )
+    safe_return_to = (return_to or "").strip()
+    if safe_return_to.startswith("/admin"):
+        return RedirectResponse(url=safe_return_to, status_code=303)
+    return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
+
+
+@app.post("/admin/case/{case_id}/delete")
+def admin_case_delete(request: Request, case_id: str, return_to: str = Form(""), delete_reason: str = Form("")):
+    user = require_admin(request)
+    reason = " ".join((delete_reason or "").split())
+    if not reason:
+        raise HTTPException(status_code=400, detail="Reason is required to delete a case.")
+    conn = get_db()
+    org_id = user.get("org_id")
+    if org_id and not user.get("is_superuser"):
+        row = conn.execute("SELECT * FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
+    else:
+        row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Case not found")
+    case_data = row if isinstance(row, dict) else dict(row)
+    case_snapshot = _json.dumps(case_data, default=str)
+    if using_postgres():
+        conn.execute(
+            """
+            INSERT INTO case_deletion_audit
+            (case_id, org_id, deleted_at, deleted_by, deleted_by_id, reason, case_snapshot)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (case_id, case_data.get("org_id"), utc_now_iso(), user.get("username"), user.get("id"), reason, case_snapshot),
+        )
+    else:
+        conn.execute(
+            """
+            INSERT INTO case_deletion_audit
+            (case_id, org_id, deleted_at, deleted_by, deleted_by_id, reason, case_snapshot)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (case_id, case_data.get("org_id"), utc_now_iso(), user.get("username"), user.get("id"), reason, case_snapshot),
+        )
+    attachments = list_case_attachments(case_id, case_dict=case_data)
+    for attachment in attachments:
+        delete_stored_attachment_file(attachment.get("stored_filepath"))
+    if table_exists("case_attachments"):
+        conn.execute("DELETE FROM case_attachments WHERE case_id = ?", (case_id,))
+    if table_exists("case_events"):
+        conn.execute("DELETE FROM case_events WHERE case_id = ?", (case_id,))
+    conn.execute("DELETE FROM cases WHERE id = ?", (case_id,))
+    conn.commit()
+    conn.close()
+    safe_return_to = (return_to or "").strip()
+    if safe_return_to.startswith("/admin"):
+        return RedirectResponse(url=safe_return_to, status_code=303)
+    return RedirectResponse(url="/admin", status_code=303)
 
 
 @app.get("/admin/case/{case_id}/timeline.pdf")
@@ -7179,192 +7372,6 @@ def admin_reopen_case_submit(
 def slugify_org_name(name: str) -> str:
     base = re.sub(r"[^a-z0-9]+", "-", str(name or "").strip().lower()).strip("-")
     return base or "organisation"
-
-
-def ensure_extended_identity_schema() -> None:
-    if using_postgres():
-        return
-
-    conn = get_db()
-    cur = conn.cursor()
-
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS organisations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            slug TEXT NOT NULL UNIQUE,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL,
-            modified_at TEXT
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS memberships (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            org_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            org_role TEXT NOT NULL DEFAULT 'org_user',
-            is_active INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL,
-            modified_at TEXT,
-            UNIQUE(org_id, user_id)
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS user_sessions (
-            user_id INTEGER PRIMARY KEY,
-            session_id TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS radiologist_profiles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL UNIQUE,
-            gmc TEXT,
-            specialty TEXT,
-            display_name TEXT,
-            created_at TEXT NOT NULL,
-            modified_at TEXT
-        )
-        """
-    )
-
-    cur.execute("PRAGMA table_info(users)")
-    user_cols = {row[1] for row in cur.fetchall()}
-    needs_user_upgrade = {"id", "password_hash", "is_superuser", "is_active", "created_at", "modified_at"} - user_cols
-
-    if needs_user_upgrade:
-        now = utc_now_iso()
-        cur.execute("DROP TABLE IF EXISTS users_extended_new")
-        cur.execute(
-            """
-            CREATE TABLE users_extended_new (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL UNIQUE,
-                email TEXT UNIQUE,
-                password_hash TEXT NOT NULL,
-                salt_hex TEXT NOT NULL,
-                is_superuser INTEGER NOT NULL DEFAULT 0,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT NOT NULL,
-                modified_at TEXT,
-                first_name TEXT,
-                surname TEXT,
-                role TEXT,
-                radiologist_name TEXT
-            )
-            """
-        )
-        old_rows = cur.execute(
-            "SELECT username, first_name, surname, email, role, radiologist_name, salt_hex, pw_hash_hex FROM users ORDER BY username"
-        ).fetchall()
-        promote_username = None
-        for old in old_rows:
-            if str(old[4] or "").strip().lower() == "admin" and promote_username is None:
-                promote_username = old[0]
-        for old in old_rows:
-            username = old[0]
-            email = (old[3] or "").strip() or None
-            role = (old[4] or "user").strip()
-            is_superuser = 1 if username == promote_username else 0
-            cur.execute(
-                """
-                INSERT INTO users_extended_new(
-                    username, email, password_hash, salt_hex, is_superuser, is_active, created_at, modified_at,
-                    first_name, surname, role, radiologist_name
-                )
-                VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    username,
-                    email,
-                    old[7],
-                    old[6],
-                    is_superuser,
-                    now,
-                    now,
-                    old[1],
-                    old[2],
-                    role,
-                    old[5],
-                ),
-            )
-        cur.execute("ALTER TABLE users RENAME TO users_legacy_backup")
-        cur.execute("ALTER TABLE users_extended_new RENAME TO users")
-
-    cur.execute("PRAGMA table_info(institutions)")
-    institution_cols = {row[1] for row in cur.fetchall()}
-    if "org_id" not in institution_cols:
-        cur.execute("ALTER TABLE institutions ADD COLUMN org_id INTEGER")
-
-    cur.execute("PRAGMA table_info(cases)")
-    case_cols = {row[1] for row in cur.fetchall()}
-    if "org_id" not in case_cols:
-        cur.execute("ALTER TABLE cases ADD COLUMN org_id INTEGER")
-
-    cur.execute("PRAGMA table_info(protocols)")
-    protocol_cols = {row[1] for row in cur.fetchall()}
-    if "org_id" not in protocol_cols:
-        cur.execute("ALTER TABLE protocols ADD COLUMN org_id INTEGER")
-
-    conn.commit()
-
-    org_row = cur.execute("SELECT id FROM organisations ORDER BY id LIMIT 1").fetchone()
-    if org_row:
-        default_org_id = org_row[0]
-    else:
-        default_org_name = "Default Organisation"
-        default_slug = slugify_org_name(default_org_name)
-        suffix = 1
-        while cur.execute("SELECT 1 FROM organisations WHERE slug = ?", (default_slug,)).fetchone():
-            suffix += 1
-            default_slug = f"{slugify_org_name(default_org_name)}-{suffix}"
-        cur.execute(
-            "INSERT INTO organisations(name, slug, is_active, created_at, modified_at) VALUES (?, ?, 1, ?, ?)",
-            (default_org_name, default_slug, utc_now_iso(), utc_now_iso()),
-        )
-        default_org_id = cur.lastrowid
-
-    cur.execute("UPDATE institutions SET org_id = ? WHERE org_id IS NULL", (default_org_id,))
-    cur.execute("UPDATE cases SET org_id = ? WHERE org_id IS NULL", (default_org_id,))
-    cur.execute("UPDATE protocols SET org_id = ? WHERE org_id IS NULL", (default_org_id,))
-
-    if table_exists("study_description_presets"):
-        cur.execute("UPDATE study_description_presets SET organization_id = ? WHERE organization_id IS NULL OR organization_id = 0", (default_org_id,))
-
-    user_rows = cur.execute("SELECT id, username, role, first_name, surname, radiologist_name FROM users").fetchall()
-    for user_row in user_rows:
-        user_id = user_row[0]
-        username = user_row[1]
-        role = str(user_row[2] or "user").strip().lower()
-        org_role = "org_admin" if role == "admin" else "radiologist" if role == "radiologist" else "org_user"
-        if not cur.execute("SELECT 1 FROM memberships WHERE org_id = ? AND user_id = ?", (default_org_id, user_id)).fetchone():
-            cur.execute(
-                "INSERT INTO memberships(org_id, user_id, org_role, is_active, created_at, modified_at) VALUES (?, ?, ?, 1, ?, ?)",
-                (default_org_id, user_id, org_role, utc_now_iso(), utc_now_iso()),
-            )
-        if role == "radiologist":
-            display_name = (
-                str(user_row[5] or "").strip()
-                or " ".join(part for part in [str(user_row[3] or "").strip(), str(user_row[4] or "").strip()] if part)
-                or username
-            )
-            if not cur.execute("SELECT 1 FROM radiologist_profiles WHERE user_id = ?", (user_id,)).fetchone():
-                cur.execute(
-                    "INSERT INTO radiologist_profiles(user_id, gmc, specialty, display_name, created_at, modified_at) VALUES (?, ?, ?, ?, ?, ?)",
-                    (user_id, None, None, display_name, utc_now_iso(), utc_now_iso()),
-                )
-
-    conn.commit()
-    conn.close()
 
 
 def list_organisations_summary() -> list[dict]:
@@ -8924,14 +8931,12 @@ def referral_trial_attachment_preview(request: Request, attachment_token: str):
         return HTMLResponse(
             f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}body{{display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}}img{{max-width:100%;max-height:100%;object-fit:contain;background:#fff;border-radius:8px}}</style></head><body><img src="/submit/referral-trial/attachment/{html.escape(attachment_token)}/inline" alt="{html.escape(filename)}"></body></html>"""
         )
-    if lower_name.endswith((".txt", ".csv", ".json", ".xml", ".html", ".htm")):
-        try:
-            text_content = file_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            text_content = file_bytes.decode("latin-1", errors="replace")
-        return HTMLResponse(
-            f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{margin:0;background:#fff;color:#0f172a;font-family:Segoe UI,Arial,sans-serif}}pre{{margin:0;padding:18px;white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.5}}</style></head><body><pre>{html.escape(text_content)}</pre></body></html>"""
-        )
+    if lower_name.endswith((".txt", ".csv", ".json", ".xml", ".html", ".htm", ".md")):
+        return render_text_preview_html(file_bytes)
+    if lower_name.endswith(".docx"):
+        docx_preview = render_docx_preview_html(file_bytes, filename)
+        if docx_preview:
+            return docx_preview
     return HTMLResponse(
         f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220;color:#e2e8f0;font-family:Segoe UI,Arial,sans-serif}}body{{display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}}.card{{max-width:520px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.2);border-radius:14px;padding:24px;text-align:center}}.name{{font-weight:600;color:#fff;margin-bottom:10px}}.msg{{color:#cbd5e1;line-height:1.6;margin-bottom:16px}}.btn{{display:inline-block;padding:10px 14px;border-radius:8px;background:#1f6feb;color:#fff;text-decoration:none}}</style></head><body><div class="card"><div class="name">{html.escape(filename)}</div><div class="msg">Preview is not available for this file type in the current environment.</div><a class="btn" href="/submit/referral-trial/attachment/{html.escape(attachment_token)}/inline" target="_blank" rel="noopener">Open file</a></div></body></html>"""
     )
@@ -8944,6 +8949,7 @@ def referral_trial_create(
     patient_surname: str = Form(""),
     patient_referral_id: str = Form(""),
     patient_dob: str = Form(""),
+    request_date: str = Form(""),
     institution_id: str = Form(""),
     modality: str = Form(""),
     study_description: str = Form(...),
@@ -8956,6 +8962,11 @@ def referral_trial_create(
     attachment_token: str = Form(...),
     attachment_original_name: str = Form("referral_upload"),
     supporting_attachments: list[UploadFile | str] = File([]),
+    extra_study_description: list[str] = Form([], alias="extra_study_description[]"),
+    extra_study_description_preset_id: list[str] = Form([], alias="extra_study_description_preset_id[]"),
+    extra_study_code: list[str] = Form([], alias="extra_study_code[]"),
+    extra_modality: list[str] = Form([], alias="extra_modality[]"),
+    extra_radiologist: list[str] = Form([], alias="extra_radiologist[]"),
 ):
     user = require_admin(request)
     org_id = user.get("org_id")
@@ -8999,6 +9010,33 @@ def referral_trial_create(
         if radiologist not in valid_rads:
             raise HTTPException(status_code=400, detail="Invalid radiologist selection")
 
+    cleaned_extra_cases: list[dict] = []
+    if extra_study_description:
+        valid_rads = {r["name"] for r in list_radiologists(org_id)}
+        for idx, extra_desc in enumerate(extra_study_description):
+            normalized_desc = (extra_desc or "").strip()
+            if not normalized_desc:
+                continue
+            selected_extra_preset = None
+            if idx < len(extra_study_description_preset_id) and str(extra_study_description_preset_id[idx] or "").strip().isdigit():
+                selected_extra_preset = get_study_description_preset(int(str(extra_study_description_preset_id[idx]).strip()), org_id)
+                if selected_extra_preset:
+                    normalized_desc = str(selected_extra_preset.get("description") or normalized_desc).strip()
+            if not selected_extra_preset:
+                raise HTTPException(status_code=400, detail="Each additional exam must be selected from the master exam catalogue")
+            normalized_rad = extra_radiologist[idx].strip() if idx < len(extra_radiologist) else ""
+            if normalized_rad and normalized_rad not in valid_rads:
+                normalized_rad = ""
+            cleaned_extra_cases.append(
+                {
+                    "study_description": normalized_desc,
+                    "study_description_preset_id": selected_extra_preset.get("id"),
+                    "study_code": str(selected_extra_preset.get("study_code") or (extra_study_code[idx] if idx < len(extra_study_code) else "")).strip() or None,
+                    "modality": str(selected_extra_preset.get("modality") or (extra_modality[idx] if idx < len(extra_modality) else "")).strip().upper() or None,
+                    "radiologist": normalized_rad,
+                }
+            )
+
     token_name = Path(attachment_token).name
     if not token_name.startswith("trial_"):
         raise HTTPException(status_code=400, detail="Invalid attachment token")
@@ -9010,7 +9048,8 @@ def referral_trial_create(
     with open(temp_path, "rb") as temp_file:
         file_bytes = temp_file.read()
 
-    case_id = generate_case_id()
+    generated_case_ids = generate_case_ids(1 + len(cleaned_extra_cases), institution_id=inst_id)
+    case_id = generated_case_ids[0]
     original_name = (attachment_original_name or "referral_upload").strip() or "referral_upload"
 
     stored_path = store_case_attachment_file(case_id, original_name, file_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
@@ -9024,6 +9063,7 @@ def referral_trial_create(
     conn = get_db()
 
     has_dob_col = table_has_column("cases", "patient_dob")
+    has_request_date_col = table_has_column("cases", "request_date")
     has_modality_col = table_has_column("cases", "modality")
     has_study_code_col = table_has_column("cases", "study_code")
     has_preset_col = table_has_column("cases", "study_description_preset_id")
@@ -9032,34 +9072,92 @@ def referral_trial_create(
     has_exception_at_col = table_has_column("cases", "exam_catalogue_exception_at")
     has_exception_by_col = table_has_column("cases", "exam_catalogue_exception_by")
     has_exception_by_id_col = table_has_column("cases", "exam_catalogue_exception_by_id")
-    if has_dob_col and has_modality_col and has_study_code_col:
+
+    def insert_referral_trial_case(
+        case_row_id: str,
+        row_created_at: str,
+        row_study_description: str,
+        row_preset_id,
+        row_study_code: str | None,
+        row_modality: str | None,
+        row_radiologist: str,
+        row_stored_path: str | None,
+        *,
+        requires_review: int = 0,
+        exception_reason: str | None = None,
+        exception_at: str | None = None,
+        exception_by: str | None = None,
+        exception_by_id=None,
+    ) -> None:
+        # V6-04: one referral can create multiple case rows while preserving legacy schemas.
+        case_insert_columns = ["id", "created_at", "patient_first_name", "patient_surname", "patient_referral_id"]
+        case_insert_values: list = [case_row_id, row_created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip()]
+        if has_dob_col:
+            case_insert_columns.append("patient_dob")
+            case_insert_values.append(patient_dob.strip() or None)
+        if has_request_date_col:
+            case_insert_columns.append("request_date")
+            case_insert_values.append(request_date.strip() or None)
+        case_insert_columns.extend(["institution_id", "study_description"])
+        case_insert_values.extend([inst_id, row_study_description])
+        if has_preset_col:
+            case_insert_columns.append("study_description_preset_id")
+            case_insert_values.append(row_preset_id)
+        if has_study_code_col:
+            case_insert_columns.append("study_code")
+            case_insert_values.append(row_study_code)
+        if has_modality_col:
+            case_insert_columns.append("modality")
+            case_insert_values.append(row_modality)
+        case_insert_columns.extend(["admin_notes", "radiologist", "uploaded_filename", "stored_filepath", "status", "vetted_at", "org_id"])
+        case_insert_values.extend([admin_notes.strip(), row_radiologist, original_name, row_stored_path, "pending", None, org_id])
+        if has_review_col:
+            case_insert_columns.append("exam_catalogue_requires_review")
+            case_insert_values.append(requires_review)
+        if has_exception_reason_col:
+            case_insert_columns.append("exam_catalogue_exception_reason")
+            case_insert_values.append(exception_reason)
+        if has_exception_at_col:
+            case_insert_columns.append("exam_catalogue_exception_at")
+            case_insert_values.append(exception_at)
+        if has_exception_by_col:
+            case_insert_columns.append("exam_catalogue_exception_by")
+            case_insert_values.append(exception_by)
+        if has_exception_by_id_col:
+            case_insert_columns.append("exam_catalogue_exception_by_id")
+            case_insert_values.append(exception_by_id)
+        placeholders = ", ".join(["?"] * len(case_insert_columns))
         conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, study_description_preset_id, study_code, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review, exam_catalogue_exception_reason, exam_catalogue_exception_at, exam_catalogue_exception_by, exam_catalogue_exception_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, selected_study_description, selected_preset_id if has_preset_col else None, selected_study_code, case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id, resolved_exam["requires_review"], resolved_exam["exception_reason"], resolved_exam["exception_at"], resolved_exam["exception_by"], resolved_exam["exception_by_id"]),
+            f"INSERT INTO cases ({', '.join(case_insert_columns)}) VALUES ({placeholders})",
+            tuple(case_insert_values),
         )
-    elif has_dob_col and has_modality_col:
-        conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, study_description_preset_id, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review, exam_catalogue_exception_reason, exam_catalogue_exception_at, exam_catalogue_exception_by, exam_catalogue_exception_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, selected_study_description, selected_preset_id if has_preset_col else None, case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id, resolved_exam["requires_review"], resolved_exam["exception_reason"], resolved_exam["exception_at"], resolved_exam["exception_by"], resolved_exam["exception_by_id"]),
-        )
-    elif has_dob_col:
-        conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, study_description_preset_id, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review, exam_catalogue_exception_reason, exam_catalogue_exception_at, exam_catalogue_exception_by, exam_catalogue_exception_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, selected_study_description, selected_preset_id if has_preset_col else None, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id, resolved_exam["requires_review"], resolved_exam["exception_reason"], resolved_exam["exception_at"], resolved_exam["exception_by"], resolved_exam["exception_by_id"]),
-        )
-    elif has_modality_col:
-        conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, study_description_preset_id, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review, exam_catalogue_exception_reason, exam_catalogue_exception_at, exam_catalogue_exception_by, exam_catalogue_exception_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, selected_study_description, selected_preset_id if has_preset_col else None, case_modality, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id, resolved_exam["requires_review"], resolved_exam["exception_reason"], resolved_exam["exception_at"], resolved_exam["exception_by"], resolved_exam["exception_by_id"]),
-        )
-    else:
-        conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, study_description_preset_id, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review, exam_catalogue_exception_reason, exam_catalogue_exception_at, exam_catalogue_exception_by, exam_catalogue_exception_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, selected_study_description, selected_preset_id if has_preset_col else None, admin_notes.strip(), radiologist, original_name, stored_path, "pending", None, org_id, resolved_exam["requires_review"], resolved_exam["exception_reason"], resolved_exam["exception_at"], resolved_exam["exception_by"], resolved_exam["exception_by_id"]),
-        )
+
+    insert_referral_trial_case(
+        case_id,
+        created_at,
+        selected_study_description,
+        selected_preset_id,
+        selected_study_code,
+        case_modality,
+        radiologist,
+        stored_path,
+        requires_review=resolved_exam["requires_review"],
+        exception_reason=resolved_exam["exception_reason"],
+        exception_at=resolved_exam["exception_at"],
+        exception_by=resolved_exam["exception_by"],
+        exception_by_id=resolved_exam["exception_by_id"],
+    )
 
     conn.commit()
     conn.close()
+
+    prepared_supporting_attachments: list[tuple[str, bytes]] = []
+    for upload in supporting_attachments:
+        if not isinstance(upload, UploadFile) or not upload.filename:
+            continue
+        upload_bytes = upload.file.read()
+        if upload_bytes:
+            prepared_supporting_attachments.append((upload.filename, upload_bytes))
 
     add_case_attachment_record(
         case_id,
@@ -9069,17 +9167,12 @@ def referral_trial_create(
         uploaded_by=user.get("username") or "admin",
         is_primary=True,
     )
-    for upload in supporting_attachments:
-        if not isinstance(upload, UploadFile) or not upload.filename:
-            continue
-        upload_bytes = upload.file.read()
-        if not upload_bytes:
-            continue
-        extra_path = store_case_attachment_file(case_id, upload.filename, upload_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
+    for upload_name, upload_bytes in prepared_supporting_attachments:
+        extra_path = store_case_attachment_file(case_id, upload_name, upload_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
         add_case_attachment_record(
             case_id,
             org_id,
-            upload.filename,
+            upload_name,
             extra_path,
             uploaded_by=user.get("username") or "admin",
             is_primary=False,
@@ -9093,6 +9186,49 @@ def referral_trial_create(
         user={"username": user.get("username") or "admin"},
         comment="Created via referral trial parser",
     )
+
+    for idx, extra_case in enumerate(cleaned_extra_cases, start=1):
+        extra_case_id = generated_case_ids[idx]
+        extra_stored_path = store_case_attachment_file(extra_case_id, original_name, file_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
+        conn = get_db()
+        insert_referral_trial_case(
+            extra_case_id,
+            utc_now_iso(),
+            extra_case["study_description"],
+            extra_case["study_description_preset_id"],
+            extra_case["study_code"],
+            extra_case["modality"],
+            extra_case["radiologist"],
+            extra_stored_path,
+        )
+        conn.commit()
+        conn.close()
+        add_case_attachment_record(
+            extra_case_id,
+            org_id,
+            original_name,
+            extra_stored_path,
+            uploaded_by=user.get("username") or "admin",
+            is_primary=True,
+        )
+        for upload_name, upload_bytes in prepared_supporting_attachments:
+            copied_path = store_case_attachment_file(extra_case_id, upload_name, upload_bytes, org_id=org_id, attachment_tag=uuid4().hex[:10])
+            add_case_attachment_record(
+                extra_case_id,
+                org_id,
+                upload_name,
+                copied_path,
+                uploaded_by=user.get("username") or "admin",
+                is_primary=False,
+            )
+        sync_case_primary_attachment(extra_case_id)
+        insert_case_event(
+            case_id=extra_case_id,
+            org_id=org_id,
+            event_type="CREATED",
+            user={"username": user.get("username") or "admin"},
+            comment="Created via referral trial parser",
+        )
 
     return RedirectResponse(url=f"/submitted/{case_id}", status_code=303)
 
@@ -9136,6 +9272,7 @@ async def submit_case(
     patient_surname: str = Form(...),
     patient_referral_id: str = Form(...),
     patient_dob: str = Form(""),
+    request_date: str = Form(""),
     institution_id: str = Form(""),
     org_id_form: str = Form(""),
     modality: str = Form(""),
@@ -9254,6 +9391,7 @@ async def submit_case(
     
     # Build insert conditionally based on columns that exist
     has_dob_col = table_has_column("cases", "patient_dob")
+    has_request_date_col = table_has_column("cases", "request_date")
     has_modality_col = table_has_column("cases", "modality")
     has_study_code_col = table_has_column("cases", "study_code")
     has_preset_col = table_has_column("cases", "study_description_preset_id")
@@ -9267,6 +9405,9 @@ async def submit_case(
     if has_dob_col:
         case_insert_columns.append("patient_dob")
         case_insert_values.append(patient_dob.strip() or None)
+    if has_request_date_col:
+        case_insert_columns.append("request_date")
+        case_insert_values.append(request_date.strip() or None)
     case_insert_columns.extend(["institution_id", "study_description"])
     case_insert_values.extend([inst_id, selected_study_description])
     if has_preset_col:
@@ -9331,14 +9472,7 @@ async def submit_case(
         comment=admin_notes.strip() or None,
     )
     if resolved_exam["exception_requested"]:
-        insert_case_event(
-            case_id=case_id,
-            org_id=org_id,
-            event_type="EXAM_CATALOGUE_EXCEPTION",
-            user=user,
-            comment=f"Temporary uncatalogued exam created. Reason: {resolved_exam['exception_reason']}",
-        )
-    if resolved_exam["exception_requested"]:
+        # Task 4: Record the temporary uncatalogued exam audit event once per submitted case.
         insert_case_event(
             case_id=case_id,
             org_id=org_id,
@@ -9368,6 +9502,8 @@ async def submit_case(
             ]
             if has_dob_col:
                 extra_insert_values.append(patient_dob.strip() or None)
+            if has_request_date_col:
+                extra_insert_values.append(request_date.strip() or None)
             extra_insert_values.extend([inst_id, extra_desc])
             if has_preset_col:
                 extra_insert_values.append(int(str(extra_study_description_preset_id[idx - 1]).strip()) if idx - 1 < len(extra_study_description_preset_id) and str(extra_study_description_preset_id[idx - 1]).strip().isdigit() else None)
@@ -9561,6 +9697,7 @@ def vet_form(request: Request, case_id: str):
     protocols, resolved_preset_id = list_protocol_rows_for_case(case, org_id=org_id)
     if resolved_preset_id and not case.get("study_description_preset_id"):
         case["study_description_preset_id"] = resolved_preset_id
+    is_read_only = str(case.get("status") or "").strip().lower() in {"vetted", "rejected"}
 
     if org_id:
         conn = get_db()
@@ -9582,6 +9719,7 @@ def vet_form(request: Request, case_id: str):
             "protocols": protocols,
             "org_name": org_name,
             "attachments": attachments,
+            "is_read_only": is_read_only,
         },
     )
 
@@ -9599,6 +9737,24 @@ def vet_submit(
     user = require_radiologist(request)
     rad_name = user.get("radiologist_name")
     org_id = user.get("org_id")
+    conn = get_db()
+    if org_id:
+        row = conn.execute("SELECT radiologist, institution_id, status FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
+    else:
+        row = conn.execute("SELECT radiologist, institution_id, status FROM cases WHERE id = ?", (case_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Case not found")
+    if row["radiologist"] != rad_name:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Not your case")
+    if str(row["status"] or "").strip().lower() in {"vetted", "rejected"}:
+        conn.close()
+        raise HTTPException(status_code=409, detail="Case is already decided and cannot be resubmitted.")
+    # V6-16: decided cases are locked before any resubmission validation runs.
+    institution_id = row["institution_id"]
+    conn.close()
+
     decision = normalize_decision_label(decision)
     decision_comment = (decision_comment or "").strip()
     protocol_id_value = int(protocol_id) if str(protocol_id or "").strip().isdigit() else None
@@ -9625,26 +9781,12 @@ def vet_submit(
         if contrast_required != "Yes":
             contrast_details = ""
 
-    conn = get_db()
-    if org_id:
-        row = conn.execute("SELECT radiologist, institution_id FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
-    else:
-        row = conn.execute("SELECT radiologist, institution_id FROM cases WHERE id = ?", (case_id,)).fetchone()
-    if not row:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Case not found")
-    if row["radiologist"] != rad_name:
-        conn.close()
-        raise HTTPException(status_code=403, detail="Not your case")
-    institution_id = row["institution_id"]
     if decision != "Rejected":
         protocol_row = get_protocol_row(protocol_id_value, institution_id=institution_id, org_id=org_id)
         if not protocol_row:
-            conn.close()
             raise HTTPException(status_code=400, detail="Selected protocol is not available for this institution")
         protocol = str(protocol_row.get("name") or "").strip()
         if not protocol:
-            conn.close()
             raise HTTPException(status_code=400, detail="Selected protocol is invalid")
 
     # Determine status based on decision
@@ -9653,6 +9795,7 @@ def vet_submit(
     else:
         case_status = "vetted"
 
+    conn = get_db()
     conn.execute(
         """
         UPDATE cases
@@ -9690,6 +9833,60 @@ def vet_submit(
     )
 
     return RedirectResponse(url="/radiologist", status_code=303)
+
+
+@app.post("/vet/{case_id}/reopen-request")
+def vet_reopen_request(
+    request: Request,
+    case_id: str,
+    reopen_notes: str = Form(...),
+):
+    user = require_radiologist(request)
+    rad_name = user.get("radiologist_name")
+    org_id = user.get("org_id")
+    reopen_reason = (reopen_notes or "").strip()
+    if not reopen_reason:
+        raise HTTPException(status_code=400, detail="Reason for reopening is required")
+
+    conn = get_db()
+    if org_id:
+        row = conn.execute(
+            "SELECT id, radiologist, status, admin_notes, org_id FROM cases WHERE id = ? AND org_id = ?",
+            (case_id, org_id),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id, radiologist, status, admin_notes, org_id FROM cases WHERE id = ?",
+            (case_id,),
+        ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Case not found")
+    if row["radiologist"] != rad_name:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Not your case")
+    if str(row["status"] or "").strip().lower() not in {"vetted", "rejected"}:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Only decided cases can be reopened")
+
+    current_notes = row["admin_notes"] or ""
+    reopen_entry = f"{REOPEN_NOTE_MARKER}\n{reopen_reason}"
+    updated_notes = "\n\n".join(part for part in [current_notes.strip(), reopen_entry] if part).strip()
+    conn.execute(
+        "UPDATE cases SET status = ?, admin_notes = ? WHERE id = ?",
+        ("reopened", updated_notes, case_id),
+    )
+    conn.commit()
+    conn.close()
+
+    insert_case_event(
+        case_id=case_id,
+        org_id=org_id or row["org_id"],
+        event_type="REOPENED",
+        user=user,
+        comment=reopen_reason,
+    )
+    return RedirectResponse(url=f"/vet/{case_id}", status_code=303)
 
 
 # -------------------------
@@ -9838,6 +10035,19 @@ def view_specific_attachment_preview(request: Request, case_id: str, attachment_
         return HTMLResponse(
             f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}body{{display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}}img{{max-width:100%;max-height:100%;object-fit:contain;background:#fff;border-radius:8px}}</style></head><body><img src="/case/{case_id}/attachments/{attachment_id}/inline" alt="{html.escape(filename)}"></body></html>"""
         )
+
+    file_bytes = load_case_attachment_bytes(attachment.get("stored_filepath"))
+    if file_bytes is None:
+        raise HTTPException(status_code=410, detail="Attachment missing or expired")
+
+    if lower_name.endswith((".txt", ".csv", ".json", ".xml", ".html", ".htm", ".md")):
+        return render_text_preview_html(file_bytes)
+
+    if lower_name.endswith(".docx"):
+        docx_preview = render_docx_preview_html(file_bytes, filename)
+        if docx_preview:
+            return docx_preview
+
     return HTMLResponse(
         f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220;color:#e2e8f0;font-family:Segoe UI,Arial,sans-serif}}body{{display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}}.card{{max-width:520px;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.2);border-radius:14px;padding:24px;text-align:center}}.name{{font-weight:600;color:#fff;margin-bottom:10px}}.msg{{color:#cbd5e1;line-height:1.6;margin-bottom:16px}}.btn{{display:inline-block;padding:10px 14px;border-radius:8px;background:#1f6feb;color:#fff;text-decoration:none}}</style></head><body><div class="card"><div class="name">{html.escape(filename)}</div><div class="msg">Preview is not available for this file type in the current environment.</div><a class="btn" href="/case/{case_id}/attachments/{attachment_id}/inline" target="_blank" rel="noopener">Open attachment</a></div></body></html>"""
     )
@@ -9944,50 +10154,13 @@ def view_attachment_preview(request: Request, case_id: str):
         clear_case_stored_filepath(case_id)
         raise HTTPException(status_code=410, detail="Referral file missing or expired")
 
-    if lower_name.endswith((".txt", ".csv", ".json", ".xml", ".html", ".htm")):
-        try:
-            text_content = file_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            text_content = file_bytes.decode("latin-1", errors="replace")
-        safe_text = html.escape(text_content)
-        return HTMLResponse(
-            f"""<!doctype html>
-<html><head><meta charset="utf-8"><style>html,body{{margin:0;background:#fff;color:#0f172a;font-family:Segoe UI,Arial,sans-serif}}pre{{margin:0;padding:18px;white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.5}}</style></head>
-<body><pre>{safe_text}</pre></body></html>"""
-        )
+    if lower_name.endswith((".txt", ".csv", ".json", ".xml", ".html", ".htm", ".md")):
+        return render_text_preview_html(file_bytes)
 
     if lower_name.endswith(".docx"):
-        try:
-            from docx import Document
-            doc = Document(io.BytesIO(file_bytes))
-            blocks: list[str] = []
-            for para in doc.paragraphs:
-                text_value = (para.text or "").strip()
-                if text_value:
-                    blocks.append(f"<p>{html.escape(text_value)}</p>")
-            for table in doc.tables:
-                rows_html: list[str] = []
-                for row in table.rows:
-                    cells = "".join(f"<td>{html.escape((cell.text or '').strip())}</td>" for cell in row.cells)
-                    rows_html.append(f"<tr>{cells}</tr>")
-                if rows_html:
-                    blocks.append(f"<table>{''.join(rows_html)}</table>")
-            if not blocks:
-                blocks.append("<p>No previewable text found in this document.</p>")
-            return HTMLResponse(
-                """<!doctype html>
-<html><head><meta charset="utf-8"><style>
-html,body{margin:0;background:#fff;color:#0f172a;font-family:Segoe UI,Arial,sans-serif}
-.docx-wrap{padding:20px 22px;font-size:14px;line-height:1.6}
-p{margin:0 0 12px}
-table{border-collapse:collapse;width:100%;margin:10px 0 16px}
-td{border:1px solid #cbd5e1;padding:8px 10px;vertical-align:top}
-</style></head><body><div class="docx-wrap">"""
-                + "".join(blocks) +
-                "</div></body></html>"
-            )
-        except Exception as exc:
-            print(f"[attachment-preview] docx preview failed for {case_id}: {exc}")
+        docx_preview = render_docx_preview_html(file_bytes, filename)
+        if docx_preview:
+            return docx_preview
 
     fallback_message = (
         "Preview is not available for this file type in the current environment. "
@@ -10116,8 +10289,12 @@ def case_pdf(request: Request, case_id: str, inline: bool = False, include_timel
                 return "Decision recorded"
             if event_type == "REPORT_SENT":
                 return "Justification sent"
+            if event_type == "JUSTIFICATION_NOT_REQUIRED":
+                return "No justification required"
             if event_type == "REPORT_SENT_RESET":
                 return "Justification sent status reset"
+            if event_type == "DELETED":
+                return "Case deleted"
             if event_type == "EXAM_CATALOGUE_EXCEPTION":
                 return "Temporary uncatalogued exam"
             if event_type == "EDITED":

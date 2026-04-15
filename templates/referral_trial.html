@@ -29,6 +29,11 @@
     .info { font-size: 11px; opacity: 0.72; margin-top: 2px; }
     .study-picker { position: relative; }
     .study-picker input { width: 100%; box-sizing: border-box; }
+    .extra-exams { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .extra-exam-row { display: grid; grid-template-columns: 160px minmax(240px, 1fr) 220px auto; gap: 10px; align-items: end; padding: 10px; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; background: rgba(255,255,255,0.04); }
+    .extra-exam-row .form-row { margin-bottom: 0; }
+    .remove-exam-btn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid rgba(239,68,68,0.35); background: rgba(239,68,68,0.18); color: #fecaca; cursor: pointer; }
+    .add-exam-btn { margin-top: 10px; width: fit-content; }
     .description-dropdown {
       display: none;
       position: absolute;
@@ -75,6 +80,7 @@
       .trial-wrap { padding: 10px; }
       .trial-review-grid { grid-template-columns: 1fr; }
       .form-grid { grid-template-columns: 1fr; }
+      .extra-exam-row { grid-template-columns: 1fr; }
       .actions { flex-direction: column; }
       .actions .btn { width: 100%; text-align: center; }
     }
@@ -124,7 +130,7 @@
         {% endfor %}
       {% endif %}
 
-      <form method="post" action="/submit/referral-trial/create">
+      <form method="post" action="/submit/referral-trial/create" enctype="multipart/form-data">
         <input type="hidden" name="attachment_token" value="{{ draft.attachment_token }}">
         <input type="hidden" name="attachment_original_name" value="{{ draft.attachment_original_name }}">
         <div class="form-grid">
@@ -144,6 +150,10 @@
           <div class="form-row">
             <label>DOB</label>
             <input name="patient_dob" value="{{ draft.patient_dob }}">
+          </div>
+          <div class="form-row">
+            <label>Request Date</label>
+            <input name="request_date" type="date" value="{{ draft.request_date or '' }}">
           </div>
           <div class="form-row">
             <label>Institution</label>
@@ -209,6 +219,12 @@
               </div>
             </div>
             <div class="info">This uses the same owner-managed master exam catalogue as manual case submission.</div>
+            <div style="margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.1);">
+              <strong>Additional examinations on this referral</strong>
+              <div class="info">Use this when the same referral asks for more than one examination.</div>
+              <button type="button" class="btn btn-secondary add-exam-btn" onclick="addReferralExamRow()">Add another exam</button>
+            </div>
+            <div id="extraReferralExams" class="extra-exams"></div>
           </div>
           <div class="form-row full">
             <label>Admin notes</label>
@@ -254,6 +270,13 @@
   <script>
     let allDescriptions = [];
     let descriptionCache = {};
+    let extraExamRowCount = 0;
+    const radiologists = [
+      { value: "", label: "Assign later" },
+      {% for rad in radiologists %}
+        { value: {{ rad.name | tojson }}, label: {{ rad.name | tojson }} },
+      {% endfor %}
+    ];
 
     function resolveOrgId() {
       return '{{ user_org_id or 1 }}';
@@ -342,6 +365,154 @@
       document.getElementById('descriptionList').style.display = 'none';
     }
 
+    function addReferralExamRow() {
+      extraExamRowCount += 1;
+      const rowId = extraExamRowCount;
+      const container = document.getElementById('extraReferralExams');
+      const row = document.createElement('div');
+      row.className = 'extra-exam-row';
+
+      const modalityWrap = document.createElement('div');
+      modalityWrap.className = 'form-row';
+      modalityWrap.innerHTML = `
+        <label>Modality</label>
+        <select name="extra_modality[]" id="extra_modality_${rowId}">
+          <option value="">Select modality</option>
+          <option value="MRI">MRI (Magnetic Resonance)</option>
+          <option value="CT">CT (Computed Tomography)</option>
+          <option value="XR">XR (X-Ray)</option>
+          <option value="PET">PET (Positron Emission Tomography)</option>
+          <option value="DEXA">DEXA (Bone Densitometry)</option>
+        </select>
+      `;
+
+      const studyWrap = document.createElement('div');
+      studyWrap.className = 'form-row';
+      studyWrap.innerHTML = `
+        <label>Study description</label>
+        <div class="study-picker">
+          <input type="hidden" name="extra_study_description_preset_id[]" id="extra_study_description_preset_id_${rowId}">
+          <input type="hidden" name="extra_study_code[]" id="extra_study_code_${rowId}">
+          <input name="extra_study_description[]" id="extra_study_description_${rowId}" type="text" placeholder="Select modality, then choose an exam" readonly autocomplete="off">
+          <div class="info" id="extra_study_code_hint_${rowId}">Exam code will appear after selection.</div>
+          <div id="extra_descriptionList_${rowId}" class="description-dropdown">
+            <div class="protocol-panel-header">
+              <span class="protocol-title">Available Exams</span>
+              <span class="protocol-meta" data-meta>Modality: --</span>
+            </div>
+            <div class="protocol-panel-search">
+              <input class="protocol-search-input" type="text" placeholder="Search exams">
+            </div>
+            <div class="protocol-panel-list" data-list></div>
+          </div>
+        </div>
+      `;
+
+      const radiologistWrap = document.createElement('div');
+      radiologistWrap.className = 'form-row';
+      const radiologistOptions = radiologists.map(rad => `<option value="${escapeHtml(rad.value)}">${escapeHtml(rad.label)}</option>`).join('');
+      radiologistWrap.innerHTML = `
+        <label>Practitioner (optional)</label>
+        <select name="extra_radiologist[]">${radiologistOptions}</select>
+      `;
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'remove-exam-btn';
+      removeBtn.textContent = 'x';
+      removeBtn.title = 'Remove exam';
+      removeBtn.onclick = () => row.remove();
+
+      row.appendChild(modalityWrap);
+      row.appendChild(studyWrap);
+      row.appendChild(radiologistWrap);
+      row.appendChild(removeBtn);
+      container.appendChild(row);
+
+      const modalitySelect = document.getElementById(`extra_modality_${rowId}`);
+      const studyInput = document.getElementById(`extra_study_description_${rowId}`);
+      const dropdown = document.getElementById(`extra_descriptionList_${rowId}`);
+      const searchInput = dropdown.querySelector('.protocol-search-input');
+      modalitySelect.addEventListener('change', () => loadExtraStudyDescriptions(rowId));
+      studyInput.addEventListener('focus', () => showExtraDescriptions(rowId));
+      searchInput.addEventListener('input', () => filterExtraDescriptions(rowId));
+    }
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[char]));
+    }
+
+    async function loadExtraStudyDescriptions(rowId) {
+      document.getElementById(`extra_study_description_${rowId}`).value = '';
+      document.getElementById(`extra_study_description_preset_id_${rowId}`).value = '';
+      document.getElementById(`extra_study_code_${rowId}`).value = '';
+      document.getElementById(`extra_study_code_hint_${rowId}`).textContent = 'Exam code will appear after selection.';
+      await fetchExtraDescriptions(rowId);
+      showExtraDescriptions(rowId);
+    }
+
+    async function fetchExtraDescriptions(rowId) {
+      const modality = document.getElementById(`extra_modality_${rowId}`).value;
+      if (!modality) {
+        return [];
+      }
+      const orgId = resolveOrgId();
+      const cacheKey = `${orgId}_${modality}`;
+      if (!descriptionCache[cacheKey]) {
+        const response = await fetch(`/api/study-descriptions/by-modality/${modality}?org_id=${orgId}`);
+        descriptionCache[cacheKey] = await response.json();
+      }
+      return descriptionCache[cacheKey] || [];
+    }
+
+    async function showExtraDescriptions(rowId) {
+      const items = await fetchExtraDescriptions(rowId);
+      renderExtraDescriptions(rowId, items, '');
+    }
+
+    async function filterExtraDescriptions(rowId) {
+      const items = await fetchExtraDescriptions(rowId);
+      const dropdown = document.getElementById(`extra_descriptionList_${rowId}`);
+      const search = dropdown.querySelector('.protocol-search-input').value.toLowerCase();
+      renderExtraDescriptions(rowId, items, search);
+    }
+
+    function renderExtraDescriptions(rowId, items, search) {
+      const dropdown = document.getElementById(`extra_descriptionList_${rowId}`);
+      const list = dropdown.querySelector('[data-list]');
+      const meta = dropdown.querySelector('[data-meta]');
+      const modality = document.getElementById(`extra_modality_${rowId}`).value || '--';
+      const filtered = search
+        ? items.filter(item => String(item.description || '').toLowerCase().includes(search))
+        : items;
+      meta.textContent = `Modality: ${modality}`;
+      if (!modality || modality === '--') {
+        list.innerHTML = '<div class="protocol-empty">Select a modality first.</div>';
+      } else if (!filtered.length) {
+        list.innerHTML = '<div class="protocol-empty">No matching study descriptions.</div>';
+      } else {
+        list.innerHTML = '';
+        filtered.forEach(item => {
+          const option = document.createElement('div');
+          option.className = 'protocol-item';
+          option.textContent = item.label || item.description;
+          option.onclick = () => selectExtraDescription(rowId, item);
+          list.appendChild(option);
+        });
+      }
+      dropdown.style.display = 'block';
+    }
+
+    function selectExtraDescription(rowId, item) {
+      document.getElementById(`extra_study_description_${rowId}`).value = item.description || '';
+      document.getElementById(`extra_study_description_preset_id_${rowId}`).value = item.id || '';
+      document.getElementById(`extra_study_code_${rowId}`).value = item.study_code || '';
+      document.getElementById(`extra_study_code_hint_${rowId}`).textContent = item.study_code ? `Exam code: ${item.study_code}` : 'Exam code will appear after selection.';
+      document.getElementById(`extra_descriptionList_${rowId}`).style.display = 'none';
+    }
+
     function toggleUncataloguedExamMode() {
       const enabled = !!document.getElementById('uncatalogued_exam_requested')?.checked;
       const studyInput = document.getElementById('study_description');
@@ -376,6 +547,12 @@
       if (picker && dropdown && !picker.contains(event.target)) {
         dropdown.style.display = 'none';
       }
+      document.querySelectorAll('#extraReferralExams .study-picker').forEach(extraPicker => {
+        const extraDropdown = extraPicker.querySelector('.description-dropdown');
+        if (extraDropdown && !extraPicker.contains(event.target)) {
+          extraDropdown.style.display = 'none';
+        }
+      });
     });
 
     if (document.getElementById('modality') && document.getElementById('modality').value) {
