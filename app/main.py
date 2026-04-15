@@ -227,7 +227,9 @@ def display_case_event_label(event_type_value: str | None) -> str:
         "REOPENED": "Case Reopened",
         "EDITED": "Case Edited",
         "REPORT_SENT": "Justification Sent",
+        "JUSTIFICATION_NOT_REQUIRED": "No Justification Required",
         "REPORT_SENT_RESET": "Justification Sent Reset",
+        "DELETED": "Case Deleted",
         "EXAM_CATALOGUE_EXCEPTION": "Temporary Uncatalogued Exam",
     }
     if event_type in mapping:
@@ -1639,6 +1641,9 @@ def ensure_report_sent_schema() -> None:
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_at TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_by TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_by_id INTEGER")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS justification_not_required_at TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS justification_not_required_by TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS justification_not_required_by_id INTEGER")
         conn.commit()
         conn.close()
         return
@@ -1666,6 +1671,12 @@ def ensure_report_sent_schema() -> None:
         cur.execute("ALTER TABLE cases ADD COLUMN report_sent_by TEXT")
     if "report_sent_by_id" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN report_sent_by_id INTEGER")
+    if "justification_not_required_at" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN justification_not_required_at TEXT")
+    if "justification_not_required_by" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN justification_not_required_by TEXT")
+    if "justification_not_required_by_id" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN justification_not_required_by_id INTEGER")
     conn.commit()
     conn.close()
 
@@ -2494,6 +2505,9 @@ def get_protocol_row(protocol_id: int, institution_id: int | None = None, org_id
 
 
 def get_report_sent_summary(case_row: dict) -> tuple[bool, str]:
+    not_required_at = str(case_row.get("justification_not_required_at") or "").strip()
+    if not_required_at:
+        return True, "Not required"
     sent_at = str(case_row.get("report_sent_at") or "").strip()
     if not sent_at:
         return False, ""
@@ -5817,6 +5831,7 @@ def admin_dashboard(
         d["display_case_id"] = d.get("id") or "-"
         d["status_display"] = display_case_status(d.get("status"))
         d["report_sent"], d["report_sent_display"] = get_report_sent_summary(d)
+        d["justification_not_required"] = bool(str(d.get("justification_not_required_at") or "").strip())
         d["catalogue_review_required"], d["catalogue_review_display"] = get_exam_catalogue_review_summary(d)
         cases.append(d)
 
@@ -6550,6 +6565,7 @@ def admin_case_view(request: Request, case_id: str):
         case_dict["status_display"] = display_case_status(case_dict.get("status"))
         case_dict["decision_display"] = display_decision_label(case_dict.get("decision"))
         case_dict["report_sent"], case_dict["report_sent_display"] = get_report_sent_summary(case_dict)
+        case_dict["justification_not_required"] = bool(str(case_dict.get("justification_not_required_at") or "").strip())
         case_dict["catalogue_review_required"], case_dict["catalogue_review_display"] = get_exam_catalogue_review_summary(case_dict)
         attachments = list_case_attachments(case_id, case_dict=case_dict)
         case_dict.update(build_case_preview_context(case_id, case_dict, attachments))
@@ -6615,7 +6631,14 @@ def admin_case_mark_report_sent(request: Request, case_id: str, return_to: str =
         raise HTTPException(status_code=404, detail="Case not found")
     now = utc_now_iso()
     conn.execute(
-        "UPDATE cases SET report_sent_at = ?, report_sent_by = ?, report_sent_by_id = ? WHERE id = ?",
+        """
+        UPDATE cases
+        SET report_sent_at = ?, report_sent_by = ?, report_sent_by_id = ?,
+            justification_not_required_at = NULL,
+            justification_not_required_by = NULL,
+            justification_not_required_by_id = NULL
+        WHERE id = ?
+        """,
         (now, user.get("username"), user.get("id"), case_id),
     )
     conn.commit()
@@ -6646,7 +6669,14 @@ def admin_case_reset_report_sent(request: Request, case_id: str, return_to: str 
         conn.close()
         raise HTTPException(status_code=404, detail="Case not found")
     conn.execute(
-        "UPDATE cases SET report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL WHERE id = ?",
+        """
+        UPDATE cases
+        SET report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
+            justification_not_required_at = NULL,
+            justification_not_required_by = NULL,
+            justification_not_required_by_id = NULL
+        WHERE id = ?
+        """,
         (case_id,),
     )
     conn.commit()
@@ -6662,6 +6692,74 @@ def admin_case_reset_report_sent(request: Request, case_id: str, return_to: str 
     if safe_return_to.startswith("/admin"):
         return RedirectResponse(url=safe_return_to, status_code=303)
     return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
+
+
+@app.post("/admin/case/{case_id}/justification-not-required")
+def admin_case_mark_justification_not_required(request: Request, case_id: str, return_to: str = Form("")):
+    user = require_admin(request)
+    conn = get_db()
+    org_id = user.get("org_id")
+    if org_id and not user.get("is_superuser"):
+        row = conn.execute("SELECT id, org_id FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
+    else:
+        row = conn.execute("SELECT id, org_id FROM cases WHERE id = ?", (case_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Case not found")
+    now = utc_now_iso()
+    conn.execute(
+        """
+        UPDATE cases
+        SET report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
+            justification_not_required_at = ?,
+            justification_not_required_by = ?,
+            justification_not_required_by_id = ?
+        WHERE id = ?
+        """,
+        (now, user.get("username"), user.get("id"), case_id),
+    )
+    conn.commit()
+    conn.close()
+    insert_case_event(
+        case_id=case_id,
+        org_id=dict(row).get("org_id"),
+        event_type="JUSTIFICATION_NOT_REQUIRED",
+        user=user,
+        comment="No justification required",
+    )
+    safe_return_to = (return_to or "").strip()
+    if safe_return_to.startswith("/admin"):
+        return RedirectResponse(url=safe_return_to, status_code=303)
+    return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
+
+
+@app.post("/admin/case/{case_id}/delete")
+def admin_case_delete(request: Request, case_id: str, return_to: str = Form("")):
+    user = require_admin(request)
+    conn = get_db()
+    org_id = user.get("org_id")
+    if org_id and not user.get("is_superuser"):
+        row = conn.execute("SELECT * FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
+    else:
+        row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Case not found")
+    case_data = row if isinstance(row, dict) else dict(row)
+    attachments = list_case_attachments(case_id, case_dict=case_data)
+    for attachment in attachments:
+        delete_stored_attachment_file(attachment.get("stored_filepath"))
+    if table_exists("case_attachments"):
+        conn.execute("DELETE FROM case_attachments WHERE case_id = ?", (case_id,))
+    if table_exists("case_events"):
+        conn.execute("DELETE FROM case_events WHERE case_id = ?", (case_id,))
+    conn.execute("DELETE FROM cases WHERE id = ?", (case_id,))
+    conn.commit()
+    conn.close()
+    safe_return_to = (return_to or "").strip()
+    if safe_return_to.startswith("/admin"):
+        return RedirectResponse(url=safe_return_to, status_code=303)
+    return RedirectResponse(url="/admin", status_code=303)
 
 
 @app.get("/admin/case/{case_id}/timeline.pdf")
@@ -10124,8 +10222,12 @@ def case_pdf(request: Request, case_id: str, inline: bool = False, include_timel
                 return "Decision recorded"
             if event_type == "REPORT_SENT":
                 return "Justification sent"
+            if event_type == "JUSTIFICATION_NOT_REQUIRED":
+                return "No justification required"
             if event_type == "REPORT_SENT_RESET":
                 return "Justification sent status reset"
+            if event_type == "DELETED":
+                return "Case deleted"
             if event_type == "EXAM_CATALOGUE_EXCEPTION":
                 return "Temporary uncatalogued exam"
             if event_type == "EDITED":

@@ -12,6 +12,7 @@
     th { text-align: left; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.6); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
     .btn { display: inline-block; padding: 10px 14px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; }
     .btn.secondary { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.8); }
+    .btn.danger { background: rgba(239,68,68,0.82); border: 1px solid rgba(252,165,165,0.28); }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .small { font-size: 12px; color: rgba(255,255,255,0.5); }
     .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 20px; }
@@ -21,11 +22,12 @@
     .case-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; width: 100%; }
     .case-grid .card { margin: 0; }
     .card-full-width { grid-column: 1 / -1; }
-    .preview-card { display: flex; flex-direction: column; }
-    .preview-body { flex: 1; min-height: 70vh; }
+    .preview-card { display: flex; flex-direction: column; min-width: 0; }
+    .preview-body { flex: 0 0 auto; height: min(66vh, 720px); min-height: 420px; margin-bottom: 16px; }
     .preview-frame { width: 100%; height: 100%; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; background: #fff; }
-    .attachment-list { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
-    .attachment-item { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); }
+    .attachment-list { display:flex; flex-direction:column; gap:12px; margin-top:14px; padding-top:2px; }
+    .attachment-item { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 14px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); flex-wrap:wrap; }
+    .attachment-item .btn { flex:0 0 auto; }
     .attachment-name { color:#f8fbff; font-weight:500; word-break:break-word; }
     .attachment-meta { color:rgba(255,255,255,0.55); font-size:12px; margin-top:4px; }
     .attachment-primary { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:11px; background:rgba(31,111,235,0.18); color:#93c5fd; border:1px solid rgba(31,111,235,0.35); }
@@ -52,6 +54,12 @@
     .ev-OTHER { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.15); }
     .detail-row { margin: 3px 0; font-size: 12px; line-height: 1.5; color: rgba(255,255,255,0.65); }
     .detail-row span { color: rgba(255,255,255,0.45); font-weight: 500; }
+    .confirm-modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(2,6,23,0.72); z-index:10000; }
+    .confirm-modal.active { display:flex; }
+    .confirm-card { width:min(460px, 100%); border-radius:16px; padding:22px; background:#111827; border:1px solid rgba(255,255,255,0.14); box-shadow:0 24px 70px rgba(0,0,0,0.42); }
+    .confirm-card h3 { margin:0 0 8px; }
+    .confirm-card p { margin:0 0 18px; color:rgba(255,255,255,0.72); line-height:1.5; }
+    .confirm-actions { display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
     @media (max-width: 1200px) { .case-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 800px) { .case-grid { grid-template-columns: 1fr; } }
     @media (max-width: 700px) {
@@ -76,6 +84,7 @@
           {% if case['status'] == 'vetted' or case['status'] == 'rejected' %}
           <a class="btn" style="background:#f39c12;" href="/admin/case/{{ case['id'] }}/reopen">Reopen Case</a>
           {% endif %}
+          <button type="button" class="btn danger" id="deleteCaseOpen">Delete Case</button>
           <a class="btn secondary" href="{{ return_to if return_to else '/admin' }}">Back</a>
         </div>
       </div>
@@ -98,7 +107,7 @@
           {% endif %}
           <p><b>Decision:</b> {{ case["decision_display"] or "" }}</p>
           <p><b>Comment:</b><br>{{ case["decision_comment"] or "" }}</p>
-          <p><b>Justification Sent:</b> {% if case["report_sent"] %}{{ case["report_sent_display"] }} by {{ case["report_sent_by"] or "Unknown" }}{% else %}Not sent{% endif %}</p>
+          <p><b>Justification Sent:</b> {% if case["justification_not_required"] %}Not required{% elif case["report_sent"] %}{{ case["report_sent_display"] }} by {{ case["report_sent_by"] or "Unknown" }}{% else %}Not sent{% endif %}</p>
           {% if case["catalogue_review_required"] %}
           <p><b>Catalogue Review:</b> Required{% if case["catalogue_review_display"] %} ({{ case["catalogue_review_display"] }}){% endif %}</p>
           {% endif %}
@@ -113,6 +122,12 @@
             <form method="post" action="/admin/case/{{ case['id'] }}/report-sent" style="display:inline;">
               <input type="hidden" name="return_to" value="/admin/case/{{ case['id'] }}{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">
               <button type="submit" class="btn">Mark Justification Sent</button>
+            </form>
+            {% endif %}
+            {% if not case["justification_not_required"] %}
+            <form method="post" action="/admin/case/{{ case['id'] }}/justification-not-required" style="display:inline;">
+              <input type="hidden" name="return_to" value="/admin/case/{{ case['id'] }}{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">
+              <button type="submit" class="btn secondary">No Justification Required</button>
             </form>
             {% endif %}
           </div>
@@ -258,7 +273,44 @@
       </div>
     </div>
   </div>
+  <div class="confirm-modal" id="deleteCaseModal" aria-hidden="true">
+    <div class="confirm-card">
+      <h3>Delete this case?</h3>
+      <p>This will permanently remove the case and its attached files from RadFlow. This cannot be undone.</p>
+      <div class="confirm-actions">
+        <button type="button" class="btn secondary" id="deleteCaseCancel">Cancel</button>
+        <form method="post" action="/admin/case/{{ case['id'] }}/delete" style="margin:0;">
+          <input type="hidden" name="return_to" value="{{ return_to if return_to else '/admin' }}">
+          <button type="submit" class="btn danger">Delete Case</button>
+        </form>
+      </div>
+    </div>
+  </div>
   <script>
+    const deleteCaseModal = document.getElementById('deleteCaseModal');
+    const deleteCaseOpen = document.getElementById('deleteCaseOpen');
+    const deleteCaseCancel = document.getElementById('deleteCaseCancel');
+    if (deleteCaseOpen && deleteCaseModal) {
+      deleteCaseOpen.addEventListener('click', () => {
+        deleteCaseModal.classList.add('active');
+        deleteCaseModal.setAttribute('aria-hidden', 'false');
+      });
+    }
+    if (deleteCaseCancel && deleteCaseModal) {
+      deleteCaseCancel.addEventListener('click', () => {
+        deleteCaseModal.classList.remove('active');
+        deleteCaseModal.setAttribute('aria-hidden', 'true');
+      });
+    }
+    if (deleteCaseModal) {
+      deleteCaseModal.addEventListener('click', (event) => {
+        if (event.target === deleteCaseModal) {
+          deleteCaseModal.classList.remove('active');
+          deleteCaseModal.setAttribute('aria-hidden', 'true');
+        }
+      });
+    }
+
     document.querySelectorAll('.attachment-preview-trigger').forEach((button) => {
       button.addEventListener('click', () => {
         const frame = document.getElementById('casePreviewFrame');

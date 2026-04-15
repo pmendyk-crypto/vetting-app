@@ -38,6 +38,7 @@ class DisplayHelperTests(unittest.TestCase):
 
     def test_display_case_event_label_humanizes_report_sent(self):
         self.assertEqual(display_case_event_label("REPORT_SENT"), "Justification Sent")
+        self.assertEqual(display_case_event_label("JUSTIFICATION_NOT_REQUIRED"), "No Justification Required")
         self.assertEqual(display_case_event_label("REPORT_SENT_RESET"), "Justification Sent Reset")
 
     def test_format_exam_label_includes_study_code(self):
@@ -53,6 +54,11 @@ class DisplayHelperTests(unittest.TestCase):
         sent, label = get_report_sent_summary({})
         self.assertFalse(sent)
         self.assertEqual(label, "")
+
+    def test_report_sent_summary_handles_not_required_state(self):
+        sent, label = get_report_sent_summary({"justification_not_required_at": "2026-04-09T09:15:00+00:00"})
+        self.assertTrue(sent)
+        self.assertEqual(label, "Not required")
 
     def test_exam_catalogue_review_summary_uses_reason(self):
         flagged, label = get_exam_catalogue_review_summary(
