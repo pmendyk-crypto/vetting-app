@@ -1644,6 +1644,21 @@ def ensure_report_sent_schema() -> None:
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS justification_not_required_at TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS justification_not_required_by TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS justification_not_required_by_id INTEGER")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS justification_not_required_reason TEXT")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS case_deletion_audit (
+                id SERIAL PRIMARY KEY,
+                case_id TEXT NOT NULL,
+                org_id INTEGER,
+                deleted_at TEXT NOT NULL,
+                deleted_by TEXT,
+                deleted_by_id INTEGER,
+                reason TEXT NOT NULL,
+                case_snapshot TEXT
+            )
+            """
+        )
         conn.commit()
         conn.close()
         return
@@ -1677,6 +1692,22 @@ def ensure_report_sent_schema() -> None:
         cur.execute("ALTER TABLE cases ADD COLUMN justification_not_required_by TEXT")
     if "justification_not_required_by_id" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN justification_not_required_by_id INTEGER")
+    if "justification_not_required_reason" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN justification_not_required_reason TEXT")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS case_deletion_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id TEXT NOT NULL,
+            org_id INTEGER,
+            deleted_at TEXT NOT NULL,
+            deleted_by TEXT,
+            deleted_by_id INTEGER,
+            reason TEXT NOT NULL,
+            case_snapshot TEXT
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -6636,7 +6667,8 @@ def admin_case_mark_report_sent(request: Request, case_id: str, return_to: str =
         SET report_sent_at = ?, report_sent_by = ?, report_sent_by_id = ?,
             justification_not_required_at = NULL,
             justification_not_required_by = NULL,
-            justification_not_required_by_id = NULL
+            justification_not_required_by_id = NULL,
+            justification_not_required_reason = NULL
         WHERE id = ?
         """,
         (now, user.get("username"), user.get("id"), case_id),
@@ -6674,7 +6706,8 @@ def admin_case_reset_report_sent(request: Request, case_id: str, return_to: str 
         SET report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
             justification_not_required_at = NULL,
             justification_not_required_by = NULL,
-            justification_not_required_by_id = NULL
+            justification_not_required_by_id = NULL,
+            justification_not_required_reason = NULL
         WHERE id = ?
         """,
         (case_id,),
@@ -6695,8 +6728,11 @@ def admin_case_reset_report_sent(request: Request, case_id: str, return_to: str 
 
 
 @app.post("/admin/case/{case_id}/justification-not-required")
-def admin_case_mark_justification_not_required(request: Request, case_id: str, return_to: str = Form("")):
+def admin_case_mark_justification_not_required(request: Request, case_id: str, return_to: str = Form(""), justification_reason: str = Form("")):
     user = require_admin(request)
+    reason = " ".join((justification_reason or "").split())
+    if not reason:
+        raise HTTPException(status_code=400, detail="Reason is required to mark no justification required.")
     conn = get_db()
     org_id = user.get("org_id")
     if org_id and not user.get("is_superuser"):
@@ -6713,10 +6749,11 @@ def admin_case_mark_justification_not_required(request: Request, case_id: str, r
         SET report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
             justification_not_required_at = ?,
             justification_not_required_by = ?,
-            justification_not_required_by_id = ?
+            justification_not_required_by_id = ?,
+            justification_not_required_reason = ?
         WHERE id = ?
         """,
-        (now, user.get("username"), user.get("id"), case_id),
+        (now, user.get("username"), user.get("id"), reason, case_id),
     )
     conn.commit()
     conn.close()
@@ -6725,7 +6762,7 @@ def admin_case_mark_justification_not_required(request: Request, case_id: str, r
         org_id=dict(row).get("org_id"),
         event_type="JUSTIFICATION_NOT_REQUIRED",
         user=user,
-        comment="No justification required",
+        comment=f"No justification required: {reason}",
     )
     safe_return_to = (return_to or "").strip()
     if safe_return_to.startswith("/admin"):
@@ -6734,8 +6771,11 @@ def admin_case_mark_justification_not_required(request: Request, case_id: str, r
 
 
 @app.post("/admin/case/{case_id}/delete")
-def admin_case_delete(request: Request, case_id: str, return_to: str = Form("")):
+def admin_case_delete(request: Request, case_id: str, return_to: str = Form(""), delete_reason: str = Form("")):
     user = require_admin(request)
+    reason = " ".join((delete_reason or "").split())
+    if not reason:
+        raise HTTPException(status_code=400, detail="Reason is required to delete a case.")
     conn = get_db()
     org_id = user.get("org_id")
     if org_id and not user.get("is_superuser"):
@@ -6746,6 +6786,25 @@ def admin_case_delete(request: Request, case_id: str, return_to: str = Form(""))
         conn.close()
         raise HTTPException(status_code=404, detail="Case not found")
     case_data = row if isinstance(row, dict) else dict(row)
+    case_snapshot = _json.dumps(case_data, default=str)
+    if using_postgres():
+        conn.execute(
+            """
+            INSERT INTO case_deletion_audit
+            (case_id, org_id, deleted_at, deleted_by, deleted_by_id, reason, case_snapshot)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (case_id, case_data.get("org_id"), utc_now_iso(), user.get("username"), user.get("id"), reason, case_snapshot),
+        )
+    else:
+        conn.execute(
+            """
+            INSERT INTO case_deletion_audit
+            (case_id, org_id, deleted_at, deleted_by, deleted_by_id, reason, case_snapshot)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (case_id, case_data.get("org_id"), utc_now_iso(), user.get("username"), user.get("id"), reason, case_snapshot),
+        )
     attachments = list_case_attachments(case_id, case_dict=case_data)
     for attachment in attachments:
         delete_stored_attachment_file(attachment.get("stored_filepath"))

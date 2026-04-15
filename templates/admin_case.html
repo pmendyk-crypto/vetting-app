@@ -49,16 +49,21 @@
     .ev-REOPENED { background: rgba(234,179,8,0.18); color: #fde68a; border: 1px solid rgba(234,179,8,0.35); }
     .ev-EDITED { background: rgba(234,88,12,0.18); color: #fdba74; border: 1px solid rgba(234,88,12,0.35); }
     .ev-REPORT_SENT { background: rgba(37,99,235,0.18); color: #bfdbfe; border: 1px solid rgba(37,99,235,0.35); }
+    .ev-JUSTIFICATION_NOT_REQUIRED { background: rgba(148,163,184,0.18); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.32); }
     .ev-REPORT_SENT_RESET { background: rgba(148,163,184,0.18); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.32); }
     .ev-EXAM_CATALOGUE_EXCEPTION { background: rgba(245,158,11,0.18); color: #fcd34d; border: 1px solid rgba(245,158,11,0.35); }
     .ev-OTHER { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.15); }
     .detail-row { margin: 3px 0; font-size: 12px; line-height: 1.5; color: rgba(255,255,255,0.65); }
     .detail-row span { color: rgba(255,255,255,0.45); font-weight: 500; }
+    .case-detail-actions { margin-top:20px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.08); display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+    .case-detail-actions .danger-zone-label { width:100%; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(255,255,255,0.45); }
     .confirm-modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(2,6,23,0.72); z-index:10000; }
     .confirm-modal.active { display:flex; }
     .confirm-card { width:min(460px, 100%); border-radius:16px; padding:22px; background:#111827; border:1px solid rgba(255,255,255,0.14); box-shadow:0 24px 70px rgba(0,0,0,0.42); }
     .confirm-card h3 { margin:0 0 8px; }
     .confirm-card p { margin:0 0 18px; color:rgba(255,255,255,0.72); line-height:1.5; }
+    .confirm-card label { display:block; margin:0 0 8px; color:rgba(255,255,255,0.78); font-size:13px; }
+    .confirm-card textarea { width:100%; min-height:108px; resize:vertical; margin-bottom:16px; box-sizing:border-box; }
     .confirm-actions { display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
     @media (max-width: 1200px) { .case-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 800px) { .case-grid { grid-template-columns: 1fr; } }
@@ -84,7 +89,6 @@
           {% if case['status'] == 'vetted' or case['status'] == 'rejected' %}
           <a class="btn" style="background:#f39c12;" href="/admin/case/{{ case['id'] }}/reopen">Reopen Case</a>
           {% endif %}
-          <button type="button" class="btn danger" id="deleteCaseOpen">Delete Case</button>
           <a class="btn secondary" href="{{ return_to if return_to else '/admin' }}">Back</a>
         </div>
       </div>
@@ -107,13 +111,21 @@
           {% endif %}
           <p><b>Decision:</b> {{ case["decision_display"] or "" }}</p>
           <p><b>Comment:</b><br>{{ case["decision_comment"] or "" }}</p>
-          <p><b>Justification Sent:</b> {% if case["justification_not_required"] %}Not required{% elif case["report_sent"] %}{{ case["report_sent_display"] }} by {{ case["report_sent_by"] or "Unknown" }}{% else %}Not sent{% endif %}</p>
+          <p><b>Justification Sent:</b> {% if case["justification_not_required"] %}Not required{% if case["justification_not_required_by"] %} by {{ case["justification_not_required_by"] }}{% endif %}{% elif case["report_sent"] %}{{ case["report_sent_display"] }} by {{ case["report_sent_by"] or "Unknown" }}{% else %}Not sent{% endif %}</p>
+          {% if case["justification_not_required_reason"] %}
+          <p><b>No Justification Reason:</b><br>{{ case["justification_not_required_reason"] }}</p>
+          {% endif %}
           {% if case["catalogue_review_required"] %}
           <p><b>Catalogue Review:</b> Required{% if case["catalogue_review_display"] %} ({{ case["catalogue_review_display"] }}){% endif %}</p>
           {% endif %}
           {% if case["status"] in ["vetted", "rejected"] %}
           <div class="actions" style="margin-top:14px;">
-            {% if case["report_sent"] %}
+            {% if case["justification_not_required"] %}
+            <form method="post" action="/admin/case/{{ case['id'] }}/report-sent/reset" style="display:inline;">
+              <input type="hidden" name="return_to" value="/admin/case/{{ case['id'] }}{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">
+              <button type="submit" class="btn secondary">Reset Justification Status</button>
+            </form>
+            {% elif case["report_sent"] %}
             <form method="post" action="/admin/case/{{ case['id'] }}/report-sent/reset" style="display:inline;">
               <input type="hidden" name="return_to" value="/admin/case/{{ case['id'] }}{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">
               <button type="submit" class="btn secondary">Reset Justification Sent</button>
@@ -124,14 +136,15 @@
               <button type="submit" class="btn">Mark Justification Sent</button>
             </form>
             {% endif %}
-            {% if not case["justification_not_required"] %}
-            <form method="post" action="/admin/case/{{ case['id'] }}/justification-not-required" style="display:inline;">
-              <input type="hidden" name="return_to" value="/admin/case/{{ case['id'] }}{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">
-              <button type="submit" class="btn secondary">No Justification Required</button>
-            </form>
-            {% endif %}
           </div>
           {% endif %}
+          <div class="case-detail-actions">
+            <div class="danger-zone-label">Case actions</div>
+            {% if case["status"] in ["vetted", "rejected"] and not case["justification_not_required"] %}
+            <button type="button" class="btn secondary" id="noJustificationOpen">No Justification Required</button>
+            {% endif %}
+            <button type="button" class="btn danger" id="deleteCaseOpen">Delete Case</button>
+          </div>
         </div>
 
         <div class="card preview-card">
@@ -223,7 +236,7 @@
               <tr>
                 <td class="ts">{{ e["created_at"] | display_datetime }}</td>
                 <td>
-                  <span class="ev-badge ev-{% if ev in ['CREATED','SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','EDITED','REPORT_SENT','REPORT_SENT_RESET','EXAM_CATALOGUE_EXCEPTION'] %}{{ ev }}{% else %}OTHER{% endif %}">
+                  <span class="ev-badge ev-{% if ev in ['CREATED','SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','EDITED','REPORT_SENT','JUSTIFICATION_NOT_REQUIRED','REPORT_SENT_RESET','EXAM_CATALOGUE_EXCEPTION'] %}{{ ev }}{% else %}OTHER{% endif %}">
                     {{ ev|display_case_event_label }}
                   </span>
                 </td>
@@ -249,6 +262,8 @@
                     <div class="detail-row"><span>Details: </span>Justification marked as sent.</div>
                     {% elif ev == "REPORT_SENT_RESET" %}
                     <div class="detail-row"><span>Details: </span>Justification sent status reset.</div>
+                    {% elif ev == "JUSTIFICATION_NOT_REQUIRED" %}
+                    <div class="detail-row"><span>Details: </span>No justification required.</div>
                     {% elif ev == "EXAM_CATALOGUE_EXCEPTION" %}
                     <div class="detail-row"><span>Details: </span>Temporary uncatalogued exam recorded for later review.</div>
                     {% elif ev == "REJECTED" %}
@@ -276,40 +291,69 @@
   <div class="confirm-modal" id="deleteCaseModal" aria-hidden="true">
     <div class="confirm-card">
       <h3>Delete this case?</h3>
-      <p>This will permanently remove the case and its attached files from RadFlow. This cannot be undone.</p>
+      <p>This will permanently remove the case and its attached files from RadFlow. Please record why this deletion is needed.</p>
       <div class="confirm-actions">
         <button type="button" class="btn secondary" id="deleteCaseCancel">Cancel</button>
-        <form method="post" action="/admin/case/{{ case['id'] }}/delete" style="margin:0;">
+        <form method="post" action="/admin/case/{{ case['id'] }}/delete" style="margin:0;width:100%;">
           <input type="hidden" name="return_to" value="{{ return_to if return_to else '/admin' }}">
-          <button type="submit" class="btn danger">Delete Case</button>
+          <label for="deleteReason">Reason for deleting this case</label>
+          <textarea id="deleteReason" name="delete_reason" required placeholder="Enter deletion reason..."></textarea>
+          <div class="confirm-actions">
+            <button type="submit" class="btn danger">Delete Case</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="confirm-modal" id="noJustificationModal" aria-hidden="true">
+    <div class="confirm-card">
+      <h3>No justification required?</h3>
+      <p>This will mark the case as not requiring a justification to be sent. Please record the reason for the audit trail.</p>
+      <div class="confirm-actions">
+        <button type="button" class="btn secondary" id="noJustificationCancel">Cancel</button>
+        <form method="post" action="/admin/case/{{ case['id'] }}/justification-not-required" style="margin:0;width:100%;">
+          <input type="hidden" name="return_to" value="/admin/case/{{ case['id'] }}{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">
+          <label for="justificationReason">Reason no justification is required</label>
+          <textarea id="justificationReason" name="justification_reason" required placeholder="Enter reason..."></textarea>
+          <div class="confirm-actions">
+            <button type="submit" class="btn secondary">Mark Not Required</button>
+          </div>
         </form>
       </div>
     </div>
   </div>
   <script>
-    const deleteCaseModal = document.getElementById('deleteCaseModal');
-    const deleteCaseOpen = document.getElementById('deleteCaseOpen');
-    const deleteCaseCancel = document.getElementById('deleteCaseCancel');
-    if (deleteCaseOpen && deleteCaseModal) {
-      deleteCaseOpen.addEventListener('click', () => {
-        deleteCaseModal.classList.add('active');
-        deleteCaseModal.setAttribute('aria-hidden', 'false');
-      });
+    function bindModal(openId, modalId, cancelId) {
+      const modal = document.getElementById(modalId);
+      const open = document.getElementById(openId);
+      const cancel = document.getElementById(cancelId);
+      if (open && modal) {
+        open.addEventListener('click', () => {
+          modal.classList.add('active');
+          modal.setAttribute('aria-hidden', 'false');
+          const reason = modal.querySelector('textarea');
+          if (reason) {
+            setTimeout(() => reason.focus(), 50);
+          }
+        });
+      }
+      if (cancel && modal) {
+        cancel.addEventListener('click', () => {
+          modal.classList.remove('active');
+          modal.setAttribute('aria-hidden', 'true');
+        });
+      }
+      if (modal) {
+        modal.addEventListener('click', (event) => {
+          if (event.target === modal) {
+            modal.classList.remove('active');
+            modal.setAttribute('aria-hidden', 'true');
+          }
+        });
+      }
     }
-    if (deleteCaseCancel && deleteCaseModal) {
-      deleteCaseCancel.addEventListener('click', () => {
-        deleteCaseModal.classList.remove('active');
-        deleteCaseModal.setAttribute('aria-hidden', 'true');
-      });
-    }
-    if (deleteCaseModal) {
-      deleteCaseModal.addEventListener('click', (event) => {
-        if (event.target === deleteCaseModal) {
-          deleteCaseModal.classList.remove('active');
-          deleteCaseModal.setAttribute('aria-hidden', 'true');
-        }
-      });
-    }
+    bindModal('deleteCaseOpen', 'deleteCaseModal', 'deleteCaseCancel');
+    bindModal('noJustificationOpen', 'noJustificationModal', 'noJustificationCancel');
 
     document.querySelectorAll('.attachment-preview-trigger').forEach((button) => {
       button.addEventListener('click', () => {
