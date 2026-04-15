@@ -87,10 +87,6 @@
           <p class="internal-page-subtitle" style="margin-top:6px;">Review attachments, decision details, justification sent status, and the full case timeline in one place.</p>
         </div>
         <div class="actions internal-page-actions">
-          <a class="btn" href="/admin/case/{{ case['id'] }}/edit{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">Edit Case</a>
-          {% if case['status'] == 'vetted' or case['status'] == 'rejected' %}
-          <a class="btn" style="background:#f39c12;" href="/admin/case/{{ case['id'] }}/reopen">Reopen Case</a>
-          {% endif %}
           <a class="btn secondary" href="{{ return_to if return_to else '/admin' }}">Back</a>
         </div>
       </div>
@@ -143,6 +139,10 @@
           <div class="case-detail-actions">
             <div class="danger-zone-label">Case actions</div>
             <div class="case-detail-action-row">
+              <a class="btn" href="/admin/case/{{ case['id'] }}/edit{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">Edit Case</a>
+              {% if case['status'] == 'vetted' or case['status'] == 'rejected' %}
+              <a class="btn secondary" href="/admin/case/{{ case['id'] }}/reopen">Reopen Case</a>
+              {% endif %}
               {% if not case["justification_not_required"] %}
               <button type="button" class="btn secondary" id="noJustificationOpen">No Justification Required</button>
               {% endif %}
