@@ -211,6 +211,7 @@ def display_case_status(status_value: str | None) -> str:
         "vetted": "Approved",
         "rejected": "Rejected",
         "reopened": "Reopened",
+        "not_required": "Not Required",
     }
     return mapping.get(status, status.title() if status else "")
 
@@ -5560,7 +5561,7 @@ def list_case_modalities(org_id, is_superuser: bool):
 
 
 def build_dashboard_series(rows: list[dict]):
-    status_counts = {"pending": 0, "vetted": 0, "rejected": 0, "reopened": 0}
+    status_counts = {"pending": 0, "vetted": 0, "rejected": 0, "reopened": 0, "not_required": 0}
     over_time_counts: dict[str, dict] = {}
     institution_counts: dict[str, int] = {}
     radiologist_counts: dict[str, int] = {}
@@ -5607,6 +5608,7 @@ def build_dashboard_series(rows: list[dict]):
         {"label": "Approved", "value": status_counts["vetted"], "tone": "vetted"},
         {"label": "Rejected", "value": status_counts["rejected"], "tone": "rejected"},
         {"label": "Reopened", "value": status_counts["reopened"], "tone": "reopened"},
+        {"label": "Not Required", "value": status_counts["not_required"], "tone": "not_required"},
     ]
 
     total_cases = len(rows)
@@ -5633,7 +5635,7 @@ def build_dashboard_series(rows: list[dict]):
 
     avg_tat_seconds = int(sum(avg_tat_values) / len(avg_tat_values)) if avg_tat_values else 0
     completed_avg_tat_seconds = int(sum(completed_tat_values) / len(completed_tat_values)) if completed_tat_values else 0
-    completion_rate = round((status_counts["vetted"] / total_cases) * 100, 1) if total_cases else 0.0
+    completion_rate = round(((status_counts["vetted"] + status_counts["not_required"]) / total_cases) * 100, 1) if total_cases else 0.0
     top_institution_label = top_institutions[0][0] if top_institutions else "No data"
     top_practitioner_label = top_radiologists[0][0] if top_radiologists else "No data"
 
@@ -5744,7 +5746,7 @@ def admin_dashboard(
         )
 
     tab = (tab or "pending").strip().lower()
-    if tab not in ("all", "pending", "vetted", "rejected", "reopened"):
+    if tab not in ("all", "pending", "vetted", "rejected", "reopened", "not_required"):
         tab = "pending"
 
     # Validate sort parameters
@@ -5838,7 +5840,8 @@ def admin_dashboard(
     vetted_count = counts.get("vetted", 0)
     rejected_count = counts.get("rejected", 0)
     reopened_count = counts.get("reopened", 0)
-    total_count = pending_count + vetted_count + rejected_count + reopened_count
+    not_required_count = counts.get("not_required", 0)
+    total_count = pending_count + vetted_count + rejected_count + reopened_count + not_required_count
 
     cases: list[dict] = []
     for r in rows:
@@ -5897,6 +5900,7 @@ def admin_dashboard(
             "vetted_count": vetted_count,
             "rejected_count": rejected_count,
             "reopened_count": reopened_count,
+            "not_required_count": not_required_count,
             "total_count": total_count,
             "dashboard_range": dashboard_range,
             "dashboard_institution": dashboard_institution or "",
@@ -5960,7 +5964,7 @@ def admin_dashboard_csv(
         )
     else:
         tab = (tab or "pending").strip().lower()
-        if tab not in ("all", "pending", "vetted", "rejected", "reopened"):
+        if tab not in ("all", "pending", "vetted", "rejected", "reopened", "not_required"):
             tab = "pending"
         clauses, params = build_admin_case_filters(
             org_id,
@@ -6703,7 +6707,9 @@ def admin_case_reset_report_sent(request: Request, case_id: str, return_to: str 
     conn.execute(
         """
         UPDATE cases
-        SET report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
+        SET status = CASE WHEN LOWER(COALESCE(status, '')) = 'not_required' THEN 'pending' ELSE status END,
+            vetted_at = CASE WHEN LOWER(COALESCE(status, '')) = 'not_required' THEN NULL ELSE vetted_at END,
+            report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
             justification_not_required_at = NULL,
             justification_not_required_by = NULL,
             justification_not_required_by_id = NULL,
@@ -6736,9 +6742,9 @@ def admin_case_mark_justification_not_required(request: Request, case_id: str, r
     conn = get_db()
     org_id = user.get("org_id")
     if org_id and not user.get("is_superuser"):
-        row = conn.execute("SELECT id, org_id FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
+        row = conn.execute("SELECT id, org_id, status FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
     else:
-        row = conn.execute("SELECT id, org_id FROM cases WHERE id = ?", (case_id,)).fetchone()
+        row = conn.execute("SELECT id, org_id, status FROM cases WHERE id = ?", (case_id,)).fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Case not found")
@@ -6746,14 +6752,16 @@ def admin_case_mark_justification_not_required(request: Request, case_id: str, r
     conn.execute(
         """
         UPDATE cases
-        SET report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
+        SET status = ?,
+            vetted_at = COALESCE(vetted_at, ?),
+            report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
             justification_not_required_at = ?,
             justification_not_required_by = ?,
             justification_not_required_by_id = ?,
             justification_not_required_reason = ?
         WHERE id = ?
         """,
-        (now, user.get("username"), user.get("id"), reason, case_id),
+        ("not_required", now, now, user.get("username"), user.get("id"), reason, case_id),
     )
     conn.commit()
     conn.close()

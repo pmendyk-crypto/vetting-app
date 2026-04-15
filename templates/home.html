@@ -47,11 +47,13 @@
     .status-chip.vetted { color:#76e6a6; border-color:rgba(51,209,122,0.28); }
     .status-chip.rejected { color:#ff9f9f; border-color:rgba(255,107,107,0.28); }
     .status-chip.reopened { color:#7dd3fc; border-color:rgba(56,189,248,0.28); }
+    .status-chip.not_required { color:#d1d5db; border-color:rgba(209,213,219,0.28); }
     .status-chip.all.active { background:linear-gradient(135deg, rgba(31,111,235,0.32), rgba(97,168,255,0.16)); border-color:rgba(147,197,253,0.75); color:#fff; }
     .status-chip.pending.active { background:linear-gradient(135deg, rgba(245,178,63,0.28), rgba(251,191,36,0.14)); border-color:rgba(253,230,138,0.72); color:#fff; }
     .status-chip.vetted.active { background:linear-gradient(135deg, rgba(51,209,122,0.28), rgba(134,239,172,0.14)); border-color:rgba(134,239,172,0.72); color:#fff; }
     .status-chip.rejected.active { background:linear-gradient(135deg, rgba(255,107,107,0.28), rgba(252,165,165,0.14)); border-color:rgba(252,165,165,0.72); color:#fff; }
     .status-chip.reopened.active { background:linear-gradient(135deg, rgba(56,189,248,0.28), rgba(125,211,252,0.14)); border-color:rgba(125,211,252,0.72); color:#fff; }
+    .status-chip.not_required.active { background:linear-gradient(135deg, rgba(148,163,184,0.26), rgba(209,213,219,0.12)); border-color:rgba(209,213,219,0.72); color:#fff; }
     .btn,.action-row .btn,.utility-actions .btn { min-height:40px; display:inline-flex; align-items:center; justify-content:center; text-align:center; }
     .action-row .btn { min-width:132px; }
     .worklist-actions { justify-content:flex-end; align-self:flex-start; }
@@ -126,6 +128,7 @@
     .status-pill.vetted { background:rgba(51,209,122,0.16); color:#76e6a6; border:1px solid rgba(51,209,122,0.26); }
     .status-pill.rejected { background:rgba(255,107,107,0.16); color:#ff9f9f; border:1px solid rgba(255,107,107,0.26); }
     .status-pill.reopened { background:rgba(56,189,248,0.14); color:#7dd3fc; border:1px solid rgba(56,189,248,0.3); }
+    .status-pill.not_required { background:rgba(148,163,184,0.16); color:#e5e7eb; border:1px solid rgba(209,213,219,0.26); }
     .row-actions { display:flex; flex-wrap:wrap; gap:8px; white-space:nowrap; justify-content:flex-start; align-items:center; } .row-actions a { color:var(--accent-blue); text-decoration:none; font-size:11px; font-weight:500; } .status-stack { display:flex; flex-direction:column; gap:4px; align-items:flex-start; } .status-meta { color:var(--muted-text); font-size:11px; line-height:1.2; } .tat-meta { font-size:16px; font-weight:400; letter-spacing:-0.01em; } .tat-meta.good { color:#76e6a6; } .tat-meta.warning { color:#f6c96f; } .tat-meta.danger { color:#ff9f9f; }
     .sent-stack { display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
     .sent-stack form { margin:0; }
@@ -205,6 +208,7 @@
               <a href="/admin?view=worklist&tab=rejected&institution={{ selected_institution }}&radiologist={{ selected_radiologist }}&modality={{ selected_modality }}&q={{ q }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="status-chip rejected {% if tab == 'rejected' %}active{% endif %}">Rejected <span class="chip-count">{{ rejected_count }}</span></a>
               <a href="/admin?view=worklist&tab=reopened&institution={{ selected_institution }}&radiologist={{ selected_radiologist }}&modality={{ selected_modality }}&q={{ q }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="status-chip reopened {% if tab == 'reopened' %}active{% endif %}">Reopened <span class="chip-count">{{ reopened_count }}</span></a>
               <a href="/admin?view=worklist&tab=vetted&institution={{ selected_institution }}&radiologist={{ selected_radiologist }}&modality={{ selected_modality }}&q={{ q }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="status-chip vetted {% if tab == 'vetted' %}active{% endif %}">Approved <span class="chip-count">{{ vetted_count }}</span></a>
+              <a href="/admin?view=worklist&tab=not_required&institution={{ selected_institution }}&radiologist={{ selected_radiologist }}&modality={{ selected_modality }}&q={{ q }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="status-chip not_required {% if tab == 'not_required' %}active{% endif %}">Not Required <span class="chip-count">{{ not_required_count }}</span></a>
               <a href="/admin?view=worklist&tab=all&institution={{ selected_institution }}&radiologist={{ selected_radiologist }}&modality={{ selected_modality }}&q={{ q }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}" class="status-chip all {% if tab == 'all' %}active{% endif %}">All <span class="chip-count">{{ total_count }}</span></a>
             </div>
             <div class="action-column utility-button-group">
@@ -299,7 +303,14 @@
     const sortDir = new URLSearchParams(window.location.search).get("sort_dir") || "desc";
     const sortMap = { "Study": "study_description", "First Name": "patient_first_name", "Surname": "patient_surname", "Modality": "modality", "Institution": "institution_id", "Created Date": "created_at", "Practitioner": "radiologist", "Status": "status" };
     document.querySelectorAll("th.sortable").forEach((th) => { const label = th.textContent.trim(); if (sortMap[label] === sortBy) { th.classList.add("sort-" + sortDir); } });
-    if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", () => { initializeCaseRowClicks(); initializeWorklistFilters(); }); } else { initializeCaseRowClicks(); initializeWorklistFilters(); }
+    function initializeNotRequiredSentLabels() {
+      document.querySelectorAll(".case-row .status-pill.not_required").forEach((pill) => {
+        const row = pill.closest(".case-row");
+        const sentStack = row ? row.querySelector(".sent-stack") : null;
+        if (sentStack) sentStack.innerHTML = '<span class="sent-meta">No justification required</span>';
+      });
+    }
+    if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", () => { initializeCaseRowClicks(); initializeWorklistFilters(); initializeNotRequiredSentLabels(); }); } else { initializeCaseRowClicks(); initializeWorklistFilters(); initializeNotRequiredSentLabels(); }
   </script>
   <script src="/static/js/session.js"></script>
 </body>

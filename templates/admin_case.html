@@ -19,7 +19,7 @@
     .wrapper { display: flex; flex-direction: column; min-height: 100vh; }
     .main-content { flex: 1; }
     .container { flex: 1; width: min(1560px, calc(100vw - 40px)); max-width: none; padding: 22px 0 0; box-sizing: border-box; margin: 0 auto; }
-    .case-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; width: 100%; }
+    .case-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; width: 100%; align-items:start; }
     .case-grid .card { margin: 0; }
     .card-full-width { grid-column: 1 / -1; }
     .preview-card { display: flex; flex-direction: column; min-width: 0; }
@@ -55,8 +55,10 @@
     .ev-OTHER { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.15); }
     .detail-row { margin: 3px 0; font-size: 12px; line-height: 1.5; color: rgba(255,255,255,0.65); }
     .detail-row span { color: rgba(255,255,255,0.45); font-weight: 500; }
-    .case-detail-actions { margin-top:20px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.08); display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
-    .case-detail-actions .danger-zone-label { width:100%; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(255,255,255,0.45); }
+    .case-detail-actions { margin-top:14px; padding:12px; border:1px solid rgba(255,255,255,0.08); border-radius:12px; background:rgba(255,255,255,0.025); display:flex; flex-direction:column; gap:10px; align-items:stretch; }
+    .case-detail-actions .danger-zone-label { font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(255,255,255,0.5); }
+    .case-detail-action-row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+    .case-detail-action-row .btn { width:auto; min-width:176px; }
     .confirm-modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(2,6,23,0.72); z-index:10000; }
     .confirm-modal.active { display:flex; }
     .confirm-card { width:min(460px, 100%); border-radius:16px; padding:22px; background:#111827; border:1px solid rgba(255,255,255,0.14); box-shadow:0 24px 70px rgba(0,0,0,0.42); }
@@ -140,10 +142,12 @@
           {% endif %}
           <div class="case-detail-actions">
             <div class="danger-zone-label">Case actions</div>
-            {% if case["status"] in ["vetted", "rejected"] and not case["justification_not_required"] %}
-            <button type="button" class="btn secondary" id="noJustificationOpen">No Justification Required</button>
-            {% endif %}
-            <button type="button" class="btn danger" id="deleteCaseOpen">Delete Case</button>
+            <div class="case-detail-action-row">
+              {% if not case["justification_not_required"] %}
+              <button type="button" class="btn secondary" id="noJustificationOpen">No Justification Required</button>
+              {% endif %}
+              <button type="button" class="btn danger" id="deleteCaseOpen">Delete Case</button>
+            </div>
           </div>
         </div>
 
