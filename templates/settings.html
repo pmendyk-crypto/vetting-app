@@ -557,18 +557,31 @@
                 </div>
             </div>
         </section>
-        <div class="settings-header">
-            <h1>Settings</h1>
-            <p style="margin:4px 0 0;color:rgba(255,255,255,0.62);">{{ org_name or 'Organisation settings' }}</p>
+        <div class="internal-page-header">
+            <div>
+                <h1 class="internal-page-title">Settings</h1>
+                <p class="internal-page-subtitle">{{ org_name or 'Organisation settings' }}</p>
+            </div>
+            <div class="internal-page-actions">
+                <a class="btn secondary" href="/admin">Back</a>
+            </div>
         </div>
 
         <!-- Tabs Navigation -->
         <div class="tabs">
-            <button class="tab-btn active" data-tab="institutions" onclick="switchTab('institutions', this)">Institutions</button>
-            <button class="tab-btn" data-tab="users" onclick="switchTab('users', this)">Users</button>
-            <button class="tab-btn" data-tab="protocols" onclick="switchTab('protocols', this)">Protocols</button>
-            <button class="tab-btn" data-tab="report" onclick="switchTab('report', this)">Justification Report</button>
+            {% set selected_tab = active_tab or 'institutions' %}
+            <button class="tab-btn {% if selected_tab == 'institutions' %}active{% endif %}" data-tab="institutions" onclick="switchTab('institutions', this)">Institutions</button>
+            <button class="tab-btn {% if selected_tab == 'users' %}active{% endif %}" data-tab="users" onclick="switchTab('users', this)">Users</button>
+            <button class="tab-btn {% if selected_tab == 'protocols' %}active{% endif %}" data-tab="protocols" onclick="switchTab('protocols', this)">Protocols</button>
+            <button class="tab-btn {% if selected_tab == 'referral-inbox' %}active{% endif %}" data-tab="referral-inbox" onclick="switchTab('referral-inbox', this)">Referral Inbox</button>
+            <button class="tab-btn {% if selected_tab == 'report' %}active{% endif %}" data-tab="report" onclick="switchTab('report', this)">Justification Report</button>
         </div>
+
+        {% if saved == 'referral_inbox' %}
+        <div style="background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.32); color: #bbf7d0; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px;">
+            Referral inbox settings saved.
+        </div>
+        {% endif %}
 
         {% if error == 'email_taken' %}
         <div style="background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px;">
@@ -583,7 +596,7 @@
         {% endif %}
 
         <!-- ===================== INSTITUTIONS TAB ===================== -->
-        <div id="institutions" class="tab-content active">
+        <div id="institutions" class="tab-content {% if selected_tab == 'institutions' %}active{% endif %}">
             <div class="settings-section">
                 <div class="section-title">Manage Institutions</div>
                 
@@ -641,7 +654,7 @@
         </div>
 
         <!-- ===================== USERS TAB ===================== -->
-        <div id="users" class="tab-content">
+        <div id="users" class="tab-content {% if selected_tab == 'users' %}active{% endif %}">
             <div class="settings-section">
                 <div class="section-title">Manage Users</div>
                 
@@ -782,7 +795,7 @@
         </div>
 
         <!-- ===================== PROTOCOLS TAB ===================== -->
-        <div id="protocols" class="tab-content">
+        <div id="protocols" class="tab-content {% if selected_tab == 'protocols' %}active{% endif %}">
             <div class="settings-section">
                 <div class="section-title">Manage Protocols</div>
                 
@@ -903,7 +916,77 @@
             </div>
         </div>
 
-        <div id="report" class="tab-content">
+        <div id="referral-inbox" class="tab-content {% if selected_tab == 'referral-inbox' %}active{% endif %}">
+            <div class="settings-section">
+                <div class="section-title">Referral Inbox</div>
+
+                <div class="form-card">
+                    <h3 style="margin-top: 0; color: rgba(255,255,255,0.9);">Shared mailbox import</h3>
+                    <p style="margin-top:0; color:rgba(255,255,255,0.68); font-size:13px; line-height:1.5;">
+                        Configure the mailbox used by this organisation. Imported emails become referral review drafts only; an admin still confirms the details before a case is created.
+                    </p>
+                    <form method="POST" action="/settings/referral-inbox" autocomplete="off">
+                        <div class="form-row full">
+                            <div class="form-group">
+                                <label style="display:flex;align-items:center;gap:10px;">
+                                    <input type="checkbox" name="is_enabled" value="1" {% if email_import_settings.is_enabled %}checked{% endif %}>
+                                    <span>Enable shared inbox import for this organisation</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Tenant ID</label>
+                                <input type="text" name="tenant_id" value="{{ email_import_settings.tenant_id or '' }}" placeholder="Microsoft tenant ID">
+                            </div>
+                            <div class="form-group">
+                                <label>Client ID</label>
+                                <input type="text" name="client_id" value="{{ email_import_settings.client_id or '' }}" placeholder="Entra app client ID">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Client Secret</label>
+                                <input type="password" name="client_secret" value="" placeholder="{% if email_import_settings.has_client_secret %}Secret saved - leave blank to keep it{% else %}Paste client secret{% endif %}" autocomplete="new-password">
+                            </div>
+                            <div class="form-group">
+                                <label>Mailbox Address</label>
+                                <input type="email" name="mailbox_address" value="{{ email_import_settings.mailbox_address or '' }}" placeholder="referrals@example.org">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Intake Folder</label>
+                                <input type="text" name="intake_folder" value="{{ email_import_settings.intake_folder or 'RadFlow Intake' }}">
+                            </div>
+                            <div class="form-group">
+                                <label>Import Limit</label>
+                                <input type="number" name="import_limit" min="1" max="50" value="{{ email_import_settings.import_limit or 10 }}">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Processed Folder</label>
+                                <input type="text" name="processed_folder" value="{{ email_import_settings.processed_folder or '' }}" placeholder="Optional">
+                            </div>
+                            <div class="form-group">
+                                <label>Failed Folder</label>
+                                <input type="text" name="failed_folder" value="{{ email_import_settings.failed_folder or '' }}" placeholder="Optional">
+                            </div>
+                        </div>
+                        <p style="margin:0; color:rgba(255,255,255,0.6); font-size:12px; line-height:1.5;">
+                            The secret is write-only in this screen. To rotate it, paste a new secret and save.
+                        </p>
+                        <div class="button-group">
+                            <button type="submit" class="btn btn-primary">Save Inbox Settings</button>
+                            <a class="btn btn-secondary" href="/admin/referral-inbox">Open Referral Inbox</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="report" class="tab-content {% if selected_tab == 'report' %}active{% endif %}">
             <div class="settings-section">
                 <div class="section-title">Justification Report</div>
 

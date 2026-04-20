@@ -44,6 +44,9 @@
         <h1 class="internal-page-title">Case Intake</h1>
         <p class="internal-page-subtitle">Submit a new case to the organisation intake queue using the assigned master exam catalogue.</p>
       </div>
+      <div class="internal-page-actions">
+        <a class="btn secondary" href="/">Back</a>
+      </div>
     </div>
 
     {% if error %}
@@ -99,6 +102,32 @@
             <label>Study description</label>
             <input id="study_description" name="study_description" required placeholder="Select from the assigned exam catalogue" autocomplete="off" onfocus="showExamResults()" oninput="filterAvailableExams()" readonly>
             <div id="study_results" class="exam-results"></div>
+          </div>
+          <div class="form-row full" style="padding:14px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;background:rgba(255,255,255,0.03);">
+            <strong style="color:#fff;margin-bottom:4px;">Requestor details</strong>
+            <div class="intake-grid" style="gap:12px;margin-top:8px;">
+              <div class="form-row">
+                <label>Requestor name</label>
+                <input name="requestor_name" placeholder="Referrer or requestor name">
+              </div>
+              <div class="form-row">
+                <label>Requestor email</label>
+                <input name="requestor_email" type="email" placeholder="requestor@example.org">
+              </div>
+              <div class="form-row">
+                <label>Organisation/site</label>
+                <input name="requestor_organisation" placeholder="Requesting site">
+              </div>
+              <div class="form-row">
+                <label>Requestor reference</label>
+                <input name="requestor_reference" placeholder="Optional reference">
+              </div>
+            </div>
+            <label style="display:flex;align-items:flex-start;gap:10px;margin-top:10px;">
+              <input type="checkbox" name="send_report_to_requestor" value="1" style="width:auto;margin-top:3px;">
+              <span>Requestor should receive report</span>
+            </label>
+            <div class="helper">The admin team will confirm and send the report after vetting is complete.</div>
           </div>
           <div class="form-row full">
             <label>Notes (optional)</label>

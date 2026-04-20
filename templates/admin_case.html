@@ -50,6 +50,9 @@
     .ev-REOPENED { background: rgba(234,179,8,0.18); color: #fde68a; border: 1px solid rgba(234,179,8,0.35); }
     .ev-EDITED { background: rgba(234,88,12,0.18); color: #fdba74; border: 1px solid rgba(234,88,12,0.35); }
     .ev-REPORT_SENT { background: rgba(37,99,235,0.18); color: #bfdbfe; border: 1px solid rgba(37,99,235,0.35); }
+    .ev-REQUESTOR_DETAILS_UPDATED { background: rgba(14,165,233,0.18); color: #bae6fd; border: 1px solid rgba(14,165,233,0.35); }
+    .ev-REQUESTOR_REPORT_SENT { background: rgba(16,185,129,0.18); color: #bbf7d0; border: 1px solid rgba(16,185,129,0.35); }
+    .ev-REQUESTOR_REPORT_SEND_FAILED { background: rgba(239,68,68,0.18); color: #fecaca; border: 1px solid rgba(239,68,68,0.35); }
     .ev-JUSTIFICATION_NOT_REQUIRED { background: rgba(148,163,184,0.18); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.32); }
     .ev-REPORT_SENT_RESET { background: rgba(148,163,184,0.18); color: #e2e8f0; border: 1px solid rgba(148,163,184,0.32); }
     .ev-EXAM_CATALOGUE_EXCEPTION { background: rgba(245,158,11,0.18); color: #fcd34d; border: 1px solid rgba(245,158,11,0.35); }
@@ -62,6 +65,11 @@
     .case-detail-action-row .btn { width:auto; min-width:118px; min-height:36px; height:36px; padding:0 12px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; text-align:center; box-sizing:border-box; font-size:12px; font-weight:500; border:1px solid rgba(255,255,255,0.1); box-shadow:none; }
     .case-detail-action-row .btn.secondary { background:rgba(148,163,184,0.16); color:rgba(255,255,255,0.9); }
     .case-detail-action-row .btn.danger { background:rgba(220,38,38,0.86); border-color:rgba(252,165,165,0.28); color:#fff; }
+    .notice-banner { margin:0 0 16px; padding:12px 14px; border-radius:10px; border:1px solid rgba(16,185,129,0.34); background:rgba(16,185,129,0.12); color:#bbf7d0; }
+    .error-banner { margin:0 0 16px; padding:12px 14px; border-radius:10px; border:1px solid rgba(239,68,68,0.34); background:rgba(239,68,68,0.12); color:#fecaca; }
+    .requestor-report-card p { margin:7px 0; }
+    .status-line { display:inline-flex; align-items:center; gap:8px; padding:5px 9px; border-radius:999px; background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.82); font-size:12px; }
+    .email-warning { margin-top:10px; padding:10px 12px; border-radius:8px; border:1px solid rgba(245,158,11,0.32); background:rgba(245,158,11,0.1); color:#fde68a; font-size:12px; line-height:1.45; }
     .confirm-modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(2,6,23,0.72); z-index:10000; }
     .confirm-modal.active { display:flex; }
     .confirm-card { width:min(460px, 100%); border-radius:16px; padding:22px; background:#111827; border:1px solid rgba(255,255,255,0.14); box-shadow:0 24px 70px rgba(0,0,0,0.42); }
@@ -86,13 +94,29 @@
     <div class="main-content container">
       <div class="topbar internal-page-header">
         <div>
-          <h1 class="internal-page-title" style="font-size:28px;margin:0;">Case Details</h1>
+          <h1 class="internal-page-title">Case Details</h1>
           <p class="internal-page-subtitle" style="margin-top:6px;">Review attachments, decision details, justification sent status, and the full case timeline in one place.</p>
         </div>
         <div class="actions internal-page-actions">
           <a class="btn secondary" href="{{ return_to if return_to else '/admin' }}">Back</a>
         </div>
       </div>
+
+      {% if report_notice == "requestor_report_sent" %}
+      <div class="notice-banner">Justification report sent to the requestor.</div>
+      {% endif %}
+      {% if report_error %}
+      <div class="error-banner">
+        {% if report_error == "not_ready" %}The report can only be emailed after the case is approved or rejected.
+        {% elif report_error == "missing_email" %}Add a requestor email address before sending the report.
+        {% elif report_error == "invalid_email" %}The requestor email address is not valid.
+        {% elif report_error == "smtp_not_configured" %}SMTP email is not configured, so RadFlow cannot send the report yet.
+        {% elif report_error == "report_unavailable" %}The report could not be generated. Please try downloading it first.
+        {% elif report_error == "confirm_required" %}Please confirm the requestor email before sending.
+        {% else %}The requestor report email could not be sent. Check SMTP settings and try again.
+        {% endif %}
+      </div>
+      {% endif %}
 
       <div class="case-grid">
         <div class="card case-details-card">
@@ -101,6 +125,7 @@
           {% if org_name %}<p><b>Organisation:</b> {{ org_name }}</p>{% endif %}
           <p><b>Status:</b> {{ case["status_display"] }}</p>
           <p><b>Created:</b> {{ case["created_at"] | display_datetime }}</p>
+          <p><b>Request Date:</b> {{ case["request_date_display"] or "-" }}</p>
           <p><b>Patient ID:</b> {{ case["patient_referral_id"] or "—" }}</p>
           <p><b>Patient DOB:</b> {{ case["patient_dob"] or "—" }}</p>
           <p><b>Study:</b> {{ case["study_description"] }}{% if case.get("study_code") %} ({{ case["study_code"] }}){% endif %}</p>
@@ -152,6 +177,38 @@
               <button type="button" class="btn danger" id="deleteCaseOpen">Delete Case</button>
             </div>
           </div>
+        </div>
+
+        <div class="card requestor-report-card">
+          <h3 style="margin-top: 0;">Requestor Report</h3>
+          <p><b>Requestor:</b> {{ case.get("requestor_name") or "-" }}</p>
+          <p><b>Email:</b> {{ case.get("requestor_email") or "-" }}</p>
+          <p><b>Organisation/site:</b> {{ case.get("requestor_organisation") or "-" }}</p>
+          <p><b>Reference:</b> {{ case.get("requestor_reference") or "-" }}</p>
+          <p><b>Report requested:</b> {% if case.get("send_report_to_requestor_enabled") %}Yes{% else %}No{% endif %}</p>
+          <p><b>Status:</b> <span class="status-line">{{ case.get("requestor_report_status_label") or "Not ready" }}</span></p>
+          {% if case.get("requestor_report_sent_display") %}
+          <p><b>Last sent to:</b> {{ case.get("requestor_report_sent_to") or case.get("requestor_email") }} on {{ case.get("requestor_report_sent_display") }}{% if case.get("report_sent_by") %} by {{ case.get("report_sent_by") }}{% endif %}</p>
+          {% endif %}
+          {% if case.get("requestor_email_personal") %}
+          <div class="email-warning">This looks like a personal email domain. Confirm it is the correct requestor address before sending.</div>
+          {% endif %}
+          {% if case["status"] in ["vetted", "rejected"] %}
+            {% if case.get("requestor_email_valid") %}
+            <div class="case-detail-actions" style="margin-top:14px;">
+              <div class="danger-zone-label">Email report</div>
+              <div class="case-detail-action-row">
+                <a href="/case/{{ case['id'] }}/pdf" target="_blank" class="btn secondary">Preview / Download</a>
+                <button type="button" class="btn" id="sendRequestorReportOpen">{% if case.get("requestor_report_sent_display") %}Resend justification report{% else %}Send justification report{% endif %}</button>
+              </div>
+              <p class="small" style="margin:0;">This action emails the requestor. Please confirm the email address is correct.</p>
+            </div>
+            {% else %}
+            <p class="small">Add a valid requestor email on Edit Case before sending.</p>
+            {% endif %}
+          {% else %}
+          <p class="small">Report sending will become available once the decision has been recorded.</p>
+          {% endif %}
         </div>
 
         <div class="card preview-card">
@@ -243,7 +300,7 @@
               <tr>
                 <td class="ts">{{ e["created_at"] | display_datetime }}</td>
                 <td>
-                  <span class="ev-badge ev-{% if ev in ['CREATED','SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','EDITED','REPORT_SENT','JUSTIFICATION_NOT_REQUIRED','REPORT_SENT_RESET','EXAM_CATALOGUE_EXCEPTION'] %}{{ ev }}{% else %}OTHER{% endif %}">
+                  <span class="ev-badge ev-{% if ev in ['CREATED','SUBMITTED','ASSIGNED','VETTED','REJECTED','REOPENED','EDITED','REPORT_SENT','REQUESTOR_DETAILS_UPDATED','REQUESTOR_REPORT_SENT','REQUESTOR_REPORT_SEND_FAILED','JUSTIFICATION_NOT_REQUIRED','REPORT_SENT_RESET','EXAM_CATALOGUE_EXCEPTION'] %}{{ ev }}{% else %}OTHER{% endif %}">
                     {{ ev|display_case_event_label }}
                   </span>
                 </td>
@@ -267,6 +324,12 @@
                     <div class="detail-row"><span>Details: </span>Decision recorded.</div>
                     {% elif ev == "REPORT_SENT" %}
                     <div class="detail-row"><span>Details: </span>Justification marked as sent.</div>
+                    {% elif ev == "REQUESTOR_DETAILS_UPDATED" %}
+                    <div class="detail-row"><span>Details: </span>Requestor details updated.</div>
+                    {% elif ev == "REQUESTOR_REPORT_SENT" %}
+                    <div class="detail-row"><span>Details: </span>Requestor report emailed.</div>
+                    {% elif ev == "REQUESTOR_REPORT_SEND_FAILED" %}
+                    <div class="detail-row"><span>Details: </span>Requestor report email failed.</div>
                     {% elif ev == "REPORT_SENT_RESET" %}
                     <div class="detail-row"><span>Details: </span>Justification sent status reset.</div>
                     {% elif ev == "JUSTIFICATION_NOT_REQUIRED" %}
@@ -329,6 +392,20 @@
       </div>
     </div>
   </div>
+  <div class="confirm-modal" id="sendRequestorReportModal" aria-hidden="true">
+    <div class="confirm-card">
+      <h3>{% if case.get("requestor_report_sent_display") %}Resend report?{% else %}Send report to requestor?{% endif %}</h3>
+      <p>This will email the generated justification report to <strong>{{ case.get("requestor_email") or "the requestor" }}</strong>. Please confirm the address is correct before sending.</p>
+      <div class="confirm-actions">
+        <button type="button" class="btn secondary" id="sendRequestorReportCancel">Cancel</button>
+        <form method="post" action="/admin/case/{{ case['id'] }}/send-requestor-report" style="margin:0;">
+          <input type="hidden" name="return_to" value="/admin/case/{{ case['id'] }}{% if return_to %}?return_to={{ return_to|urlencode }}{% endif %}">
+          <input type="hidden" name="confirm_send" value="1">
+          <button type="submit" class="btn">{% if case.get("requestor_report_sent_display") %}Resend Report{% else %}Send Report{% endif %}</button>
+        </form>
+      </div>
+    </div>
+  </div>
   <script>
     function bindModal(openId, modalId, cancelId) {
       const modal = document.getElementById(modalId);
@@ -361,6 +438,7 @@
     }
     bindModal('deleteCaseOpen', 'deleteCaseModal', 'deleteCaseCancel');
     bindModal('noJustificationOpen', 'noJustificationModal', 'noJustificationCancel');
+    bindModal('sendRequestorReportOpen', 'sendRequestorReportModal', 'sendRequestorReportCancel');
 
     document.querySelectorAll('.attachment-preview-trigger').forEach((button) => {
       button.addEventListener('click', () => {

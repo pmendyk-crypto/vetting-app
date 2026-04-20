@@ -889,6 +889,38 @@
           <div class="bottom-grid">
             <div class="form-card">
               <div class="card-header">
+                <h2 class="card-title">Requestor Details</h2>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-row">
+                  <label>Requestor name</label>
+                  <input name="requestor_name" type="text" placeholder="Referrer or requestor name">
+                </div>
+                <div class="form-row">
+                  <label>Requestor email</label>
+                  <input name="requestor_email" type="email" placeholder="requestor@example.org">
+                </div>
+              </div>
+              <div class="form-grid" style="margin-top:10px;">
+                <div class="form-row">
+                  <label>Organisation/site</label>
+                  <input name="requestor_organisation" type="text" placeholder="Requesting site">
+                </div>
+                <div class="form-row">
+                  <label>Requestor reference</label>
+                  <input name="requestor_reference" type="text" placeholder="Optional reference">
+                </div>
+              </div>
+              <label style="display:flex;align-items:flex-start;gap:10px;margin-top:12px;color:rgba(255,255,255,0.9);font-size:12px;">
+                <input name="send_report_to_requestor" type="checkbox" value="1" style="width:auto;margin-top:2px;">
+                <span>Requestor should receive report</span>
+              </label>
+              <p class="info-text">After vetting is complete, admins can send the justification report from Case Details.</p>
+            </div>
+
+            <div class="form-card">
+              <div class="card-header">
                 <h2 class="card-title">Referral File</h2>
               </div>
 

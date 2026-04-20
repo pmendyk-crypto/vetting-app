@@ -25,8 +25,25 @@
     pre { white-space: pre-wrap; max-height: 180px; overflow: auto; background: rgba(0,0,0,0.25); padding: 10px; border-radius: 8px; }
     .preview-panel { display:flex; flex-direction:column; min-height: 76vh; }
     .preview-frame { width:100%; flex:1; min-height:66vh; border:1px solid rgba(255,255,255,0.12); border-radius:10px; background:#fff; }
-    .disclaimer { margin-top:12px; padding:12px 14px; border-radius:10px; border:1px solid rgba(245,158,11,0.32); background:rgba(245,158,11,0.1); color:#fde68a; font-size:13px; line-height:1.5; }
+    .disclaimer { margin:0 0 14px; padding:12px 14px; border-radius:10px; border:1px solid rgba(245,158,11,0.32); background:rgba(245,158,11,0.1); color:#fde68a; font-size:13px; line-height:1.5; }
     .info { font-size: 11px; opacity: 0.72; margin-top: 2px; }
+    .subsection { margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.1); }
+    .subsection-title { display:block; color:#fff; font-weight:700; font-size:15px; }
+    .requestor-inline-grid { margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .compact-check { display:flex; align-items:flex-start; gap:10px; margin-top:10px; }
+    .source-summary { margin:0 0 14px; padding:10px 12px; border-radius:8px; border:1px solid rgba(96,165,250,0.24); background:rgba(37,99,235,0.1); color:#dbeafe; font-size:12px; line-height:1.5; }
+    .source-summary strong { color:#fff; }
+    .file-drop-zone { position:relative; min-height:118px; border:1px dashed rgba(148,163,184,0.42); border-radius:10px; background:rgba(15,23,42,0.52); display:flex; align-items:center; justify-content:center; padding:16px; cursor:pointer; text-align:center; transition:border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease; box-sizing:border-box; }
+    .file-drop-zone:hover,.file-drop-zone:focus-within,.file-drop-zone.drag-over { border-color:rgba(96,165,250,0.92); background:rgba(37,99,235,0.14); box-shadow:0 0 0 3px rgba(37,99,235,0.16); }
+    .file-drop-zone.has-file { border-style:solid; border-color:rgba(34,197,94,0.55); background:rgba(34,197,94,0.1); }
+    .file-drop-inner { display:flex; flex-direction:column; align-items:center; gap:6px; pointer-events:none; }
+    .file-drop-icon { width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; background:rgba(96,165,250,0.14); color:#bfdbfe; font-size:11px; font-weight:700; letter-spacing:0.04em; line-height:1; }
+    .file-drop-title { color:#fff; font-weight:700; font-size:15px; }
+    .file-drop-copy { color:rgba(226,232,240,0.78); font-size:12px; line-height:1.4; }
+    .file-drop-link { color:#93c5fd; font-weight:700; }
+    .file-drop-name { margin-top:2px; color:#bbf7d0; font-size:12px; word-break:break-word; max-width:100%; }
+    .file-drop-error { margin-top:6px; color:#fecaca; font-size:12px; min-height:16px; }
+    .drop-input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
     .study-picker { position: relative; }
     .study-picker input { width: 100%; box-sizing: border-box; }
     .extra-exams { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
@@ -76,26 +93,43 @@
     .protocol-item:last-child { border-bottom: none; }
     .protocol-item:hover { background: rgba(59, 130, 246, 0.28); color: #ffffff; padding-left: 14px; }
     .protocol-empty { padding: 14px 12px; text-align: center; color: rgba(148, 163, 184, 0.9); font-size: 12px; font-style: italic; }
+    .catalogue-status { margin-top: 8px; padding: 9px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4; border: 1px solid rgba(148, 163, 184, 0.18); background: rgba(15, 23, 42, 0.7); color: rgba(226, 232, 240, 0.84); }
+    .catalogue-status.ok { border-color: rgba(34, 197, 94, 0.36); background: rgba(34, 197, 94, 0.1); color: #bbf7d0; }
+    .catalogue-status.warn { border-color: rgba(245, 158, 11, 0.36); background: rgba(245, 158, 11, 0.1); color: #fde68a; }
+    .match-suggestions { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .match-suggestion { width: 100%; text-align: left; border: 1px solid rgba(96, 165, 250, 0.28); background: rgba(37, 99, 235, 0.12); color: #dbeafe; border-radius: 8px; padding: 9px 10px; cursor: pointer; font: inherit; }
+    .match-suggestion strong { display:block; color:#fff; font-size: 13px; }
+    .match-suggestion span { display:block; margin-top:2px; color:rgba(191, 219, 254, 0.82); font-size:11px; }
+    .match-suggestion:hover { background: rgba(37, 99, 235, 0.22); }
     @media (max-width: 760px) {
       .trial-wrap { padding: 10px; }
       .trial-review-grid { grid-template-columns: 1fr; }
       .form-grid { grid-template-columns: 1fr; }
+      .requestor-inline-grid { grid-template-columns: 1fr; }
       .extra-exam-row { grid-template-columns: 1fr; }
       .actions { flex-direction: column; }
       .actions .btn { width: 100%; text-align: center; }
     }
   </style>
 </head>
-<body>
+<body ondragover="event.preventDefault()" ondrop="event.preventDefault()">
   <div class="trial-wrap">
-    <h1>Referral Intake Assistant</h1>
+    <div class="internal-page-header">
+      <div>
+        <h1 class="internal-page-title">Referral Intake Assistant</h1>
+        <p class="internal-page-subtitle">Upload a referral and review the extracted case details before creating a booking.</p>
+      </div>
+      <div class="internal-page-actions">
+        <a class="btn secondary" href="{{ back_url or '/submit' }}">Back</a>
+      </div>
+    </div>
     {% if error %}
       <div class="err">{{ error }}</div>
     {% endif %}
 
     <div class="card">
       <h3>1) Upload and parse referral</h3>
-      <form method="post" action="/submit/referral-trial/parse" enctype="multipart/form-data">
+      <form method="post" action="/submit/referral-trial/parse" enctype="multipart/form-data" id="referralParseForm">
         <div class="form-grid">
           <div class="form-row">
             <label>Institution</label>
@@ -107,8 +141,18 @@
             </select>
           </div>
           <div class="form-row">
-            <label>Referral file</label>
-            <input type="file" name="attachment" required>
+            <label>Referral document or email file</label>
+            <label class="file-drop-zone" id="referralDropZone" for="referralAttachment" tabindex="0" role="button" aria-describedby="referralUploadHelp">
+              <input id="referralAttachment" class="drop-input" type="file" name="attachment" accept=".pdf,.docx,.txt,.csv,.json,.xml,.html,.htm,.md,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.gif,.eml,.msg" required>
+              <span class="file-drop-inner">
+                <span class="file-drop-icon" aria-hidden="true">File</span>
+                <span class="file-drop-title">Drag and drop referral here</span>
+                <span class="file-drop-copy">or <span class="file-drop-link">choose a file</span> from your computer. Dropped files are parsed automatically.</span>
+                <span class="file-drop-name" id="referralFileName">No file selected</span>
+              </span>
+            </label>
+            <div class="file-drop-error" id="referralDropError" aria-live="polite"></div>
+            <div class="info" id="referralUploadHelp">Upload a referral document, or a saved/exported .eml/.msg email containing the referral. Direct drag from Outlook may not expose an uploadable file to the browser.</div>
           </div>
         </div>
         <div class="actions" style="margin-top: 8px;">
@@ -130,9 +174,22 @@
         {% endfor %}
       {% endif %}
 
-      <form method="post" action="/submit/referral-trial/create" enctype="multipart/form-data">
+      <form method="post" action="/submit/referral-trial/create" enctype="multipart/form-data" id="referralCreateForm">
         <input type="hidden" name="attachment_token" value="{{ draft.attachment_token }}">
         <input type="hidden" name="attachment_original_name" value="{{ draft.attachment_original_name }}">
+        <input type="hidden" name="source_email_token" value="{{ draft.source_email_token or '' }}">
+        <input type="hidden" name="source_email_original_name" value="{{ draft.source_email_original_name or '' }}">
+        <input type="hidden" name="email_import_id" value="{{ draft.email_import_id or '' }}">
+        <div class="disclaimer">The intake assistant may make errors. Please check the referral details carefully before submitting.</div>
+        {% if email_source %}
+          <div class="source-summary">
+            <strong>Email import:</strong>
+            {% if email_source.requestor_email %}from {{ email_source.requestor_name or email_source.from_name or 'requestor' }} &lt;{{ email_source.requestor_email }}&gt;{% endif %}
+            {% if email_source.sent_date %} on {{ email_source.sent_date }}{% endif %}
+            {% if email_source.subject %}<br>Subject: {{ email_source.subject }}{% endif %}
+            {% if email_source.selected_attachment %}<br>Referral attachment used: {{ email_source.selected_attachment }}{% elif email_source.attachment_count %}<br>No supported referral attachment selected from {{ email_source.attachment_count }} attachment(s).{% endif %}
+          </div>
+        {% endif %}
         <div class="form-grid">
           <div class="form-row">
             <label>Patient first name</label>
@@ -193,6 +250,31 @@
                 readonly
               >
               <div class="info" id="studyCodeHint">{% if draft.study_code %}Exam code: {{ draft.study_code }}{% else %}Exam code will appear automatically when you select an exam.{% endif %}</div>
+              <div id="catalogueStatus" class="catalogue-status {% if draft.study_description_preset_id %}ok{% elif draft.study_description %}warn{% endif %}">
+                {% if draft.catalogue_match_notice %}
+                  {{ draft.catalogue_match_notice }}
+                {% elif draft.study_description_preset_id %}
+                  Selected from the master exam catalogue.
+                {% elif draft.study_description %}
+                  Parsed from the referral. Select a matching master exam before creating the case.
+                {% else %}
+                  Select a master exam from the catalogue.
+                {% endif %}
+              </div>
+              {% if draft.catalogue_match_suggestions %}
+                <div class="match-suggestions" aria-label="Suggested master exam matches">
+                  {% for match in draft.catalogue_match_suggestions %}
+                    <button
+                      type="button"
+                      class="match-suggestion"
+                      onclick='selectDescription({{ match.id | tojson }}, {{ match.description | tojson }}, {{ match.study_code | tojson }})'
+                    >
+                      <strong>{{ match.label }}</strong>
+                      <span>Suggested catalogue match</span>
+                    </button>
+                  {% endfor %}
+                </div>
+              {% endif %}
               {% if can_create_uncatalogued_exam %}
               <div style="margin-top:10px; padding:10px 12px; border:1px solid rgba(245,158,11,0.28); border-radius:10px; background:rgba(245,158,11,0.08);">
                 <label style="display:flex; align-items:flex-start; gap:10px; margin:0;">
@@ -226,6 +308,32 @@
             </div>
             <div id="extraReferralExams" class="extra-exams"></div>
           </div>
+          <div class="form-row full subsection">
+            <span class="subsection-title">Requestor details</span>
+            <div class="info">Optional. These details let admins email the final justification report after vetting.</div>
+            <div class="requestor-inline-grid">
+              <div class="form-row">
+                <label>Requestor name</label>
+                <input name="requestor_name" value="{{ draft.requestor_name or '' }}" placeholder="Referrer or requestor name">
+              </div>
+              <div class="form-row">
+                <label>Requestor email</label>
+                <input name="requestor_email" type="email" value="{{ draft.requestor_email or '' }}" placeholder="requestor@example.org">
+              </div>
+              <div class="form-row">
+                <label>Organisation/site</label>
+                <input name="requestor_organisation" value="{{ draft.requestor_organisation or '' }}" placeholder="Requesting site">
+              </div>
+              <div class="form-row">
+                <label>Requestor reference</label>
+                <input name="requestor_reference" value="{{ draft.requestor_reference or '' }}" placeholder="Optional reference">
+              </div>
+            </div>
+            <label class="compact-check">
+              <input type="checkbox" name="send_report_to_requestor" value="1" {% if draft.send_report_to_requestor %}checked{% endif %}>
+              <span>Requestor should receive report</span>
+            </label>
+          </div>
           <div class="form-row full">
             <label>Admin notes</label>
             <textarea name="admin_notes">{{ draft.admin_notes }}</textarea>
@@ -246,10 +354,9 @@
           </div>
         </div>
         <div class="actions" style="margin-top: 8px;">
-          <button type="submit" class="btn btn-primary">Create booking/case</button>
+          <button type="submit" class="btn btn-primary" id="createCaseButton">Create booking/case</button>
           <a class="btn btn-secondary" href="/admin">Cancel</a>
         </div>
-        <div class="disclaimer">The intake assistant may make errors. Please check the referral details carefully before submitting.</div>
       </form>
     </div>
 
@@ -277,24 +384,323 @@
         { value: {{ rad.name | tojson }}, label: {{ rad.name | tojson }} },
       {% endfor %}
     ];
+    const referralAcceptedExtensions = new Set([
+      '.pdf', '.docx', '.txt', '.csv', '.json', '.xml', '.html', '.htm', '.md',
+      '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.gif', '.eml', '.msg'
+    ]);
+
+    function referralFileExtension(file) {
+      const name = String(file?.name || '').toLowerCase();
+      const dotIndex = name.lastIndexOf('.');
+      return dotIndex >= 0 ? name.slice(dotIndex) : '';
+    }
+
+    function formatFileSize(bytes) {
+      if (!Number.isFinite(bytes) || bytes <= 0) return '';
+      if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function setReferralUploadStatus(file, message = '') {
+      const dropZone = document.getElementById('referralDropZone');
+      const nameEl = document.getElementById('referralFileName');
+      const errorEl = document.getElementById('referralDropError');
+      if (dropZone) {
+        dropZone.classList.toggle('has-file', !!file);
+      }
+      if (nameEl) {
+        nameEl.textContent = file ? `${file.name}${formatFileSize(file.size) ? ` (${formatFileSize(file.size)})` : ''}` : 'No file selected';
+      }
+      if (errorEl) {
+        errorEl.textContent = message;
+      }
+    }
+
+    function submitReferralParseForm() {
+      const form = document.getElementById('referralParseForm');
+      if (!form) return;
+      const submitButton = form.querySelector('button[type="submit"]');
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Parsing referral...';
+      }
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.submit();
+      }
+    }
+
+    function assignReferralUpload(file, options = {}) {
+      const input = document.getElementById('referralAttachment');
+      if (!input || !file) return;
+      const extension = referralFileExtension(file);
+      if (!referralAcceptedExtensions.has(extension)) {
+        input.value = '';
+        setReferralUploadStatus(null, 'This file type is not supported. Please use PDF, DOCX, image, text, EML or MSG.');
+        return;
+      }
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      setReferralUploadStatus(file);
+      if (options.autoSubmit) {
+        window.setTimeout(submitReferralParseForm, 80);
+      }
+    }
+
+    function transferTypes(dataTransfer) {
+      try {
+        return Array.from(dataTransfer?.types || []);
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function transferHasFile(dataTransfer) {
+      const types = transferTypes(dataTransfer);
+      return types.includes('Files') || !!dataTransfer?.files?.length;
+    }
+
+    function firstDroppedFile(dataTransfer) {
+      if (dataTransfer?.files?.length) {
+        return dataTransfer.files[0];
+      }
+      const items = Array.from(dataTransfer?.items || []);
+      for (const item of items) {
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (file) return file;
+        }
+      }
+      return null;
+    }
+
+    function htmlToPlainText(htmlText) {
+      const container = document.createElement('div');
+      container.innerHTML = htmlText || '';
+      return (container.textContent || container.innerText || '').trim();
+    }
+
+    function droppedBodyFile(dataTransfer) {
+      const plainText = (dataTransfer?.getData('text/plain') || '').trim();
+      if (plainText) {
+        return new File([plainText], 'dropped-email-body.txt', { type: 'text/plain' });
+      }
+      const htmlText = dataTransfer?.getData('text/html') || '';
+      const bodyText = htmlToPlainText(htmlText);
+      if (bodyText) {
+        return new File([bodyText], 'dropped-email-body.txt', { type: 'text/plain' });
+      }
+      return null;
+    }
+
+    function extractDroppedTextFile(dataTransfer, callback) {
+      const directFile = droppedBodyFile(dataTransfer);
+      if (directFile) {
+        callback(directFile);
+        return;
+      }
+      const stringItems = Array.from(dataTransfer?.items || []).filter(item => item.kind === 'string');
+      if (!stringItems.length) {
+        callback(null);
+        return;
+      }
+      let remaining = stringItems.length;
+      const chunks = [];
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        remaining -= 1;
+        if (remaining > 0) return;
+        finished = true;
+        const text = chunks.join('\n\n').trim();
+        callback(text ? new File([text], 'dropped-email-body.txt', { type: 'text/plain' }) : null);
+      };
+      stringItems.forEach(item => {
+        try {
+          item.getAsString(value => {
+            const cleaned = item.type === 'text/html' ? htmlToPlainText(value) : String(value || '').trim();
+            if (cleaned) chunks.push(cleaned);
+            finish();
+          });
+        } catch (error) {
+          finish();
+        }
+      });
+      window.setTimeout(() => {
+        if (!finished) {
+          finished = true;
+          const text = chunks.join('\n\n').trim();
+          callback(text ? new File([text], 'dropped-email-body.txt', { type: 'text/plain' }) : null);
+        }
+      }, 900);
+    }
+
+    function preventBrowserDropNavigation(event) {
+      const dataTransfer = event.dataTransfer;
+      const dropZone = document.getElementById('referralDropZone');
+      const isDragEvent = event.type === 'dragenter' || event.type === 'dragover';
+      const isDropEvent = event.type === 'drop';
+      const types = transferTypes(dataTransfer);
+      const looksLikeExternalDrop = transferHasFile(dataTransfer) || types.some(type => ['text/uri-list', 'text/html', 'text/plain'].includes(type));
+      if (!looksLikeExternalDrop) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (isDragEvent && dropZone) {
+        dropZone.classList.add('drag-over');
+        if (dataTransfer) {
+          dataTransfer.dropEffect = 'copy';
+        }
+      }
+
+      if (!isDropEvent) return;
+      if (dropZone) {
+        dropZone.classList.remove('drag-over');
+      }
+
+      const file = firstDroppedFile(dataTransfer);
+      if (file) {
+        assignReferralUpload(file, { autoSubmit: true });
+        return;
+      }
+
+      extractDroppedTextFile(dataTransfer, textFile => {
+        if (textFile) {
+          assignReferralUpload(textFile, { autoSubmit: true });
+        } else {
+          setReferralUploadStatus(
+            null,
+            'This email drag did not expose a file or readable text to the browser. Save/export as .msg/.eml, or paste the email body from the admin worklist.'
+          );
+        }
+      });
+    }
+
+    function initReferralDropZone() {
+      const dropZone = document.getElementById('referralDropZone');
+      const input = document.getElementById('referralAttachment');
+      if (!dropZone || !input) return;
+
+      input.addEventListener('change', () => {
+        const file = input.files && input.files[0];
+        if (!file) {
+          setReferralUploadStatus(null);
+          return;
+        }
+        const extension = referralFileExtension(file);
+        if (!referralAcceptedExtensions.has(extension)) {
+          input.value = '';
+          setReferralUploadStatus(null, 'This file type is not supported. Please use PDF, DOCX, image, text, EML or MSG.');
+          return;
+        }
+        setReferralUploadStatus(file);
+      });
+
+      dropZone.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          input.click();
+        }
+      });
+
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, event => {
+          event.preventDefault();
+          dropZone.classList.add('drag-over');
+        });
+      });
+
+      ['dragleave', 'dragend', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, event => {
+          event.preventDefault();
+          dropZone.classList.remove('drag-over');
+        });
+      });
+
+      dropZone.addEventListener('drop', event => {
+        const files = event.dataTransfer?.files;
+        if (!files || !files.length) return;
+        assignReferralUpload(files[0], { autoSubmit: true });
+      });
+
+      ['dragenter', 'dragover', 'drop'].forEach(eventName => {
+        window.addEventListener(eventName, preventBrowserDropNavigation, true);
+        document.addEventListener(eventName, preventBrowserDropNavigation, true);
+      });
+    }
 
     function resolveOrgId() {
       return '{{ user_org_id or 1 }}';
     }
 
-    async function loadStudyDescriptions() {
+    function normalizeExamSearch(value) {
+      return String(value || '')
+        .toLowerCase()
+        .replace(/magnetic resonance imaging/g, 'mri')
+        .replace(/magnetic resonance/g, 'mri')
+        .replace(/computed tomography/g, 'ct')
+        .replace(/x-ray/g, 'xray')
+        .replace(/x ray/g, 'xray')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .split(/\s+/)
+        .filter(token => token && !['a', 'an', 'and', 'exam', 'examination', 'imaging', 'investigation', 'of', 'procedure', 'requested', 'required', 'scan', 'study', 'test', 'the'].includes(token))
+        .join(' ');
+    }
+
+    function scoreExamMatch(query, item) {
+      const queryText = normalizeExamSearch(query);
+      const itemText = normalizeExamSearch(item.description || '');
+      if (!queryText || !itemText) return 0;
+      const queryTokens = new Set(queryText.split(' ').filter(Boolean));
+      const itemTokens = new Set(itemText.split(' ').filter(Boolean));
+      const overlap = [...queryTokens].filter(token => itemTokens.has(token)).length;
+      const precision = overlap / Math.max(1, queryTokens.size);
+      const recall = overlap / Math.max(1, itemTokens.size);
+      const tokenScore = precision && recall ? (2 * precision * recall) / (precision + recall) : 0;
+      const containmentBonus = itemText.includes(queryText) || queryText.includes(itemText) ? 0.18 : 0;
+      return Math.min(1, tokenScore + containmentBonus);
+    }
+
+    function setCatalogueStatus(message, state) {
+      const status = document.getElementById('catalogueStatus');
+      if (!status) return;
+      status.textContent = message;
+      status.classList.remove('ok', 'warn');
+      if (state) status.classList.add(state);
+    }
+
+    function updateCreateButtonState() {
+      const button = document.getElementById('createCaseButton');
+      if (!button) return;
+      const hasPreset = !!document.getElementById('study_description_preset_id')?.value;
+      const uncatalogued = !!document.getElementById('uncatalogued_exam_requested')?.checked;
+      button.disabled = !hasPreset && !uncatalogued;
+      button.textContent = button.disabled ? 'Select master exam first' : 'Create booking/case';
+      button.style.opacity = button.disabled ? '0.62' : '';
+      button.style.cursor = button.disabled ? 'not-allowed' : '';
+    }
+
+    async function loadStudyDescriptions(options = {}) {
+      const preserveSelection = !!options.preserveSelection;
       const modality = document.getElementById('modality').value;
       const dropdown = document.getElementById('descriptionList');
       const meta = dropdown.querySelector('[data-meta]');
       const orgId = resolveOrgId();
-      document.getElementById('study_description_preset_id').value = '';
-      document.getElementById('study_code').value = '';
-      document.getElementById('studyCodeHint').textContent = 'Exam code will appear automatically when you select an exam.';
+      if (!preserveSelection) {
+        document.getElementById('study_description_preset_id').value = '';
+        document.getElementById('study_code').value = '';
+        document.getElementById('studyCodeHint').textContent = 'Exam code will appear automatically when you select an exam.';
+        setCatalogueStatus('Select a matching master exam before creating the case.', 'warn');
+      }
 
       if (!modality) {
         allDescriptions = [];
         dropdown.style.display = 'none';
         if (meta) meta.textContent = 'Modality: --';
+        updateCreateButtonState();
         return;
       }
 
@@ -305,12 +711,17 @@
           descriptionCache[cacheKey] = await response.json();
         }
         allDescriptions = descriptionCache[cacheKey] || [];
+        if (preserveSelection && document.getElementById('study_description_preset_id').value) {
+          updateCreateButtonState();
+          return;
+        }
         showAllDescriptions();
       } catch (error) {
         console.error('Error loading study descriptions:', error);
         allDescriptions = [];
         dropdown.style.display = 'none';
       }
+      updateCreateButtonState();
     }
 
     function filterDescriptions() {
@@ -337,14 +748,17 @@
       }
 
       const filtered = !searchValue
-        ? allDescriptions
-        : allDescriptions.filter(item => item.description.toLowerCase().includes(searchValue));
+        ? allDescriptions.map(item => ({ item, score: 1 }))
+        : allDescriptions
+            .map(item => ({ item, score: scoreExamMatch(searchValue, item) }))
+            .filter(match => match.score >= 0.35)
+            .sort((a, b) => b.score - a.score || String(a.item.description || '').localeCompare(String(b.item.description || '')));
 
       if (!filtered.length) {
-        list.innerHTML = '<div class="protocol-empty">No matching study descriptions.</div>';
+        list.innerHTML = '<div class="protocol-empty">No matching master exams. Try a shorter search, such as "lumbar" or "spine".</div>';
       } else {
-        list.innerHTML = filtered.map(item =>
-          `<div class="protocol-item" onclick="selectDescription(${item.id}, '${item.description.replace(/'/g, "\\'")}', '${(item.study_code || '').replace(/'/g, "\\'")}')">${item.label || item.description}</div>`
+        list.innerHTML = filtered.map(match =>
+          `<div class="protocol-item" onclick="selectDescription(${match.item.id}, ${JSON.stringify(match.item.description || '')}, ${JSON.stringify(match.item.study_code || '')})">${match.item.label || match.item.description}</div>`
         ).join('');
       }
       dropdown.style.display = 'block';
@@ -363,6 +777,8 @@
       document.getElementById('study_code').value = studyCode || '';
       document.getElementById('studyCodeHint').textContent = studyCode ? `Exam code: ${studyCode}` : 'Exam code will appear automatically when you select an exam.';
       document.getElementById('descriptionList').style.display = 'none';
+      setCatalogueStatus('Selected from the master exam catalogue.', 'ok');
+      updateCreateButtonState();
     }
 
     function addReferralExamRow() {
@@ -536,10 +952,17 @@
       if (enabled) {
         document.getElementById('study_description_preset_id').value = '';
         document.getElementById('study_code').value = '';
+        setCatalogueStatus('Temporary uncatalogued exam mode is enabled. A reason is required.', 'warn');
+      } else if (document.getElementById('study_description_preset_id').value) {
+        setCatalogueStatus('Selected from the master exam catalogue.', 'ok');
+      } else {
+        setCatalogueStatus('Select a matching master exam before creating the case.', 'warn');
       }
+      updateCreateButtonState();
     }
 
     toggleUncataloguedExamMode();
+    initReferralDropZone();
 
     document.addEventListener('click', function (event) {
       const picker = document.querySelector('.study-picker');
@@ -556,7 +979,9 @@
     });
 
     if (document.getElementById('modality') && document.getElementById('modality').value) {
-      loadStudyDescriptions();
+      loadStudyDescriptions({ preserveSelection: true });
+    } else {
+      updateCreateButtonState();
     }
   </script>
 </body>

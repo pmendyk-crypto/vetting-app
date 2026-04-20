@@ -183,22 +183,29 @@ select{
 .internal-page-header{
   display:flex;
   justify-content:space-between;
-  align-items:flex-start;
-  gap:18px;
-  margin-bottom:22px;
+  align-items:center;
+  gap:16px;
+  margin-bottom:18px;
+  padding:10px 16px;
+  background:var(--card-bg);
+  border:1px solid var(--card-border);
+  border-radius:10px;
+  box-sizing:border-box;
+  backdrop-filter:blur(10px);
 }
 .internal-page-title{
   margin:0;
   color:#fff;
-  font-size:30px;
-  line-height:1.05;
-  letter-spacing:-0.03em;
+  font-size:19px;
+  font-weight:600;
+  line-height:1.2;
+  letter-spacing:-0.02em;
 }
 .internal-page-subtitle{
-  margin:8px 0 0;
+  margin:5px 0 0;
   color:rgba(255,255,255,0.68);
-  font-size:14px;
-  line-height:1.55;
+  font-size:13px;
+  line-height:1.45;
   max-width:76ch;
 }
 .internal-page-actions{
@@ -208,7 +215,9 @@ select{
   justify-content:flex-end;
 }
 .internal-page-actions .btn{
-  min-width:160px;
+  min-width:0;
+  display:inline-flex;
+  align-items:center;
   justify-content:center;
 }
 .internal-surface{
@@ -241,6 +250,7 @@ select{
   .internal-page-header{
     flex-direction:column;
     align-items:stretch;
+    padding:12px;
   }
   .internal-page-actions{
     justify-content:stretch;

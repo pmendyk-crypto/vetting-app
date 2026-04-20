@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Referral Inbox</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+  <style>
+    .inbox-wrap { width:min(1280px, calc(100vw - 40px)); margin:24px auto 40px; }
+    .panel { border:1px solid rgba(255,255,255,0.12); border-radius:10px; background:rgba(15,23,42,0.72); padding:18px; margin-bottom:16px; }
+    .panel h2 { margin:0 0 8px; font-size:18px; color:#fff; }
+    .muted { color:rgba(226,232,240,0.72); font-size:13px; line-height:1.5; }
+    .notice { border:1px solid rgba(34,197,94,0.34); background:rgba(34,197,94,0.1); color:#bbf7d0; border-radius:8px; padding:10px 12px; margin-bottom:12px; }
+    .error { border:1px solid rgba(239,68,68,0.38); background:rgba(239,68,68,0.1); color:#fecaca; border-radius:8px; padding:10px 12px; margin-bottom:12px; }
+    .config-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:12px; }
+    .config-item { border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; background:rgba(255,255,255,0.03); }
+    .config-label { color:rgba(226,232,240,0.6); font-size:11px; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px; }
+    .config-value { color:#fff; font-size:13px; overflow-wrap:anywhere; }
+    .actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:14px; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; min-height:40px; border-radius:8px; padding:0 14px; border:0; color:#fff; text-decoration:none; cursor:pointer; font-weight:700; background:#1f6feb; }
+    .btn.secondary { background:#273244; }
+    .btn[disabled] { opacity:0.55; cursor:not-allowed; }
+    .inbox-table { width:100%; border-collapse:collapse; }
+    .inbox-table th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.07em; color:rgba(255,255,255,0.58); padding:11px 10px; border-bottom:1px solid rgba(255,255,255,0.1); }
+    .inbox-table td { padding:12px 10px; border-bottom:1px solid rgba(255,255,255,0.06); color:#e5edf8; font-size:13px; vertical-align:top; }
+    .subject { color:#fff; font-weight:700; margin-bottom:4px; }
+    .status-pill { display:inline-flex; align-items:center; justify-content:center; min-width:84px; border-radius:999px; padding:4px 9px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; border:1px solid rgba(147,197,253,0.28); color:#bfdbfe; background:rgba(37,99,235,0.12); }
+    .status-pill.case_created { color:#bbf7d0; border-color:rgba(34,197,94,0.3); background:rgba(34,197,94,0.1); }
+    .warning-list { margin:6px 0 0; padding-left:16px; color:#fde68a; font-size:12px; }
+    .empty { padding:30px 12px; text-align:center; color:rgba(226,232,240,0.7); }
+    code { color:#dbeafe; }
+    @media (max-width:900px) {
+      .config-grid { grid-template-columns:1fr 1fr; }
+      .inbox-table, .inbox-table thead, .inbox-table tbody, .inbox-table tr, .inbox-table th, .inbox-table td { display:block; width:100%; }
+      .inbox-table thead { display:none; }
+      .inbox-table tr { padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
+      .inbox-table td { border:0; padding:6px 0; }
+      .inbox-table td::before { content:attr(data-label); display:block; color:rgba(226,232,240,0.58); font-size:11px; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:3px; }
+    }
+    @media (max-width:640px) {
+      .inbox-wrap { width:calc(100vw - 28px); margin-top:18px; }
+      .config-grid { grid-template-columns:1fr; }
+      .btn { width:100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="inbox-wrap">
+    <div class="internal-page-header">
+      <div>
+        <h1 class="internal-page-title">Referral Inbox</h1>
+        <p class="internal-page-subtitle">Import referrals from the shared mailbox, then review before creating a booking.</p>
+      </div>
+      <div class="internal-page-actions">
+        <a class="btn secondary" href="/admin">Back</a>
+      </div>
+    </div>
+
+    {% if notice %}
+      <div class="notice">
+        {% if notice.startswith('imported_') %}
+          Import completed. Review the latest imported referrals below.
+        {% else %}
+          {{ notice }}
+        {% endif %}
+      </div>
+    {% endif %}
+    {% if error %}
+      <div class="error">
+        {% if error == 'not_configured' %}
+          Shared inbox is not configured yet.
+        {% elif error == 'import_failed' %}
+          Import failed. Check server logs and Microsoft 365 mailbox settings.
+        {% else %}
+          {{ error }}
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <section class="panel">
+      <h2>Mailbox connection</h2>
+      {% if configured %}
+        <div class="muted">RadFlow will read messages from this folder when an admin presses Import now. Nothing is created as a case until an admin reviews and submits it.</div>
+      {% else %}
+        <div class="muted">Add the Microsoft Graph environment variables below, then restart the app. This first version uses manual import so the team can validate the workflow safely.</div>
+      {% endif %}
+      <div class="config-grid">
+        <div class="config-item">
+          <div class="config-label">Mailbox</div>
+          <div class="config-value">{{ config.mailbox or 'Not set' }}</div>
+        </div>
+        <div class="config-item">
+          <div class="config-label">Intake folder</div>
+          <div class="config-value">{{ config.intake_folder }}</div>
+        </div>
+        <div class="config-item">
+          <div class="config-label">Processed folder</div>
+          <div class="config-value">{{ config.processed_folder or 'Leave in place' }}</div>
+        </div>
+        <div class="config-item">
+          <div class="config-label">Import limit</div>
+          <div class="config-value">{{ config.import_limit }}</div>
+        </div>
+      </div>
+      {% if missing_config %}
+        <p class="muted" style="margin-top:12px;">Missing: {% for name in missing_config %}<code>{{ name }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+      {% endif %}
+      <div class="actions">
+        <form method="post" action="/admin/referral-inbox/import">
+          <button class="btn" type="submit" {% if not configured %}disabled{% endif %}>Import now</button>
+        </form>
+        <a class="btn secondary" href="/settings?tab=referral-inbox">Configure inbox</a>
+        <a class="btn secondary" href="/submit/referral-trial">Upload file instead</a>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Imported referrals</h2>
+      {% if messages %}
+        <table class="inbox-table">
+          <thead>
+            <tr>
+              <th>Received</th>
+              <th>Sender</th>
+              <th>Subject</th>
+              <th>Status</th>
+              <th>Attachment</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in messages %}
+              <tr>
+                <td data-label="Received">{{ item.received_display or item.created_display }}</td>
+                <td data-label="Sender">{{ item.sender_name or '-' }}<br><span class="muted">{{ item.sender_email or '-' }}</span></td>
+                <td data-label="Subject">
+                  <div class="subject">{{ item.subject or '(No subject)' }}</div>
+                  {% if item.warnings %}
+                    <ul class="warning-list">
+                      {% for warning in item.warnings[:2] %}
+                        <li>{{ warning }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% endif %}
+                </td>
+                <td data-label="Status"><span class="status-pill {{ item.status }}">{{ item.status.replace('_', ' ') }}</span></td>
+                <td data-label="Attachment">{{ item.attachment_original_name or '-' }}</td>
+                <td data-label="Action"><a class="btn secondary" href="/admin/referral-inbox/{{ item.id }}/review">Review</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="empty">No imported referrals yet. Press Import now after the mailbox is configured.</div>
+      {% endif %}
+    </section>
+  </div>
+</body>
+</html>

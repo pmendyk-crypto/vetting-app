@@ -317,12 +317,17 @@
 </head>
 <body>
     <div class="settings-container">
-        <a href="/settings" class="back-link">Back to Settings</a>
-        
-        <div class="section-title">Study Description Presets</div>
-        <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 20px; font-size: 14px;">
-            Manage standard study descriptions for UK radiology examinations. These presets will appear as searchable dropdowns when submitting cases.
-        </p>
+        <div class="internal-page-header">
+            <div>
+                <h1 class="internal-page-title">Study Description Presets</h1>
+                <p class="internal-page-subtitle">
+                    Manage standard study descriptions for UK radiology examinations. These presets will appear as searchable dropdowns when submitting cases.
+                </p>
+            </div>
+            <div class="internal-page-actions">
+                <a href="/settings" class="btn secondary">Back</a>
+            </div>
+        </div>
         
         {% if request.query_params.get('error') %}
             <div class="alert error">

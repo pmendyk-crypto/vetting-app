@@ -80,14 +80,14 @@
 </head>
 <body>
     <div class="edit-shell">
-        <div class="page-top">
+        <div class="page-top internal-page-header">
             <div>
-                <h1 class="page-title">Edit Organisation</h1>
-                <p class="page-subtitle">
+                <h1 class="internal-page-title">Edit Organisation</h1>
+                <p class="internal-page-subtitle">
                     Update the organisation itself and manage everyone inside it from one place.
                 </p>
             </div>
-            <div class="button-group">
+            <div class="button-group internal-page-actions">
                 <a class="btn secondary" href="/owner">Back to Owner Portal</a>
             </div>
         </div>
@@ -108,6 +108,8 @@
         <div class="notice success">Institution deleted from the organisation.</div>
         {% elif notice == 'catalogue_assigned' %}
         <div class="notice success">Full National Reference List visibility assigned to the organisation.</div>
+        {% elif notice == 'referral_inbox_saved' %}
+        <div class="notice success">Referral inbox settings saved.</div>
         {% endif %}
 
         {% if error %}
@@ -217,6 +219,68 @@
                         </form>
                     </div>
                 </aside>
+
+                <section class="panel">
+                    <h2>Referral Inbox</h2>
+                    <p class="panel-copy">
+                        Configure the shared mailbox import for this organisation.
+                    </p>
+
+                    <form method="post" action="/owner/organisations/{{ organisation.id }}/referral-inbox" class="form-stack" autocomplete="off">
+                        <div class="field">
+                            <label style="display:flex;align-items:center;gap:10px;">
+                                <input name="is_enabled" type="checkbox" value="1" {% if email_import_settings.is_enabled %}checked{% endif %}>
+                                <span>Enable shared inbox import</span>
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <div class="field">
+                                <label>Tenant ID</label>
+                                <input name="tenant_id" type="text" value="{{ email_import_settings.tenant_id or '' }}">
+                            </div>
+                            <div class="field">
+                                <label>Client ID</label>
+                                <input name="client_id" type="text" value="{{ email_import_settings.client_id or '' }}">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="field">
+                                <label>Client Secret</label>
+                                <input name="client_secret" type="password" value="" placeholder="{% if email_import_settings.has_client_secret %}Secret saved - leave blank to keep it{% else %}Paste client secret{% endif %}" autocomplete="new-password">
+                            </div>
+                            <div class="field">
+                                <label>Mailbox Address</label>
+                                <input name="mailbox_address" type="email" value="{{ email_import_settings.mailbox_address or '' }}" placeholder="referrals@example.org">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="field">
+                                <label>Intake Folder</label>
+                                <input name="intake_folder" type="text" value="{{ email_import_settings.intake_folder or 'RadFlow Intake' }}">
+                            </div>
+                            <div class="field">
+                                <label>Import Limit</label>
+                                <input name="import_limit" type="number" min="1" max="50" value="{{ email_import_settings.import_limit or 10 }}">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="field">
+                                <label>Processed Folder</label>
+                                <input name="processed_folder" type="text" value="{{ email_import_settings.processed_folder or '' }}" placeholder="Optional">
+                            </div>
+                            <div class="field">
+                                <label>Failed Folder</label>
+                                <input name="failed_folder" type="text" value="{{ email_import_settings.failed_folder or '' }}" placeholder="Optional">
+                            </div>
+                        </div>
+                        <p class="panel-copy" style="font-size:12px;margin-bottom:0;">
+                            The secret is write-only here. Paste a new one only when rotating credentials.
+                        </p>
+                        <div class="inline-actions">
+                            <button type="submit" class="btn primary">Save Inbox Settings</button>
+                        </div>
+                    </form>
+                </section>
             </div>
 
             <div class="stack">

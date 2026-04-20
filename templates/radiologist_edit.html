@@ -6,7 +6,7 @@
   <title>Vetting App | Admin</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    body { margin: 24px; }
+    body { margin: 0; }
     table { border-collapse: collapse; width: 100%; }
     th, td { border-bottom: 1px solid #ddd; padding: 10px; vertical-align: top; }
     th { text-align: left; background: #f6f6f6; }
@@ -17,7 +17,7 @@
     .filters input, .filters select { padding: 8px; min-width: 180px; }
     .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
     .btn { display: inline-block; padding: 10px 14px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; }
-    .btn.secondary { background: #555; }
+    .btn.secondary { background: rgba(255,255,255,0.08); }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     .small { font-size: 12px; color: #666; }
 
@@ -34,38 +34,40 @@
   </style>
 </head>
 <body>
-  <div class="top">
-    <div style="display: flex; align-items: center; gap: 16px;">
+  <div class="internal-page-shell">
+    <div class="internal-page-header">
       <div>
-        <h1 style="margin:0;">Edit radiologist</h1>
-        <p style="margin:6px 0 0; color:#555;">Update details for this radiologist.</p>
+        <h1 class="internal-page-title">Edit Practitioner</h1>
+        <p class="internal-page-subtitle">Update details for this practitioner.</p>
+      </div>
+      <div class="internal-page-actions">
+        <a class="btn secondary" href="/settings">Back</a>
       </div>
     </div>
-    <a class="btn secondary" href="/settings">Back to settings</a>
-  </div>
 
-  <div class="card">
-    <form method="post" action="/settings/radiologist/update">
-      <label>Name</label>
-      <input name="name" value="{{ rad['name'] }}" readonly>
+    <div class="card">
+      <form method="post" action="/settings/radiologist/update">
+        <label>Name</label>
+        <input name="name" value="{{ rad['name'] }}" readonly>
 
-      <label>Email</label>
-      <input name="email" value="{{ rad['email'] or '' }}" placeholder="e.g. dr.smith@nhs.net">
+        <label>Email</label>
+        <input name="email" value="{{ rad['email'] or '' }}" placeholder="e.g. dr.smith@nhs.net">
 
-      <label>Surname</label>
-      <input name="surname" value="{{ rad['surname'] or '' }}" placeholder="e.g. Smith">
+        <label>Surname</label>
+        <input name="surname" value="{{ rad['surname'] or '' }}" placeholder="e.g. Smith">
 
-      <label>GMC Number</label>
-      <input name="gmc" value="{{ rad['gmc'] or '' }}" placeholder="e.g. 1234567">
+        <label>GMC Number</label>
+        <input name="gmc" value="{{ rad['gmc'] or '' }}" placeholder="e.g. 1234567">
 
-      <label>Speciality</label>
-      <input name="speciality" value="{{ rad['speciality'] or '' }}" placeholder="e.g. Radiology, Neuroradiology">
+        <label>Speciality</label>
+        <input name="speciality" value="{{ rad['speciality'] or '' }}" placeholder="e.g. Radiology, Neuroradiology">
 
-      <div class="row">
-        <button type="submit" class="btn">Save</button>
-        <a class="btn secondary" href="/settings">Cancel</a>
-      </div>
-    </form>
+        <div class="row">
+          <button type="submit" class="btn">Save</button>
+          <a class="btn secondary" href="/settings">Cancel</a>
+        </div>
+      </form>
+    </div>
   </div>
 </body>
 </html>

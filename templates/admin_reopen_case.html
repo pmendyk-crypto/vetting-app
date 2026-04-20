@@ -6,11 +6,11 @@
   <title>Reopen Case | Vetting Suite</title>
   <link rel="stylesheet" href="/static/css/site.css">
   <style>
-    body { margin: 24px; display: flex; flex-direction: column; min-height: 100vh; }
+    body { margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
     .container { max-width: 800px; margin: 0 auto; }
     .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
     .btn { display: inline-block; padding: 10px 14px; background: #1f6feb; color: white; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
-    .btn.secondary { background: #555; }
+    .btn.secondary { background: rgba(255,255,255,0.08); }
     .form-group { margin-bottom: 20px; }
     .form-group label { display: block; margin-bottom: 8px; font-weight: 400; }
     .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-family: inherit; resize: vertical; min-height: 150px; }
@@ -24,10 +24,16 @@
   </style>
 </head>
 <body>
+  <div class="internal-page-shell">
   <div class="container">
-    <div class="topbar">
-      <h1>Reopen Case</h1>
-      <a class="btn secondary" href="/admin/case/{{ case['id'] }}">Cancel</a>
+    <div class="topbar internal-page-header">
+      <div>
+        <h1 class="internal-page-title">Reopen Case</h1>
+        <p class="internal-page-subtitle">Send this case back to the practitioner queue with a clear reason.</p>
+      </div>
+      <div class="internal-page-actions">
+        <a class="btn secondary" href="/admin/case/{{ case['id'] }}">Back</a>
+      </div>
     </div>
 
     <div class="info-box">
@@ -61,6 +67,7 @@
         <a class="btn secondary" href="/admin/case/{{ case['id'] }}">Cancel</a>
       </div>
     </form>
+  </div>
   </div>
 </body>
 </html>

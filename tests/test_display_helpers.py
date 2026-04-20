@@ -8,11 +8,17 @@ from app.main import (
     display_case_status,
     display_decision_label,
     format_exam_label,
+    find_best_exam_catalogue_matches,
     find_matching_exam_catalogue_item,
     get_exam_catalogue_review_summary,
     get_report_sent_summary,
+    get_requestor_report_context,
+    is_personal_email_address,
+    is_valid_email_address,
     normalize_decision_label,
+    normalize_email_address,
     resolve_case_exam_selection,
+    send_email_with_attachment,
     should_allow_same_origin_frame,
 )
 
@@ -38,6 +44,7 @@ class DisplayHelperTests(unittest.TestCase):
 
     def test_display_case_event_label_humanizes_report_sent(self):
         self.assertEqual(display_case_event_label("REPORT_SENT"), "Justification Sent")
+        self.assertEqual(display_case_event_label("REQUESTOR_REPORT_SENT"), "Requestor Report Sent")
         self.assertEqual(display_case_event_label("JUSTIFICATION_NOT_REQUIRED"), "No Justification Required")
         self.assertEqual(display_case_event_label("REPORT_SENT_RESET"), "Justification Sent Reset")
 
@@ -59,6 +66,76 @@ class DisplayHelperTests(unittest.TestCase):
         sent, label = get_report_sent_summary({"justification_not_required_at": "2026-04-09T09:15:00+00:00"})
         self.assertTrue(sent)
         self.assertEqual(label, "Not required")
+
+    def test_requestor_email_helpers_normalize_and_validate(self):
+        self.assertEqual(normalize_email_address("  Requestor@Example.Org "), "requestor@example.org")
+        self.assertTrue(is_valid_email_address("requestor@example.org"))
+        self.assertFalse(is_valid_email_address("not-an-email"))
+        self.assertTrue(is_personal_email_address("someone@gmail.com"))
+        self.assertFalse(is_personal_email_address("requestor@nhs.net"))
+
+    def test_requestor_report_context_requires_complete_case_and_email(self):
+        not_ready = get_requestor_report_context({"status": "pending", "requestor_email": "requestor@example.org"})
+        self.assertEqual(not_ready["requestor_report_status"], "not_ready")
+
+        missing_email = get_requestor_report_context({"status": "vetted", "requestor_email": ""})
+        self.assertEqual(missing_email["requestor_report_status"], "missing_email")
+
+        ready = get_requestor_report_context({"status": "rejected", "requestor_email": "requestor@example.org"})
+        self.assertEqual(ready["requestor_report_status"], "ready")
+
+        sent = get_requestor_report_context(
+            {
+                "status": "vetted",
+                "requestor_email": "requestor@example.org",
+                "report_sent_at": "2026-04-09T09:15:00+00:00",
+                "report_sent_to": "requestor@example.org",
+            }
+        )
+        self.assertEqual(sent["requestor_report_status"], "sent")
+
+    def test_send_email_with_attachment_uses_configured_smtp(self):
+        sent = {}
+
+        class FakeSMTP:
+            def __init__(self, host, port, timeout=10):
+                sent["connect"] = (host, port, timeout)
+
+            def starttls(self, context=None):
+                sent["tls"] = True
+
+            def login(self, username, password):
+                sent["login"] = (username, password)
+
+            def send_message(self, message):
+                sent["to"] = message["To"]
+                sent["subject"] = message["Subject"]
+                sent["attachment_count"] = len(list(message.iter_attachments()))
+
+            def quit(self):
+                sent["quit"] = True
+
+        with (
+            patch("app.main.SMTP_HOST", "smtp.example.org"),
+            patch("app.main.SMTP_PORT", 587),
+            patch("app.main.SMTP_FROM", "radflow@example.org"),
+            patch("app.main.SMTP_USER", "smtp-user"),
+            patch("app.main.SMTP_PASSWORD", "smtp-pass"),
+            patch("smtplib.SMTP", FakeSMTP),
+        ):
+            send_email_with_attachment(
+                to_address="Requestor@Example.Org",
+                subject="Imaging referral outcome available",
+                body="Please see attached.",
+                attachment_bytes=b"%PDF-1.4",
+                attachment_filename="report.pdf",
+            )
+
+        self.assertEqual(sent["connect"], ("smtp.example.org", 587, 10))
+        self.assertEqual(sent["login"], ("smtp-user", "smtp-pass"))
+        self.assertEqual(sent["to"], "requestor@example.org")
+        self.assertEqual(sent["subject"], "Imaging referral outcome available")
+        self.assertEqual(sent["attachment_count"], 1)
 
     def test_exam_catalogue_review_summary_uses_reason(self):
         flagged, label = get_exam_catalogue_review_summary(
@@ -138,6 +215,31 @@ class DisplayHelperTests(unittest.TestCase):
         )
         self.assertIsNotNone(match)
         self.assertEqual(match["id"], 11)
+
+    @patch("app.main.list_exam_catalogue")
+    def test_fuzzy_exam_match_prefers_exact_anatomy_over_extra_terms(self, mock_list_exam_catalogue):
+        mock_list_exam_catalogue.return_value = [
+            {"id": 1, "modality": "MRI", "description": "MRI Lumbar spine and pelvis", "study_code": "MLSPE"},
+            {"id": 2, "modality": "MRI", "description": "MRI Spine lumbar", "study_code": "MLUSP"},
+            {"id": 3, "modality": "MRI", "description": "MRI Lumbar spine with contrast", "study_code": "MLUSPC"},
+        ]
+
+        match = find_matching_exam_catalogue_item(
+            org_id=2,
+            study_description="MRI Scan - Lumbar Spine",
+            modality="MRI",
+        )
+        suggestions = find_best_exam_catalogue_matches(
+            org_id=2,
+            study_description="MRI Scan - Lumbar Spine",
+            modality="MRI",
+            limit=3,
+            min_score=0.28,
+        )
+
+        self.assertIsNotNone(match)
+        self.assertEqual(match["id"], 2)
+        self.assertEqual(suggestions[0]["id"], 2)
 
 
 if __name__ == "__main__":

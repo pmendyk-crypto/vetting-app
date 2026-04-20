@@ -10,6 +10,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from pathlib import Path
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
+from difflib import SequenceMatcher
 import sqlite3
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -35,7 +36,16 @@ from app.security import (
     should_lock_account, get_lockout_until, is_account_locked, 
     get_lockout_remaining_minutes
 )
-from app.referral_ingest import parse_referral_attachment
+from app.referral_ingest import extract_referral_text, parse_referral_attachment
+from app.graph_inbox import (
+    GraphInboxConfig,
+    GraphInboxError,
+    fetch_message_mime,
+    get_graph_token,
+    list_intake_messages,
+    load_graph_inbox_config,
+    move_message_to_folder,
+)
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -228,6 +238,9 @@ def display_case_event_label(event_type_value: str | None) -> str:
         "REOPENED": "Case Reopened",
         "EDITED": "Case Edited",
         "REPORT_SENT": "Justification Sent",
+        "REQUESTOR_DETAILS_UPDATED": "Requestor Details Updated",
+        "REQUESTOR_REPORT_SENT": "Requestor Report Sent",
+        "REQUESTOR_REPORT_SEND_FAILED": "Requestor Report Send Failed",
         "JUSTIFICATION_NOT_REQUIRED": "No Justification Required",
         "REPORT_SENT_RESET": "Justification Sent Reset",
         "DELETED": "Case Deleted",
@@ -318,6 +331,49 @@ td{border:1px solid #cbd5e1;padding:8px 10px;vertical-align:top}
     except Exception as exc:
         print(f"[attachment-preview] docx preview failed for {label}: {exc}")
         return None
+
+
+def render_pdf_preview_html(file_bytes: bytes, filename: str, inline_url: str) -> HTMLResponse:
+    text_content, warnings = extract_referral_text(filename, file_bytes)
+    safe_filename = html.escape(filename or "Referral document")
+    safe_inline_url = html.escape(inline_url)
+    warning_html = "".join(
+        f'<div class="warning">{html.escape(str(warning))}</div>' for warning in warnings if warning
+    )
+    if text_content.strip():
+        body_html = f'<pre>{html.escape(text_content)}</pre>'
+        helper_text = "Text preview generated from the uploaded PDF."
+    else:
+        body_html = (
+            '<div class="empty">'
+            "<strong>No previewable text was found in this PDF.</strong>"
+            "<span>This may be a scanned referral. Open the original PDF to review it.</span>"
+            "</div>"
+        )
+        helper_text = "The original PDF is still available from the button above."
+    return HTMLResponse(
+        f"""<!doctype html>
+<html><head><meta charset="utf-8"><style>
+html,body{{height:100%;margin:0;background:#f8fafc;color:#0f172a;font-family:Segoe UI,Arial,sans-serif}}
+body{{display:flex;flex-direction:column;min-height:100%}}
+.toolbar{{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;background:#e2e8f0;border-bottom:1px solid #cbd5e1}}
+.name{{font-weight:700;font-size:14px;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.hint{{font-size:12px;color:#475569;margin-top:2px}}
+.btn{{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 12px;border-radius:8px;background:#1f6feb;color:#fff;text-decoration:none;font-size:13px;font-weight:700;white-space:nowrap}}
+.content{{padding:16px 18px 22px;box-sizing:border-box;flex:1}}
+pre{{margin:0;white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.55;color:#0f172a}}
+.warning{{margin:0 0 10px;padding:10px 12px;border-radius:8px;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;font-size:13px;line-height:1.4}}
+.empty{{display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;min-height:260px;text-align:center;color:#475569}}
+.empty strong{{color:#0f172a}}
+</style></head>
+<body>
+  <div class="toolbar">
+    <div><div class="name">{safe_filename}</div><div class="hint">{html.escape(helper_text)}</div></div>
+    <a class="btn" href="{safe_inline_url}" target="_blank" rel="noopener">Open original PDF</a>
+  </div>
+  <div class="content">{warning_html}{body_html}</div>
+</body></html>"""
+    )
 
 
 def load_case_attachment_bytes(stored_path: str | None) -> bytes | None:
@@ -734,6 +790,10 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def today_date_iso() -> str:
+    return datetime.now().date().isoformat()
+
+
 def _split_note_blocks(note_text: str) -> list[str]:
     text = str(note_text or "").strip()
     if not text:
@@ -1088,7 +1148,16 @@ def init_db() -> None:
                 vetted_at TEXT,
                 org_id INTEGER,
                 contrast_required TEXT,
-                contrast_details TEXT
+                contrast_details TEXT,
+                requestor_name TEXT,
+                requestor_email TEXT,
+                requestor_organisation TEXT,
+                requestor_reference TEXT,
+                send_report_to_requestor INTEGER NOT NULL DEFAULT 0,
+                report_sent_at TEXT,
+                report_sent_to TEXT,
+                report_sent_by TEXT,
+                report_sent_by_id INTEGER
             )
             """
         )
@@ -1193,6 +1262,15 @@ def init_db() -> None:
             decision TEXT,
             decision_comment TEXT,
             vetted_at TEXT,
+            requestor_name TEXT,
+            requestor_email TEXT,
+            requestor_organisation TEXT,
+            requestor_reference TEXT,
+            send_report_to_requestor INTEGER NOT NULL DEFAULT 0,
+            report_sent_at TEXT,
+            report_sent_to TEXT,
+            report_sent_by TEXT,
+            report_sent_by_id INTEGER,
             FOREIGN KEY (institution_id) REFERENCES institutions(id)
         )
         """
@@ -1358,6 +1436,11 @@ def ensure_cases_schema() -> None:
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS stored_filepath TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS admin_notes TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS radiologist TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS requestor_name TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS requestor_email TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS requestor_organisation TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS requestor_reference TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS send_report_to_requestor INTEGER NOT NULL DEFAULT 0")
         conn.commit()
         conn.close()
         return
@@ -1402,6 +1485,16 @@ def ensure_cases_schema() -> None:
         cur.execute("ALTER TABLE cases ADD COLUMN contrast_required TEXT")
     if "contrast_details" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN contrast_details TEXT")
+    if "requestor_name" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN requestor_name TEXT")
+    if "requestor_email" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN requestor_email TEXT")
+    if "requestor_organisation" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN requestor_organisation TEXT")
+    if "requestor_reference" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN requestor_reference TEXT")
+    if "send_report_to_requestor" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN send_report_to_requestor INTEGER NOT NULL DEFAULT 0")
 
     conn.commit()
     conn.close()
@@ -1640,6 +1733,7 @@ def ensure_report_sent_schema() -> None:
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS exam_catalogue_exception_by TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS exam_catalogue_exception_by_id INTEGER")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_at TEXT")
+        conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_to TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_by TEXT")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS report_sent_by_id INTEGER")
         conn.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS justification_not_required_at TEXT")
@@ -1683,6 +1777,8 @@ def ensure_report_sent_schema() -> None:
         cur.execute("ALTER TABLE cases ADD COLUMN exam_catalogue_exception_by_id INTEGER")
     if "report_sent_at" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN report_sent_at TEXT")
+    if "report_sent_to" not in cols:
+        cur.execute("ALTER TABLE cases ADD COLUMN report_sent_to TEXT")
     if "report_sent_by" not in cols:
         cur.execute("ALTER TABLE cases ADD COLUMN report_sent_by TEXT")
     if "report_sent_by_id" not in cols:
@@ -1706,6 +1802,159 @@ def ensure_report_sent_schema() -> None:
             deleted_by_id INTEGER,
             reason TEXT NOT NULL,
             case_snapshot TEXT
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def ensure_email_import_schema() -> None:
+    conn = get_db()
+    if using_postgres():
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS email_import_messages (
+                id TEXT PRIMARY KEY,
+                org_id INTEGER,
+                mailbox_address TEXT,
+                folder_name TEXT,
+                graph_message_id TEXT,
+                internet_message_id TEXT,
+                subject TEXT,
+                sender_name TEXT,
+                sender_email TEXT,
+                received_at TEXT,
+                status TEXT NOT NULL DEFAULT 'draft',
+                draft_json TEXT,
+                attachment_token TEXT,
+                attachment_original_name TEXT,
+                source_email_token TEXT,
+                source_email_original_name TEXT,
+                parse_confidence REAL,
+                parse_preview TEXT,
+                warnings_json TEXT,
+                error_message TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                imported_by TEXT,
+                imported_by_id INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS email_import_runs (
+                id TEXT PRIMARY KEY,
+                org_id INTEGER,
+                mailbox_address TEXT,
+                folder_name TEXT,
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                imported_count INTEGER NOT NULL DEFAULT 0,
+                skipped_count INTEGER NOT NULL DEFAULT 0,
+                failed_count INTEGER NOT NULL DEFAULT 0,
+                error_message TEXT,
+                triggered_by TEXT,
+                triggered_by_id INTEGER
+            )
+            """
+        )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_email_import_graph_message ON email_import_messages(org_id, graph_message_id)"
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_email_import_org_status ON email_import_messages(org_id, status)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS org_email_import_settings (
+                org_id INTEGER PRIMARY KEY,
+                tenant_id TEXT,
+                client_id TEXT,
+                client_secret TEXT,
+                mailbox_address TEXT,
+                intake_folder TEXT NOT NULL DEFAULT 'RadFlow Intake',
+                processed_folder TEXT,
+                failed_folder TEXT,
+                import_limit INTEGER NOT NULL DEFAULT 10,
+                is_enabled INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT,
+                updated_by TEXT,
+                updated_by_id INTEGER
+            )
+            """
+        )
+        conn.commit()
+        conn.close()
+        return
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_import_messages (
+            id TEXT PRIMARY KEY,
+            org_id INTEGER,
+            mailbox_address TEXT,
+            folder_name TEXT,
+            graph_message_id TEXT,
+            internet_message_id TEXT,
+            subject TEXT,
+            sender_name TEXT,
+            sender_email TEXT,
+            received_at TEXT,
+            status TEXT NOT NULL DEFAULT 'draft',
+            draft_json TEXT,
+            attachment_token TEXT,
+            attachment_original_name TEXT,
+            source_email_token TEXT,
+            source_email_original_name TEXT,
+            parse_confidence REAL,
+            parse_preview TEXT,
+            warnings_json TEXT,
+            error_message TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            imported_by TEXT,
+            imported_by_id INTEGER
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_import_runs (
+            id TEXT PRIMARY KEY,
+            org_id INTEGER,
+            mailbox_address TEXT,
+            folder_name TEXT,
+            started_at TEXT NOT NULL,
+            finished_at TEXT,
+            imported_count INTEGER NOT NULL DEFAULT 0,
+            skipped_count INTEGER NOT NULL DEFAULT 0,
+            failed_count INTEGER NOT NULL DEFAULT 0,
+            error_message TEXT,
+            triggered_by TEXT,
+            triggered_by_id INTEGER
+        )
+        """
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_email_import_graph_message ON email_import_messages(org_id, graph_message_id)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_email_import_org_status ON email_import_messages(org_id, status)")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS org_email_import_settings (
+            org_id INTEGER PRIMARY KEY,
+            tenant_id TEXT,
+            client_id TEXT,
+            client_secret TEXT,
+            mailbox_address TEXT,
+            intake_folder TEXT NOT NULL DEFAULT 'RadFlow Intake',
+            processed_folder TEXT,
+            failed_folder TEXT,
+            import_limit INTEGER NOT NULL DEFAULT 10,
+            is_enabled INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT,
+            updated_by TEXT,
+            updated_by_id INTEGER
         )
         """
     )
@@ -2244,6 +2493,121 @@ def normalize_exam_match_value(value: str | None) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
 
 
+EXAM_MATCH_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "exam",
+    "examination",
+    "imaging",
+    "investigation",
+    "of",
+    "procedure",
+    "requested",
+    "required",
+    "scan",
+    "study",
+    "test",
+    "the",
+}
+
+
+def normalize_exam_search_text(value: str | None) -> str:
+    text_value = str(value or "").casefold()
+    replacements = {
+        "x ray": "xray",
+        "x-ray": "xray",
+        "computed tomography": "ct",
+        "magnetic resonance imaging": "mri",
+        "magnetic resonance": "mri",
+    }
+    for source, target in replacements.items():
+        text_value = text_value.replace(source, target)
+    text_value = re.sub(r"[^a-z0-9]+", " ", text_value)
+    tokens = [
+        token
+        for token in text_value.split()
+        if token and token not in EXAM_MATCH_STOPWORDS
+    ]
+    return " ".join(tokens)
+
+
+def exam_search_tokens(value: str | None) -> set[str]:
+    normalized = normalize_exam_search_text(value)
+    return {token for token in normalized.split() if token}
+
+
+def score_exam_catalogue_match(query: str | None, item: dict) -> float:
+    query_text = normalize_exam_search_text(query)
+    item_text = normalize_exam_search_text(item.get("description"))
+    if not query_text or not item_text:
+        return 0.0
+
+    query_tokens = exam_search_tokens(query)
+    item_tokens = exam_search_tokens(item.get("description"))
+    if not query_tokens or not item_tokens:
+        return 0.0
+
+    overlap = len(query_tokens & item_tokens)
+    precision = overlap / max(1, len(query_tokens))
+    recall = overlap / max(1, len(item_tokens))
+    token_score = (2 * precision * recall / (precision + recall)) if precision and recall else 0.0
+    sequence_score = SequenceMatcher(None, query_text, item_text).ratio()
+    containment_bonus = 0.08 if query_text in item_text or item_text in query_text else 0.0
+    exact_token_bonus = 0.18 if query_tokens == item_tokens else 0.0
+    extra_token_penalty = min(0.24, len(item_tokens - query_tokens) * 0.08)
+    return max(
+        0.0,
+        min(
+            1.0,
+            (token_score * 0.68)
+            + (sequence_score * 0.26)
+            + containment_bonus
+            + exact_token_bonus
+            - extra_token_penalty,
+        ),
+    )
+
+
+def find_best_exam_catalogue_matches(
+    *,
+    org_id: int | None,
+    study_description: str | None,
+    modality: str | None = None,
+    limit: int = 5,
+    min_score: float = 0.35,
+) -> list[dict]:
+    available_exams = list_exam_catalogue(active_only=True, org_id=org_id)
+    if not available_exams:
+        return []
+
+    normalized_modality = str(modality or "").strip().upper()
+    modality_matches = [
+        item
+        for item in available_exams
+        if not normalized_modality or str(item.get("modality") or "").strip().upper() == normalized_modality
+    ]
+    search_space = modality_matches or available_exams
+    scored: list[dict] = []
+    for item in search_space:
+        if item.get("id") is None:
+            continue
+        score = score_exam_catalogue_match(study_description, item)
+        if score >= min_score:
+            scored_item = dict(item)
+            scored_item["match_score"] = score
+            scored.append(scored_item)
+
+    scored.sort(
+        key=lambda item: (
+            -float(item.get("match_score") or 0),
+            -int(bool(str(item.get("study_code") or "").strip())),
+            len(str(item.get("description") or "")),
+        )
+    )
+    return scored[: max(1, int(limit or 1))]
+
+
 def find_matching_exam_catalogue_item(
     *,
     org_id: int | None,
@@ -2265,13 +2629,22 @@ def find_matching_exam_catalogue_item(
         exact = [item for item in items if str(item.get("modality") or "").strip().upper() == normalized_modality]
         return exact or items
 
+    def _prefer_coded(items: list[dict]) -> list[dict]:
+        return sorted(
+            items,
+            key=lambda item: (
+                -int(bool(str(item.get("study_code") or "").strip())),
+                len(str(item.get("description") or "")),
+            ),
+        )
+
     if normalized_code:
         code_matches = [
             item
             for item in available_exams
             if normalize_exam_match_value(item.get("study_code")) == normalized_code
         ]
-        code_matches = _prefer_modality(code_matches)
+        code_matches = _prefer_coded(_prefer_modality(code_matches))
         if code_matches:
             return code_matches[0]
 
@@ -2281,9 +2654,19 @@ def find_matching_exam_catalogue_item(
             for item in available_exams
             if normalize_exam_match_value(item.get("description")) == normalized_description
         ]
-        desc_matches = _prefer_modality(desc_matches)
+        desc_matches = _prefer_coded(_prefer_modality(desc_matches))
         if desc_matches:
             return desc_matches[0]
+
+    fuzzy_matches = find_best_exam_catalogue_matches(
+        org_id=org_id,
+        study_description=study_description,
+        modality=modality,
+        limit=1,
+        min_score=0.82,
+    )
+    if fuzzy_matches:
+        return fuzzy_matches[0]
 
     # Task 2: Stop after no catalogue match; legacy seed code below this point was unreachable.
     return None
@@ -2632,6 +3015,26 @@ def resolve_case_exam_selection(
             "study_code": str(selected_preset.get("study_code") or cleaned_study_code or "").strip() or None,
             "modality": str(selected_preset.get("modality") or cleaned_modality or "").strip().upper() or None,
             "study_description_preset_id": selected_preset_id,
+            "requires_review": 0,
+            "exception_reason": None,
+            "exception_at": None,
+            "exception_by": None,
+            "exception_by_id": None,
+            "exception_requested": False,
+        }
+
+    catalogue_match = find_matching_exam_catalogue_item(
+        org_id=org_id,
+        study_description=cleaned_study_description,
+        modality=cleaned_modality,
+        study_code=cleaned_study_code,
+    )
+    if catalogue_match:
+        return {
+            "study_description": str(catalogue_match.get("description") or cleaned_study_description).strip(),
+            "study_code": str(catalogue_match.get("study_code") or cleaned_study_code or "").strip() or None,
+            "modality": str(catalogue_match.get("modality") or cleaned_modality or "").strip().upper() or None,
+            "study_description_preset_id": catalogue_match.get("id"),
             "requires_review": 0,
             "exception_reason": None,
             "exception_at": None,
@@ -3520,6 +3923,175 @@ def send_email(to_address: str, subject: str, body: str) -> bool:
             pass
 
 
+def form_flag_enabled(value: str | int | bool | None) -> int:
+    return 1 if str(value or "").strip().lower() in {"1", "true", "on", "yes"} else 0
+
+
+def normalize_email_address(value: str | None) -> str:
+    return re.sub(r"\s+", "", str(value or "").strip()).lower()
+
+
+def is_valid_email_address(value: str | None) -> bool:
+    email_value = normalize_email_address(value)
+    if not email_value or len(email_value) > 254:
+        return False
+    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_value))
+
+
+PERSONAL_EMAIL_DOMAINS = {
+    "aol.com",
+    "gmail.com",
+    "googlemail.com",
+    "hotmail.com",
+    "icloud.com",
+    "live.com",
+    "me.com",
+    "msn.com",
+    "outlook.com",
+    "pm.me",
+    "proton.me",
+    "protonmail.com",
+    "yahoo.com",
+}
+
+
+def is_personal_email_address(value: str | None) -> bool:
+    email_value = normalize_email_address(value)
+    if "@" not in email_value:
+        return False
+    domain = email_value.rsplit("@", 1)[-1]
+    return domain in PERSONAL_EMAIL_DOMAINS
+
+
+def build_requestor_case_values(
+    requestor_name: str = "",
+    requestor_email: str = "",
+    requestor_organisation: str = "",
+    requestor_reference: str = "",
+    send_report_to_requestor: str | int | bool | None = "",
+) -> dict:
+    return {
+        "requestor_name": str(requestor_name or "").strip() or None,
+        "requestor_email": normalize_email_address(requestor_email) or None,
+        "requestor_organisation": str(requestor_organisation or "").strip() or None,
+        "requestor_reference": str(requestor_reference or "").strip() or None,
+        "send_report_to_requestor": form_flag_enabled(send_report_to_requestor),
+    }
+
+
+def has_requestor_details(values: dict) -> bool:
+    return any(
+        str(values.get(key) or "").strip()
+        for key in ("requestor_name", "requestor_email", "requestor_organisation", "requestor_reference")
+    ) or bool(values.get("send_report_to_requestor"))
+
+
+def requestor_details_summary(values: dict) -> str:
+    pieces: list[str] = []
+    if values.get("requestor_name"):
+        pieces.append(str(values["requestor_name"]))
+    if values.get("requestor_email"):
+        pieces.append(str(values["requestor_email"]))
+    if values.get("requestor_organisation"):
+        pieces.append(str(values["requestor_organisation"]))
+    if values.get("requestor_reference"):
+        pieces.append(f"ref {values['requestor_reference']}")
+    if values.get("send_report_to_requestor"):
+        pieces.append("report requested")
+    return ", ".join(pieces) or "No requestor details recorded"
+
+
+def get_requestor_report_context(case_row: dict) -> dict:
+    email_value = normalize_email_address(case_row.get("requestor_email"))
+    completed = str(case_row.get("status") or "").strip().lower() in {"vetted", "rejected"}
+    report_sent_at = str(case_row.get("report_sent_at") or "").strip()
+    report_sent_to = normalize_email_address(case_row.get("report_sent_to"))
+    requestor_report_sent = bool(report_sent_at and report_sent_to)
+    email_valid = is_valid_email_address(email_value)
+    if not completed:
+        status = "not_ready"
+        label = "Not ready"
+    elif not email_value:
+        status = "missing_email"
+        label = "Missing email"
+    elif not email_valid:
+        status = "invalid_email"
+        label = "Invalid email"
+    elif requestor_report_sent:
+        status = "sent"
+        label = "Sent"
+    else:
+        status = "ready"
+        label = "Ready to send"
+    return {
+        "requestor_email_normalized": email_value,
+        "requestor_email_valid": email_valid,
+        "requestor_email_personal": is_personal_email_address(email_value),
+        "requestor_report_completed": completed,
+        "requestor_report_status": status,
+        "requestor_report_status_label": label,
+        "requestor_report_ready": status in {"ready", "sent"},
+        "requestor_report_sent_display": format_display_datetime(report_sent_at, report_sent_at) if requestor_report_sent else "",
+        "requestor_report_sent_to": report_sent_to,
+        "send_report_to_requestor_enabled": bool(form_flag_enabled(case_row.get("send_report_to_requestor"))),
+    }
+
+
+def send_email_with_attachment(
+    *,
+    to_address: str,
+    subject: str,
+    body: str,
+    attachment_bytes: bytes,
+    attachment_filename: str,
+    content_type: str = "application/pdf",
+) -> None:
+    if not SMTP_HOST or not SMTP_FROM:
+        raise RuntimeError("smtp_not_configured")
+    if not attachment_bytes:
+        raise RuntimeError("missing_attachment")
+
+    import smtplib
+    import ssl
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    msg["From"] = SMTP_FROM
+    msg["To"] = normalize_email_address(to_address)
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    maintype, _, subtype = content_type.partition("/")
+    msg.add_attachment(
+        attachment_bytes,
+        maintype=maintype or "application",
+        subtype=subtype or "octet-stream",
+        filename=attachment_filename,
+    )
+
+    server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
+    try:
+        server.starttls(context=ssl.create_default_context())
+        if SMTP_USER and SMTP_PASSWORD:
+            server.login(SMTP_USER, SMTP_PASSWORD)
+        server.send_message(msg)
+    finally:
+        try:
+            server.quit()
+        except Exception:
+            pass
+
+
+def build_case_pdf_bytes_for_user(request: Request, case_id: str, include_timeline: bool = False) -> bytes:
+    """Reuse the existing authenticated PDF route generation and return attachment bytes."""
+    case_pdf(request, case_id, inline=False, include_timeline=include_timeline)
+    suffix = "_timeline" if include_timeline else ""
+    pdf_path = UPLOAD_DIR / f"{case_id}_vetting{suffix}.pdf"
+    if not pdf_path.exists():
+        raise RuntimeError("report_unavailable")
+    return pdf_path.read_bytes()
+
+
 def get_user_by_email(email: str) -> dict | None:
     if not email:
         return None
@@ -4071,6 +4643,7 @@ try:
     ensure_case_events_schema()
     ensure_case_attachments_schema()
     ensure_report_sent_schema()
+    ensure_email_import_schema()
     ensure_seed_data()
     ensure_local_owner_account()
     ensure_default_protocols()
@@ -4872,6 +5445,7 @@ def owner_edit_organisation_page(request: Request, org_id: int, saved: str = "",
             "org_users": list_organisation_users(org_id),
             "org_institutions": list_organisation_institutions(org_id),
             "exam_catalogue_visibility": get_exam_catalogue_visibility_summary(org_id),
+            "email_import_settings": get_org_email_import_settings(org_id),
             "saved": saved,
             "notice": request.query_params.get("notice", ""),
             "error": error,
@@ -4887,6 +5461,40 @@ def owner_assign_full_exam_catalogue_to_org(request: Request, org_id: int):
         raise HTTPException(status_code=404, detail="Organisation not found")
     assign_exam_catalogue_to_org(org_id, assigned_by=user.get("id") or 1)
     return RedirectResponse(url=f"/owner/organisations/{org_id}?notice=catalogue_assigned", status_code=303)
+
+
+@app.post("/owner/organisations/{org_id}/referral-inbox")
+def owner_update_org_referral_inbox_settings(
+    request: Request,
+    org_id: int,
+    is_enabled: str = Form("0"),
+    tenant_id: str = Form(""),
+    client_id: str = Form(""),
+    client_secret: str = Form(""),
+    mailbox_address: str = Form(""),
+    intake_folder: str = Form("RadFlow Intake"),
+    processed_folder: str = Form(""),
+    failed_folder: str = Form(""),
+    import_limit: str = Form("10"),
+):
+    user = require_superuser(request)
+    organisation = get_organisation_summary(org_id)
+    if not organisation:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+    save_org_email_import_settings(
+        org_id=org_id,
+        user=user,
+        is_enabled=is_enabled,
+        tenant_id=tenant_id,
+        client_id=client_id,
+        client_secret=client_secret,
+        mailbox_address=mailbox_address,
+        intake_folder=intake_folder,
+        processed_folder=processed_folder,
+        failed_folder=failed_folder,
+        import_limit=import_limit,
+    )
+    return RedirectResponse(url=f"/owner/organisations/{org_id}?notice=referral_inbox_saved", status_code=303)
 
 
 @app.post("/owner/organisations/{org_id}")
@@ -5915,6 +6523,490 @@ def admin_dashboard(
     )
 
 
+def _email_address_from_graph(message: dict) -> dict:
+    address_block = ((message.get("from") or {}).get("emailAddress") or {}) if isinstance(message, dict) else {}
+    if not address_block:
+        address_block = ((message.get("sender") or {}).get("emailAddress") or {}) if isinstance(message, dict) else {}
+    return {
+        "requestor_name": str(address_block.get("name") or "").strip(),
+        "requestor_email": str(address_block.get("address") or "").strip(),
+    }
+
+
+def _email_import_subject_filename(subject: str, message_id: str) -> str:
+    base = re.sub(r"[^A-Za-z0-9._ -]+", " ", subject or "").strip()
+    base = re.sub(r"\s+", "_", base)[:70].strip("._-")
+    if not base:
+        digest = hashlib.sha1((message_id or uuid4().hex).encode("utf-8")).hexdigest()[:10]
+        base = f"graph_message_{digest}"
+    return f"{base}.eml"
+
+
+def _email_import_exists(conn, org_id: int | None, graph_message_id: str) -> bool:
+    if org_id is None:
+        row = conn.execute(
+            "SELECT id FROM email_import_messages WHERE org_id IS NULL AND graph_message_id = ? LIMIT 1",
+            (graph_message_id,),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id FROM email_import_messages WHERE org_id = ? AND graph_message_id = ? LIMIT 1",
+            (org_id, graph_message_id),
+        ).fetchone()
+    return bool(row)
+
+
+def _insert_email_import_message(
+    *,
+    org_id: int | None,
+    config,
+    message: dict,
+    draft: dict,
+    parsed: dict,
+    warnings: list,
+    user: dict,
+    status: str = "draft",
+    error_message: str = "",
+) -> str:
+    now = utc_now_iso()
+    import_id = uuid4().hex
+    sender = _email_address_from_graph(message)
+    conn = get_db()
+    conn.execute(
+        """
+        INSERT INTO email_import_messages (
+            id, org_id, mailbox_address, folder_name, graph_message_id, internet_message_id,
+            subject, sender_name, sender_email, received_at, status, draft_json,
+            attachment_token, attachment_original_name, source_email_token, source_email_original_name,
+            parse_confidence, parse_preview, warnings_json, error_message,
+            created_at, updated_at, imported_by, imported_by_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            import_id,
+            org_id,
+            config.mailbox,
+            config.intake_folder,
+            str(message.get("id") or ""),
+            str(message.get("internetMessageId") or ""),
+            str(message.get("subject") or ""),
+            sender.get("requestor_name") or "",
+            sender.get("requestor_email") or "",
+            str(message.get("receivedDateTime") or ""),
+            status,
+            _json.dumps(draft),
+            draft.get("attachment_token") or "",
+            draft.get("attachment_original_name") or "",
+            draft.get("source_email_token") or "",
+            draft.get("source_email_original_name") or "",
+            parsed.get("confidence"),
+            parsed.get("text_preview") or "",
+            _json.dumps(warnings),
+            error_message,
+            now,
+            now,
+            user.get("username"),
+            user.get("id"),
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return import_id
+
+
+def _list_email_import_messages(user: dict) -> list[dict]:
+    org_id = user.get("org_id")
+    conn = get_db()
+    if org_id and not user.get("is_superuser"):
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM email_import_messages
+            WHERE org_id = ?
+            ORDER BY created_at DESC
+            LIMIT 80
+            """,
+            (org_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM email_import_messages
+            ORDER BY created_at DESC
+            LIMIT 80
+            """
+        ).fetchall()
+    conn.close()
+    messages: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        item["created_display"] = format_display_datetime(item.get("created_at"), item.get("created_at") or "")
+        item["received_display"] = format_display_datetime(item.get("received_at"), item.get("received_at") or "")
+        try:
+            item["warnings"] = _json.loads(item.get("warnings_json") or "[]")
+        except Exception:
+            item["warnings"] = []
+        messages.append(item)
+    return messages
+
+
+def _get_email_import_message(import_id: str, user: dict) -> dict | None:
+    org_id = user.get("org_id")
+    conn = get_db()
+    if org_id and not user.get("is_superuser"):
+        row = conn.execute(
+            "SELECT * FROM email_import_messages WHERE id = ? AND org_id = ?",
+            (import_id, org_id),
+        ).fetchone()
+    else:
+        row = conn.execute("SELECT * FROM email_import_messages WHERE id = ?", (import_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def _blank_email_import_settings(org_id: int | None) -> dict:
+    env_config = load_graph_inbox_config()
+    return {
+        "org_id": org_id,
+        "tenant_id": env_config.tenant_id,
+        "client_id": env_config.client_id,
+        "client_secret": env_config.client_secret,
+        "mailbox_address": env_config.mailbox,
+        "intake_folder": env_config.intake_folder,
+        "processed_folder": env_config.processed_folder,
+        "failed_folder": env_config.failed_folder,
+        "import_limit": env_config.import_limit,
+        "is_enabled": 1 if env_config.is_configured else 0,
+        "updated_at": "",
+        "updated_by": "",
+        "has_client_secret": bool(env_config.client_secret),
+        "uses_environment_fallback": env_config.is_configured,
+    }
+
+
+def get_org_email_import_settings(org_id: int | None) -> dict:
+    settings = _blank_email_import_settings(org_id)
+    if not org_id or not table_exists("org_email_import_settings"):
+        return settings
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM org_email_import_settings WHERE org_id = ?",
+        (org_id,),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return settings
+    data = dict(row)
+    env_config = load_graph_inbox_config()
+    settings.update(
+        {
+            "tenant_id": data.get("tenant_id") or "",
+            "client_id": data.get("client_id") or "",
+            "client_secret": data.get("client_secret") or env_config.client_secret or "",
+            "mailbox_address": data.get("mailbox_address") or "",
+            "intake_folder": data.get("intake_folder") or "RadFlow Intake",
+            "processed_folder": data.get("processed_folder") or "",
+            "failed_folder": data.get("failed_folder") or "",
+            "import_limit": int(data.get("import_limit") or 10),
+            "is_enabled": int(data.get("is_enabled") or 0),
+            "updated_at": data.get("updated_at") or "",
+            "updated_by": data.get("updated_by") or "",
+            "has_client_secret": bool(data.get("client_secret") or env_config.client_secret),
+            "uses_environment_fallback": False,
+        }
+    )
+    return settings
+
+
+def get_graph_inbox_config_for_org(org_id: int | None) -> GraphInboxConfig:
+    settings = get_org_email_import_settings(org_id)
+    if not int(settings.get("is_enabled") or 0):
+        return GraphInboxConfig(
+            tenant_id="",
+            client_id="",
+            client_secret="",
+            mailbox="",
+            intake_folder=settings.get("intake_folder") or "RadFlow Intake",
+            processed_folder=settings.get("processed_folder") or "",
+            failed_folder=settings.get("failed_folder") or "",
+            import_limit=int(settings.get("import_limit") or 10),
+        )
+    return GraphInboxConfig(
+        tenant_id=str(settings.get("tenant_id") or "").strip(),
+        client_id=str(settings.get("client_id") or "").strip(),
+        client_secret=str(settings.get("client_secret") or "").strip(),
+        mailbox=str(settings.get("mailbox_address") or "").strip(),
+        intake_folder=str(settings.get("intake_folder") or "RadFlow Intake").strip() or "RadFlow Intake",
+        processed_folder=str(settings.get("processed_folder") or "").strip(),
+        failed_folder=str(settings.get("failed_folder") or "").strip(),
+        import_limit=max(1, min(50, int(settings.get("import_limit") or 10))),
+    )
+
+
+def save_org_email_import_settings(
+    *,
+    org_id: int,
+    user: dict,
+    is_enabled: str,
+    tenant_id: str,
+    client_id: str,
+    client_secret: str,
+    mailbox_address: str,
+    intake_folder: str,
+    processed_folder: str,
+    failed_folder: str,
+    import_limit: str,
+) -> None:
+    existing = get_org_email_import_settings(org_id)
+    try:
+        clean_limit = max(1, min(50, int(str(import_limit or "10").strip())))
+    except ValueError:
+        clean_limit = 10
+    clean_secret = client_secret.strip() or str(existing.get("client_secret") or "")
+    conn = get_db()
+    conn.execute(
+        """
+        INSERT INTO org_email_import_settings (
+            org_id, tenant_id, client_id, client_secret, mailbox_address,
+            intake_folder, processed_folder, failed_folder, import_limit,
+            is_enabled, updated_at, updated_by, updated_by_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(org_id) DO UPDATE SET
+            tenant_id = excluded.tenant_id,
+            client_id = excluded.client_id,
+            client_secret = excluded.client_secret,
+            mailbox_address = excluded.mailbox_address,
+            intake_folder = excluded.intake_folder,
+            processed_folder = excluded.processed_folder,
+            failed_folder = excluded.failed_folder,
+            import_limit = excluded.import_limit,
+            is_enabled = excluded.is_enabled,
+            updated_at = excluded.updated_at,
+            updated_by = excluded.updated_by,
+            updated_by_id = excluded.updated_by_id
+        """,
+        (
+            org_id,
+            tenant_id.strip(),
+            client_id.strip(),
+            clean_secret,
+            mailbox_address.strip(),
+            intake_folder.strip() or "RadFlow Intake",
+            processed_folder.strip(),
+            failed_folder.strip(),
+            clean_limit,
+            1 if str(is_enabled).strip().lower() in {"1", "true", "yes", "on"} else 0,
+            utc_now_iso(),
+            user.get("username"),
+            user.get("id"),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+@app.get("/admin/referral-inbox", response_class=HTMLResponse)
+def admin_referral_inbox(request: Request, notice: str = "", error: str = ""):
+    try:
+        user = require_admin(request)
+    except HTTPException:
+        return redirect_to_login("admin", "/admin/referral-inbox")
+
+    config = get_graph_inbox_config_for_org(user.get("org_id"))
+    settings = get_org_email_import_settings(user.get("org_id"))
+    return templates.TemplateResponse(
+        "referral_inbox.html",
+        {
+            "request": request,
+            "current_user": get_session_user(request),
+            "config": config,
+            "configured": config.is_configured,
+            "missing_config": config.missing_names,
+            "settings": settings,
+            "messages": _list_email_import_messages(user),
+            "notice": notice,
+            "error": error,
+        },
+    )
+
+
+@app.post("/admin/referral-inbox/import")
+def admin_referral_inbox_import(request: Request):
+    try:
+        user = require_admin(request)
+    except HTTPException:
+        return redirect_to_login("admin", "/admin/referral-inbox")
+
+    config = get_graph_inbox_config_for_org(user.get("org_id"))
+    if not config.is_configured:
+        return RedirectResponse(url="/admin/referral-inbox?error=not_configured", status_code=303)
+
+    org_id = user.get("org_id")
+    run_id = uuid4().hex
+    conn = get_db()
+    conn.execute(
+        """
+        INSERT INTO email_import_runs (
+            id, org_id, mailbox_address, folder_name, started_at, triggered_by, triggered_by_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (run_id, org_id, config.mailbox, config.intake_folder, utc_now_iso(), user.get("username"), user.get("id")),
+    )
+    conn.commit()
+    conn.close()
+
+    imported_count = 0
+    skipped_count = 0
+    failed_count = 0
+    run_error = ""
+
+    try:
+        token = get_graph_token(config)
+        _folder_id, messages = list_intake_messages(token, config)
+        for message in messages:
+            graph_message_id = str(message.get("id") or "")
+            if not graph_message_id:
+                skipped_count += 1
+                continue
+
+            conn = get_db()
+            exists = _email_import_exists(conn, org_id, graph_message_id)
+            conn.close()
+            if exists:
+                skipped_count += 1
+                continue
+
+            try:
+                mime_bytes = fetch_message_mime(token, config, graph_message_id)
+                original_filename = _email_import_subject_filename(str(message.get("subject") or ""), graph_message_id)
+                sender = _email_address_from_graph(message)
+                parsed = parse_referral_attachment(original_filename, mime_bytes)
+                draft = build_referral_trial_draft_from_parsed(
+                    parsed,
+                    original_filename,
+                    mime_bytes,
+                    org_id=org_id,
+                    institution_id="",
+                    requestor_fallback={
+                        "requestor_name": sender.get("requestor_name") or "",
+                        "requestor_email": sender.get("requestor_email") or "",
+                        "requestor_reference": str(message.get("subject") or ""),
+                    },
+                )
+                warnings = list(parsed.get("warnings", []) or [])
+                source = parsed.get("source") or {}
+                if source.get("selected_attachment"):
+                    warnings.append(f"Imported from shared inbox attachment: {source['selected_attachment']}")
+                else:
+                    warnings.append("Imported from shared inbox email body. Check the referral details carefully.")
+                _insert_email_import_message(
+                    org_id=org_id,
+                    config=config,
+                    message=message,
+                    draft=draft,
+                    parsed=parsed,
+                    warnings=warnings,
+                    user=user,
+                    status="draft",
+                )
+                imported_count += 1
+                if config.processed_folder:
+                    try:
+                        move_message_to_folder(token, config, graph_message_id, config.processed_folder)
+                    except Exception as move_exc:
+                        print(f"[email-import] processed-folder move failed: {move_exc}")
+            except Exception as item_exc:
+                failed_count += 1
+                print(f"[email-import] import failed for message {graph_message_id}: {item_exc}")
+                if config.failed_folder:
+                    try:
+                        move_message_to_folder(token, config, graph_message_id, config.failed_folder)
+                    except Exception as move_exc:
+                        print(f"[email-import] failed-folder move failed: {move_exc}")
+    except GraphInboxError as exc:
+        run_error = str(exc)
+    except Exception as exc:
+        run_error = f"Unexpected inbox import error: {exc}"
+
+    if run_error:
+        failed_count += 1
+
+    conn = get_db()
+    conn.execute(
+        """
+        UPDATE email_import_runs
+        SET finished_at = ?, imported_count = ?, skipped_count = ?, failed_count = ?, error_message = ?
+        WHERE id = ?
+        """,
+        (utc_now_iso(), imported_count, skipped_count, failed_count, run_error, run_id),
+    )
+    conn.commit()
+    conn.close()
+
+    if run_error:
+        return RedirectResponse(url="/admin/referral-inbox?error=import_failed", status_code=303)
+    return RedirectResponse(
+        url=f"/admin/referral-inbox?notice=imported_{imported_count}_skipped_{skipped_count}_failed_{failed_count}",
+        status_code=303,
+    )
+
+
+@app.get("/admin/referral-inbox/{import_id}/review", response_class=HTMLResponse)
+def admin_referral_inbox_review(request: Request, import_id: str):
+    try:
+        user = require_admin(request)
+    except HTTPException:
+        return redirect_to_login("admin", f"/admin/referral-inbox/{import_id}/review")
+
+    row = _get_email_import_message(import_id, user)
+    if not row:
+        raise HTTPException(status_code=404, detail="Imported referral not found")
+
+    org_id = user.get("org_id")
+    try:
+        draft = _json.loads(row.get("draft_json") or "{}")
+    except Exception:
+        draft = {}
+    draft["email_import_id"] = import_id
+
+    try:
+        warnings = _json.loads(row.get("warnings_json") or "[]")
+    except Exception:
+        warnings = []
+    if row.get("status") == "case_created":
+        warnings.append("A case has already been created from this imported email. Review before creating another.")
+
+    return templates.TemplateResponse(
+        "referral_trial.html",
+        {
+            "request": request,
+            "institutions": list_institutions(org_id),
+            "radiologists": list_radiologists(org_id),
+            "user_org_id": org_id,
+            "draft": draft,
+            "parse_warnings": warnings,
+            "parse_confidence": row.get("parse_confidence"),
+            "parse_preview": row.get("parse_preview") or "",
+            "email_source": {
+                "requestor_name": row.get("sender_name") or "",
+                "requestor_email": row.get("sender_email") or "",
+                "subject": row.get("subject") or "",
+                "sent_date": row.get("received_at") or "",
+                "selected_attachment": row.get("attachment_original_name") or "",
+            },
+            "error": "",
+            "default_institution": get_default_institution(org_id),
+            "available_exams": list_exam_catalogue(active_only=True, org_id=org_id),
+            "can_create_uncatalogued_exam": can_use_uncatalogued_exam_exception(user),
+            "back_url": "/admin/referral-inbox",
+        },
+    )
+
+
 @app.get("/admin.csv")
 def admin_dashboard_csv(
     request: Request,
@@ -6599,9 +7691,11 @@ def admin_case_view(request: Request, case_id: str):
         case_dict["attachment_previewable"] = is_inline_previewable(case_dict.get("uploaded_filename"))
         case_dict["status_display"] = display_case_status(case_dict.get("status"))
         case_dict["decision_display"] = display_decision_label(case_dict.get("decision"))
+        case_dict["request_date_display"] = format_display_date(case_dict.get("request_date"), "")
         case_dict["report_sent"], case_dict["report_sent_display"] = get_report_sent_summary(case_dict)
         case_dict["justification_not_required"] = bool(str(case_dict.get("justification_not_required_at") or "").strip())
         case_dict["catalogue_review_required"], case_dict["catalogue_review_display"] = get_exam_catalogue_review_summary(case_dict)
+        case_dict.update(get_requestor_report_context(case_dict))
         attachments = list_case_attachments(case_id, case_dict=case_dict)
         case_dict.update(build_case_preview_context(case_id, case_dict, attachments))
     else:
@@ -6648,6 +7742,8 @@ def admin_case_view(request: Request, case_id: str):
             "events": events,
             "attachments": attachments,
             "return_to": (request.query_params.get("return_to") or "").strip(),
+            "report_notice": (request.query_params.get("report_notice") or "").strip(),
+            "report_error": (request.query_params.get("report_error") or "").strip(),
         },
     )
 
@@ -6668,7 +7764,7 @@ def admin_case_mark_report_sent(request: Request, case_id: str, return_to: str =
     conn.execute(
         """
         UPDATE cases
-        SET report_sent_at = ?, report_sent_by = ?, report_sent_by_id = ?,
+        SET report_sent_at = ?, report_sent_to = NULL, report_sent_by = ?, report_sent_by_id = ?,
             justification_not_required_at = NULL,
             justification_not_required_by = NULL,
             justification_not_required_by_id = NULL,
@@ -6692,6 +7788,175 @@ def admin_case_mark_report_sent(request: Request, case_id: str, return_to: str =
     return RedirectResponse(url=f"/admin/case/{case_id}", status_code=303)
 
 
+def redirect_to_admin_case_with_report_status(
+    case_id: str,
+    *,
+    return_to: str = "",
+    report_notice: str = "",
+    report_error: str = "",
+) -> RedirectResponse:
+    params: dict[str, str] = {}
+    safe_return_to = (return_to or "").strip()
+    if safe_return_to.startswith("/admin"):
+        params["return_to"] = safe_return_to
+    if report_notice:
+        params["report_notice"] = report_notice
+    if report_error:
+        params["report_error"] = report_error
+    query = urllib.parse.urlencode(params)
+    url = f"/admin/case/{case_id}"
+    if query:
+        url = f"{url}?{query}"
+    return RedirectResponse(url=url, status_code=303)
+
+
+@app.post("/admin/case/{case_id}/send-requestor-report")
+def admin_case_send_requestor_report(
+    request: Request,
+    case_id: str,
+    return_to: str = Form(""),
+    confirm_send: str = Form(""),
+):
+    user = require_admin(request)
+    if str(confirm_send or "").strip() != "1":
+        return redirect_to_admin_case_with_report_status(
+            case_id,
+            return_to=return_to,
+            report_error="confirm_required",
+        )
+
+    conn = get_db()
+    org_id = user.get("org_id")
+    if org_id and not user.get("is_superuser"):
+        row = conn.execute("SELECT * FROM cases WHERE id = ? AND org_id = ?", (case_id, org_id)).fetchone()
+    else:
+        row = conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    case_dict = row if isinstance(row, dict) else dict(row)
+    case_org_id = case_dict.get("org_id")
+    recipient = normalize_email_address(case_dict.get("requestor_email"))
+    status_value = str(case_dict.get("status") or "").strip().lower()
+
+    def record_failure(code: str, comment: str) -> RedirectResponse:
+        conn.close()
+        insert_case_event(
+            case_id=case_id,
+            org_id=case_org_id,
+            event_type="REQUESTOR_REPORT_SEND_FAILED",
+            user=user,
+            comment=comment,
+        )
+        return redirect_to_admin_case_with_report_status(
+            case_id,
+            return_to=return_to,
+            report_error=code,
+        )
+
+    if status_value not in {"vetted", "rejected"}:
+        return record_failure("not_ready", "Requestor report send blocked because the case is not complete.")
+    if not recipient:
+        return record_failure("missing_email", "Requestor report send blocked because requestor email is missing.")
+    if not is_valid_email_address(recipient):
+        return record_failure("invalid_email", f"Requestor report send blocked because the email address is invalid: {recipient}")
+    if not SMTP_HOST:
+        return record_failure("smtp_not_configured", "Requestor report send blocked because SMTP is not configured.")
+
+    conn.close()
+
+    try:
+        pdf_bytes = build_case_pdf_bytes_for_user(request, case_id, include_timeline=False)
+    except Exception as exc:
+        insert_case_event(
+            case_id=case_id,
+            org_id=case_org_id,
+            event_type="REQUESTOR_REPORT_SEND_FAILED",
+            user=user,
+            comment=f"Requestor report send failed while generating the report: {exc}",
+        )
+        return redirect_to_admin_case_with_report_status(
+            case_id,
+            return_to=return_to,
+            report_error="report_unavailable",
+        )
+
+    try:
+        send_email_with_attachment(
+            to_address=recipient,
+            subject="Imaging referral outcome available",
+            body=(
+                "An imaging referral outcome is available. "
+                "Please see the attached justification report.\n\n"
+                "This message was sent by RadFlow."
+            ),
+            attachment_bytes=pdf_bytes,
+            attachment_filename=f"justification_report_{case_id}.pdf",
+            content_type="application/pdf",
+        )
+    except RuntimeError as exc:
+        code = str(exc) if str(exc) in {"smtp_not_configured", "missing_attachment"} else "send_failed"
+        insert_case_event(
+            case_id=case_id,
+            org_id=case_org_id,
+            event_type="REQUESTOR_REPORT_SEND_FAILED",
+            user=user,
+            comment=f"Requestor report send failed for {recipient}: {exc}",
+        )
+        return redirect_to_admin_case_with_report_status(
+            case_id,
+            return_to=return_to,
+            report_error=code,
+        )
+    except Exception as exc:
+        insert_case_event(
+            case_id=case_id,
+            org_id=case_org_id,
+            event_type="REQUESTOR_REPORT_SEND_FAILED",
+            user=user,
+            comment=f"Requestor report send failed for {recipient}: {exc}",
+        )
+        return redirect_to_admin_case_with_report_status(
+            case_id,
+            return_to=return_to,
+            report_error="send_failed",
+        )
+
+    now = utc_now_iso()
+    conn = get_db()
+    conn.execute(
+        """
+        UPDATE cases
+        SET report_sent_at = ?,
+            report_sent_to = ?,
+            report_sent_by = ?,
+            report_sent_by_id = ?,
+            justification_not_required_at = NULL,
+            justification_not_required_by = NULL,
+            justification_not_required_by_id = NULL,
+            justification_not_required_reason = NULL
+        WHERE id = ?
+        """,
+        (now, recipient, user.get("username"), user.get("id"), case_id),
+    )
+    conn.commit()
+    conn.close()
+
+    insert_case_event(
+        case_id=case_id,
+        org_id=case_org_id,
+        event_type="REQUESTOR_REPORT_SENT",
+        user=user,
+        comment=f"Justification report sent to {recipient} by {user.get('username') or 'admin'}",
+    )
+    return redirect_to_admin_case_with_report_status(
+        case_id,
+        return_to=return_to,
+        report_notice="requestor_report_sent",
+    )
+
+
 @app.post("/admin/case/{case_id}/report-sent/reset")
 def admin_case_reset_report_sent(request: Request, case_id: str, return_to: str = Form("")):
     user = require_admin(request)
@@ -6709,7 +7974,7 @@ def admin_case_reset_report_sent(request: Request, case_id: str, return_to: str 
         UPDATE cases
         SET status = CASE WHEN LOWER(COALESCE(status, '')) = 'not_required' THEN 'pending' ELSE status END,
             vetted_at = CASE WHEN LOWER(COALESCE(status, '')) = 'not_required' THEN NULL ELSE vetted_at END,
-            report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
+            report_sent_at = NULL, report_sent_to = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
             justification_not_required_at = NULL,
             justification_not_required_by = NULL,
             justification_not_required_by_id = NULL,
@@ -6754,7 +8019,7 @@ def admin_case_mark_justification_not_required(request: Request, case_id: str, r
         UPDATE cases
         SET status = ?,
             vetted_at = COALESCE(vetted_at, ?),
-            report_sent_at = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
+            report_sent_at = NULL, report_sent_to = NULL, report_sent_by = NULL, report_sent_by_id = NULL,
             justification_not_required_at = ?,
             justification_not_required_by = ?,
             justification_not_required_by_id = ?,
@@ -7047,6 +8312,7 @@ def admin_case_edit_view(request: Request, case_id: str):
     case_dict["status_display"] = display_case_status(case_dict.get("status"))
     case_dict["decision_display"] = display_decision_label(case_dict.get("decision"), fallback_status=case_dict.get("status"))
     case_dict["catalogue_review_required"], case_dict["catalogue_review_display"] = get_exam_catalogue_review_summary(case_dict)
+    case_dict.update(get_requestor_report_context(case_dict))
     case_dict["attachment_previewable"] = is_inline_previewable(case_dict.get("uploaded_filename"))
     attachments = list_case_attachments(case_id, case_dict=case_dict)
     case_dict.update(build_case_preview_context(case_id, case_dict, attachments))
@@ -7086,6 +8352,11 @@ async def admin_case_edit_save(
     uncatalogued_exam_requested: str = Form(""),
     uncatalogued_exam_reason: str = Form(""),
     protocol: str = Form(""),
+    requestor_name: str = Form(""),
+    requestor_email: str = Form(""),
+    requestor_organisation: str = Form(""),
+    requestor_reference: str = Form(""),
+    send_report_to_requestor: str = Form(""),
     attachments: list[UploadFile | str] = File([]),
     remove_attachment_ids: list[str] = Form([]),
     return_to: str = Form(""),
@@ -7116,6 +8387,13 @@ async def admin_case_edit_save(
     cleaned_admin_notes = admin_notes.strip()
     cleaned_protocol = protocol.strip() or None
     cleaned_modality = modality.strip() or None
+    requestor_values = build_requestor_case_values(
+        requestor_name=requestor_name,
+        requestor_email=requestor_email,
+        requestor_organisation=requestor_organisation,
+        requestor_reference=requestor_reference,
+        send_report_to_requestor=send_report_to_requestor,
+    )
 
     institution_raw = institution_id.strip()
     cleaned_institution_id = int(institution_raw) if institution_raw.isdigit() else None
@@ -7160,6 +8438,8 @@ async def admin_case_edit_save(
     add_field_if_exists("radiologist", cleaned_radiologist)
     add_field_if_exists("protocol", cleaned_protocol)
     add_field_if_exists("modality", cleaned_modality)
+    for requestor_column, requestor_value in requestor_values.items():
+        add_field_if_exists(requestor_column, requestor_value)
     add_field_if_exists("exam_catalogue_requires_review", resolved_exam["requires_review"])
     add_field_if_exists("exam_catalogue_exception_reason", resolved_exam["exception_reason"])
     add_field_if_exists("exam_catalogue_exception_at", resolved_exam["exception_at"])
@@ -7178,6 +8458,17 @@ async def admin_case_edit_save(
         new_text = _clean(str(new_val)) if new_val is not None else ""
         if old_text != new_text:
             changes.append(f"{col}: {old_text or '-'} -> {new_text or '-'}")
+    requestor_changes = [
+        change
+        for change in changes
+        if change.split(":", 1)[0] in {
+            "requestor_name",
+            "requestor_email",
+            "requestor_organisation",
+            "requestor_reference",
+            "send_report_to_requestor",
+        }
+    ]
 
     update_sql = "UPDATE cases SET " + ", ".join([f"{col} = ?" for col, _ in update_fields]) + " WHERE id = ?"
     update_params = [value for _, value in update_fields] + [case_id]
@@ -7229,6 +8520,14 @@ async def admin_case_edit_save(
                 event_type="EXAM_CATALOGUE_EXCEPTION",
                 user=user,
                 comment=f"Temporary uncatalogued exam created during edit. Reason: {resolved_exam['exception_reason']}",
+            )
+        if requestor_changes:
+            insert_case_event(
+                case_id=case_id,
+                org_id=event_org_id,
+                event_type="REQUESTOR_DETAILS_UPDATED",
+                user=user,
+                comment="Requestor details updated: " + "; ".join(requestor_changes),
             )
     except Exception as exc:
         print(f"[WARN] Saved case {case_id} but failed to write edit event: {exc}")
@@ -7796,7 +9095,7 @@ def radiologist_dashboard(request: Request, tab: str = "all"):
 # Settings (admin)
 # -------------------------
 @app.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request, error: str = ""):
+def settings_page(request: Request, error: str = "", saved: str = "", tab: str = ""):
     try:
         require_admin(request)
     except HTTPException:
@@ -7842,8 +9141,11 @@ def settings_page(request: Request, error: str = ""):
             "org_name": org_name,
             "report_header_text": report_header_text,
             "report_footer_text": report_footer_text,
+            "email_import_settings": get_org_email_import_settings(org_id),
             "current_user": get_session_user(request),
             "error": error,
+            "saved": saved,
+            "active_tab": tab or "",
         },
     )
 
@@ -7859,6 +9161,39 @@ def update_report_settings(
     set_setting(f"report_header:{org_id}", report_header_text.strip())
     set_setting(f"report_footer:{org_id}", report_footer_text.strip())
     return RedirectResponse(url="/settings?tab=report", status_code=303)
+
+
+@app.post("/settings/referral-inbox")
+def update_referral_inbox_settings(
+    request: Request,
+    is_enabled: str = Form("0"),
+    tenant_id: str = Form(""),
+    client_id: str = Form(""),
+    client_secret: str = Form(""),
+    mailbox_address: str = Form(""),
+    intake_folder: str = Form("RadFlow Intake"),
+    processed_folder: str = Form(""),
+    failed_folder: str = Form(""),
+    import_limit: str = Form("10"),
+):
+    user = require_admin(request)
+    org_id = user.get("org_id")
+    if not org_id:
+        return RedirectResponse(url="/settings?tab=referral-inbox&error=no_org", status_code=303)
+    save_org_email_import_settings(
+        org_id=org_id,
+        user=user,
+        is_enabled=is_enabled,
+        tenant_id=tenant_id,
+        client_id=client_id,
+        client_secret=client_secret,
+        mailbox_address=mailbox_address,
+        intake_folder=intake_folder,
+        processed_folder=processed_folder,
+        failed_folder=failed_folder,
+        import_limit=import_limit,
+    )
+    return RedirectResponse(url="/settings?tab=referral-inbox&saved=referral_inbox", status_code=303)
 
 
 @app.get("/settings/report/preview", response_class=HTMLResponse)
@@ -8679,6 +10014,11 @@ async def intake_submit(
     study_description: str = Form(...),
     study_description_preset_id: str = Form(""),
     study_code: str = Form(""),
+    requestor_name: str = Form(""),
+    requestor_email: str = Form(""),
+    requestor_organisation: str = Form(""),
+    requestor_reference: str = Form(""),
+    send_report_to_requestor: str = Form(""),
     admin_notes: str = Form(""),
     attachments: list[UploadFile] = File(...),
 ):
@@ -8713,6 +10053,13 @@ async def intake_submit(
     selected_study_code = resolved_exam["study_code"]
     selected_modality = resolved_exam["modality"]
     selected_preset_id = resolved_exam["study_description_preset_id"]
+    requestor_values = build_requestor_case_values(
+        requestor_name=requestor_name,
+        requestor_email=requestor_email,
+        requestor_organisation=requestor_organisation,
+        requestor_reference=requestor_reference,
+        send_report_to_requestor=send_report_to_requestor,
+    )
 
     valid_attachments = [file for file in attachments if file and file.filename]
     if not valid_attachments:
@@ -8727,33 +10074,41 @@ async def intake_submit(
     created_at = utc_now_iso()
     conn = get_db()
     
-    # Build insert conditionally based on columns that exist
     has_dob_col = table_has_column("cases", "patient_dob")
     has_preset_col = table_has_column("cases", "study_description_preset_id")
     has_study_code_col = table_has_column("cases", "study_code")
     has_modality_col = table_has_column("cases", "modality")
     has_review_col = table_has_column("cases", "exam_catalogue_requires_review")
-    if has_dob_col and has_study_code_col and has_modality_col:
-        conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, study_description_preset_id, study_code, modality, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, selected_study_description, selected_preset_id if has_preset_col else None, selected_study_code, selected_modality, admin_notes.strip(), "", original_name, stored_path, "pending", None, org_id, 0 if has_review_col else 0),
-        )
-    elif has_dob_col and has_study_code_col:
-        conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, study_description_preset_id, study_code, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, selected_study_description, selected_preset_id if has_preset_col else None, selected_study_code, admin_notes.strip(), "", original_name, stored_path, "pending", None, org_id, 0 if has_review_col else 0),
-        )
-    elif has_dob_col:
-        conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, patient_dob, institution_id, study_description, study_description_preset_id, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), patient_dob.strip() or None, inst_id, selected_study_description, selected_preset_id if has_preset_col else None, admin_notes.strip(), "", original_name, stored_path, "pending", None, org_id, 0 if has_review_col else 0),
-        )
-    else:
-        # PostgreSQL doesn't have patient_dob column, exclude it
-        conn.execute(
-            "INSERT INTO cases (id, created_at, patient_first_name, patient_surname, patient_referral_id, institution_id, study_description, study_description_preset_id, admin_notes, radiologist, uploaded_filename, stored_filepath, status, vetted_at, org_id, exam_catalogue_requires_review) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip(), inst_id, selected_study_description, selected_preset_id if has_preset_col else None, admin_notes.strip(), "", original_name, stored_path, "pending", None, org_id, 0 if has_review_col else 0),
-        )
+    case_insert_columns = ["id", "created_at", "patient_first_name", "patient_surname", "patient_referral_id"]
+    case_insert_values: list = [case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip()]
+    if has_dob_col:
+        case_insert_columns.append("patient_dob")
+        case_insert_values.append(patient_dob.strip() or None)
+    case_insert_columns.extend(["institution_id", "study_description"])
+    case_insert_values.extend([inst_id, selected_study_description])
+    if has_preset_col:
+        case_insert_columns.append("study_description_preset_id")
+        case_insert_values.append(selected_preset_id)
+    if has_study_code_col:
+        case_insert_columns.append("study_code")
+        case_insert_values.append(selected_study_code)
+    if has_modality_col:
+        case_insert_columns.append("modality")
+        case_insert_values.append(selected_modality)
+    case_insert_columns.extend(["admin_notes", "radiologist", "uploaded_filename", "stored_filepath", "status", "vetted_at", "org_id"])
+    case_insert_values.extend([admin_notes.strip(), "", original_name, stored_path, "pending", None, org_id])
+    if has_review_col:
+        case_insert_columns.append("exam_catalogue_requires_review")
+        case_insert_values.append(0)
+    for column, value in requestor_values.items():
+        if table_has_column("cases", column):
+            case_insert_columns.append(column)
+            case_insert_values.append(value)
+    placeholders = ", ".join(["?"] * len(case_insert_columns))
+    conn.execute(
+        f"INSERT INTO cases ({', '.join(case_insert_columns)}) VALUES ({placeholders})",
+        tuple(case_insert_values),
+    )
     conn.commit()
     conn.close()
 
@@ -8785,6 +10140,14 @@ async def intake_submit(
         user={"username": "external"},
         comment=admin_notes.strip() or None,
     )
+    if has_requestor_details(requestor_values):
+        insert_case_event(
+            case_id=case_id,
+            org_id=org_id,
+            event_type="REQUESTOR_DETAILS_UPDATED",
+            user={"username": "external"},
+            comment="Requestor details captured: " + requestor_details_summary(requestor_values),
+        )
 
     return RedirectResponse(url="/", status_code=303)
 
@@ -8805,12 +10168,18 @@ def referral_trial_form(request: Request):
             "institutions": institutions,
             "radiologists": radiologists,
             "user_org_id": org_id,
-            "draft": {
-                "patient_first_name": "",
-                "patient_surname": "",
-                "patient_referral_id": "",
-                "patient_dob": "",
-                "study_description": "",
+                "draft": {
+                    "patient_first_name": "",
+                    "patient_surname": "",
+                    "patient_referral_id": "",
+                    "patient_dob": "",
+                    "request_date": today_date_iso(),
+                    "requestor_name": "",
+                    "requestor_email": "",
+                    "requestor_organisation": "",
+                    "requestor_reference": "",
+                    "send_report_to_requestor": "",
+                    "study_description": "",
                 "modality": "",
                 "admin_notes": "",
                 "radiologist": "",
@@ -8827,6 +10196,96 @@ def referral_trial_form(request: Request):
             "can_create_uncatalogued_exam": can_use_uncatalogued_exam_exception(user),
         },
     )
+
+
+def build_referral_trial_draft_from_parsed(
+    parsed: dict,
+    original_filename: str,
+    original_bytes: bytes,
+    org_id: int | None,
+    institution_id: str = "",
+    requestor_fallback: dict | None = None,
+) -> dict:
+    primary_attachment = parsed.get("primary_attachment") or {}
+    primary_filename = Path(str(primary_attachment.get("filename") or original_filename or "referral_upload")).name
+    primary_bytes = primary_attachment.get("bytes") if isinstance(primary_attachment.get("bytes"), bytes) else original_bytes
+
+    temp_name = f"trial_{uuid4().hex}_{primary_filename}"
+    temp_path = UPLOAD_DIR / temp_name
+    with open(temp_path, "wb") as temp_file:
+        temp_file.write(primary_bytes)
+
+    draft = dict(parsed.get("fields", {}) or {})
+    draft["institution_id"] = (institution_id or "").strip()
+    draft["radiologist"] = ""
+    draft["attachment_token"] = temp_name
+    draft["attachment_original_name"] = primary_filename
+    draft["source_email_token"] = ""
+    draft["source_email_original_name"] = ""
+
+    if requestor_fallback:
+        if not draft.get("requestor_name"):
+            draft["requestor_name"] = requestor_fallback.get("requestor_name") or ""
+        if not draft.get("requestor_email"):
+            draft["requestor_email"] = requestor_fallback.get("requestor_email") or ""
+        if not draft.get("requestor_reference"):
+            draft["requestor_reference"] = requestor_fallback.get("requestor_reference") or ""
+        if not draft.get("send_report_to_requestor") and draft.get("requestor_email"):
+            draft["send_report_to_requestor"] = "1"
+
+    if parsed.get("source_email"):
+        source_email = parsed["source_email"]
+        source_email_filename = Path(str(source_email.get("filename") or original_filename or "referral_email.eml")).name
+        source_email_bytes = source_email.get("bytes")
+        if isinstance(source_email_bytes, bytes):
+            source_email_token = f"trial_{uuid4().hex}_{source_email_filename}"
+            source_email_path = UPLOAD_DIR / source_email_token
+            with open(source_email_path, "wb") as source_file:
+                source_file.write(source_email_bytes)
+            draft["source_email_token"] = source_email_token
+            draft["source_email_original_name"] = source_email_filename
+
+    draft["request_date"] = (draft.get("request_date") or "").strip() or today_date_iso()
+    for key in ("requestor_name", "requestor_email", "requestor_organisation", "requestor_reference", "send_report_to_requestor"):
+        draft.setdefault(key, "")
+
+    parsed_study_description = str(draft.get("study_description") or "").strip()
+    draft["parsed_study_description"] = parsed_study_description
+    catalogue_match = find_matching_exam_catalogue_item(
+        org_id=org_id,
+        study_description=parsed_study_description,
+        modality=draft.get("modality"),
+    )
+    if catalogue_match:
+        draft["study_description"] = str(catalogue_match.get("description") or parsed_study_description).strip()
+        draft["study_description_preset_id"] = str(catalogue_match.get("id") or "")
+        draft["study_code"] = str(catalogue_match.get("study_code") or "")
+        draft["modality"] = str(catalogue_match.get("modality") or draft.get("modality") or "").strip().upper()
+        if normalize_exam_match_value(parsed_study_description) != normalize_exam_match_value(draft["study_description"]):
+            draft["catalogue_match_notice"] = (
+                f"Matched parsed exam '{parsed_study_description}' to "
+                f"'{format_exam_label(draft['study_description'], draft.get('study_code'))}'."
+            )
+        else:
+            draft["catalogue_match_notice"] = "Matched to the master exam catalogue."
+    elif parsed_study_description:
+        draft["catalogue_match_suggestions"] = [
+            {
+                "id": item.get("id"),
+                "description": item.get("description"),
+                "study_code": item.get("study_code") or "",
+                "label": format_exam_label(item.get("description"), item.get("study_code")),
+                "match_score": item.get("match_score"),
+            }
+            for item in find_best_exam_catalogue_matches(
+                org_id=org_id,
+                study_description=parsed_study_description,
+                modality=draft.get("modality"),
+                limit=5,
+                min_score=0.28,
+            )
+        ]
+    return draft
 
 
 @app.post("/submit/referral-trial/parse", response_class=HTMLResponse)
@@ -8848,7 +10307,7 @@ async def referral_trial_parse(
                 "request": request,
                 "institutions": institutions,
                 "radiologists": radiologists,
-                "draft": {"institution_id": institution_id or ""},
+                "draft": {"institution_id": institution_id or "", "request_date": today_date_iso()},
                 "parse_warnings": [],
                 "parse_confidence": None,
                 "parse_preview": "",
@@ -8861,17 +10320,13 @@ async def referral_trial_parse(
 
     file_bytes = await attachment.read()
     parsed = parse_referral_attachment(attachment.filename, file_bytes)
-
-    temp_name = f"trial_{uuid4().hex}_{Path(attachment.filename).name}"
-    temp_path = UPLOAD_DIR / temp_name
-    with open(temp_path, "wb") as temp_file:
-        temp_file.write(file_bytes)
-
-    draft = parsed.get("fields", {})
-    draft["institution_id"] = (institution_id or "").strip()
-    draft["radiologist"] = ""
-    draft["attachment_token"] = temp_name
-    draft["attachment_original_name"] = attachment.filename
+    draft = build_referral_trial_draft_from_parsed(
+        parsed,
+        attachment.filename,
+        file_bytes,
+        org_id=org_id,
+        institution_id=institution_id,
+    )
 
     return templates.TemplateResponse(
         "referral_trial.html",
@@ -8884,6 +10339,7 @@ async def referral_trial_parse(
             "parse_warnings": parsed.get("warnings", []),
             "parse_confidence": parsed.get("confidence"),
             "parse_preview": parsed.get("text_preview", ""),
+            "email_source": parsed.get("source"),
             "error": "",
             "default_institution": default_institution,
             "available_exams": list_exam_catalogue(active_only=True, org_id=org_id),
@@ -8924,8 +10380,10 @@ def referral_trial_attachment_preview(request: Request, attachment_token: str):
     file_bytes = trial_path.read_bytes()
 
     if lower_name.endswith(".pdf"):
-        return HTMLResponse(
-            f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}iframe{{width:100%;height:100%;border:0;background:#fff}}</style></head><body><iframe src="/submit/referral-trial/attachment/{html.escape(attachment_token)}/inline#view=FitH"></iframe></body></html>"""
+        return render_pdf_preview_html(
+            file_bytes,
+            filename,
+            f"/submit/referral-trial/attachment/{attachment_token}/inline",
         )
     if lower_name.endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")):
         return HTMLResponse(
@@ -8950,6 +10408,11 @@ def referral_trial_create(
     patient_referral_id: str = Form(""),
     patient_dob: str = Form(""),
     request_date: str = Form(""),
+    requestor_name: str = Form(""),
+    requestor_email: str = Form(""),
+    requestor_organisation: str = Form(""),
+    requestor_reference: str = Form(""),
+    send_report_to_requestor: str = Form(""),
     institution_id: str = Form(""),
     modality: str = Form(""),
     study_description: str = Form(...),
@@ -8961,6 +10424,9 @@ def referral_trial_create(
     radiologist: str = Form(""),
     attachment_token: str = Form(...),
     attachment_original_name: str = Form("referral_upload"),
+    source_email_token: str = Form(""),
+    source_email_original_name: str = Form(""),
+    email_import_id: str = Form(""),
     supporting_attachments: list[UploadFile | str] = File([]),
     extra_study_description: list[str] = Form([], alias="extra_study_description[]"),
     extra_study_description_preset_id: list[str] = Form([], alias="extra_study_description_preset_id[]"),
@@ -8974,20 +10440,104 @@ def referral_trial_create(
     if not patient_first_name.strip() or not patient_surname.strip() or not patient_referral_id.strip() or not study_description.strip():
         raise HTTPException(status_code=400, detail="Patient name, referral ID, and study description are required")
 
-    resolved_exam = resolve_case_exam_selection(
-        user=user,
-        org_id=org_id,
-        study_description=study_description,
-        study_description_preset_id=study_description_preset_id,
-        study_code=study_code,
-        modality=modality,
-        uncatalogued_exam_requested=uncatalogued_exam_requested,
-        uncatalogued_exam_reason=uncatalogued_exam_reason,
-    )
+    try:
+        resolved_exam = resolve_case_exam_selection(
+            user=user,
+            org_id=org_id,
+            study_description=study_description,
+            study_description_preset_id=study_description_preset_id,
+            study_code=study_code,
+            modality=modality,
+            uncatalogued_exam_requested=uncatalogued_exam_requested,
+            uncatalogued_exam_reason=uncatalogued_exam_reason,
+        )
+    except HTTPException as exc:
+        if exc.status_code != 400:
+            raise
+        submitted_draft = {
+            "patient_first_name": patient_first_name,
+            "patient_surname": patient_surname,
+            "patient_referral_id": patient_referral_id,
+            "patient_dob": patient_dob,
+            "request_date": request_date,
+            "requestor_name": requestor_name,
+            "requestor_email": requestor_email,
+            "requestor_organisation": requestor_organisation,
+            "requestor_reference": requestor_reference,
+            "send_report_to_requestor": send_report_to_requestor,
+            "institution_id": institution_id,
+            "modality": modality,
+            "study_description": study_description,
+            "study_description_preset_id": study_description_preset_id,
+            "study_code": study_code,
+            "admin_notes": admin_notes,
+            "radiologist": radiologist,
+            "attachment_token": attachment_token,
+            "attachment_original_name": attachment_original_name,
+            "source_email_token": source_email_token,
+            "source_email_original_name": source_email_original_name,
+            "parsed_study_description": study_description,
+        }
+        submitted_draft["catalogue_match_suggestions"] = [
+            {
+                "id": item.get("id"),
+                "description": item.get("description"),
+                "study_code": item.get("study_code") or "",
+                "label": format_exam_label(item.get("description"), item.get("study_code")),
+                "match_score": item.get("match_score"),
+            }
+            for item in find_best_exam_catalogue_matches(
+                org_id=org_id,
+                study_description=study_description,
+                modality=modality,
+                limit=5,
+                min_score=0.28,
+            )
+        ]
+        parse_preview = ""
+        parse_warnings: list[str] = []
+        token_name = Path(attachment_token or "").name
+        trial_path = UPLOAD_DIR / token_name
+        if token_name.startswith("trial_") and trial_path.exists():
+            try:
+                preview_text, preview_warnings = extract_referral_text(
+                    attachment_original_name or token_name,
+                    trial_path.read_bytes(),
+                )
+                parse_preview = preview_text[:2000]
+                parse_warnings.extend(preview_warnings)
+            except Exception as preview_exc:
+                print(f"[referral-trial] failed to rebuild parse preview after validation error: {preview_exc}")
+        parse_warnings.append(str(exc.detail))
+        return templates.TemplateResponse(
+            "referral_trial.html",
+            {
+                "request": request,
+                "institutions": list_institutions(org_id),
+                "radiologists": list_radiologists(org_id),
+                "user_org_id": org_id,
+                "draft": submitted_draft,
+                "parse_warnings": parse_warnings,
+                "parse_confidence": 0,
+                "parse_preview": parse_preview,
+                "error": str(exc.detail),
+                "default_institution": get_default_institution(org_id),
+                "available_exams": list_exam_catalogue(active_only=True, org_id=org_id),
+                "can_create_uncatalogued_exam": can_use_uncatalogued_exam_exception(user),
+            },
+            status_code=400,
+        )
     selected_study_description = resolved_exam["study_description"]
     selected_study_code = resolved_exam["study_code"]
     selected_preset_id = resolved_exam["study_description_preset_id"]
     case_modality = resolved_exam["modality"]
+    requestor_values = build_requestor_case_values(
+        requestor_name=requestor_name,
+        requestor_email=requestor_email,
+        requestor_organisation=requestor_organisation,
+        requestor_reference=requestor_reference,
+        send_report_to_requestor=send_report_to_requestor,
+    )
 
     institution_value = (institution_id or "").strip()
     if institution_value:
@@ -9072,6 +10622,11 @@ def referral_trial_create(
     has_exception_at_col = table_has_column("cases", "exam_catalogue_exception_at")
     has_exception_by_col = table_has_column("cases", "exam_catalogue_exception_by")
     has_exception_by_id_col = table_has_column("cases", "exam_catalogue_exception_by_id")
+    requestor_insert_fields = [
+        (column, value)
+        for column, value in requestor_values.items()
+        if table_has_column("cases", column)
+    ]
 
     def insert_referral_trial_case(
         case_row_id: str,
@@ -9126,6 +10681,9 @@ def referral_trial_create(
         if has_exception_by_id_col:
             case_insert_columns.append("exam_catalogue_exception_by_id")
             case_insert_values.append(exception_by_id)
+        for column, value in requestor_insert_fields:
+            case_insert_columns.append(column)
+            case_insert_values.append(value)
         placeholders = ", ".join(["?"] * len(case_insert_columns))
         conn.execute(
             f"INSERT INTO cases ({', '.join(case_insert_columns)}) VALUES ({placeholders})",
@@ -9152,6 +10710,19 @@ def referral_trial_create(
     conn.close()
 
     prepared_supporting_attachments: list[tuple[str, bytes]] = []
+    source_email_token_name = Path(source_email_token or "").name
+    if source_email_token_name:
+        if not source_email_token_name.startswith("trial_"):
+            raise HTTPException(status_code=400, detail="Invalid source email token")
+        source_email_path = UPLOAD_DIR / source_email_token_name
+        if not source_email_path.exists():
+            raise HTTPException(status_code=400, detail="Source email file not found. Please parse again.")
+        source_email_name = Path(source_email_original_name or source_email_token_name).name
+        prepared_supporting_attachments.append((source_email_name, source_email_path.read_bytes()))
+        try:
+            source_email_path.unlink(missing_ok=True)
+        except Exception:
+            pass
     for upload in supporting_attachments:
         if not isinstance(upload, UploadFile) or not upload.filename:
             continue
@@ -9184,8 +10755,16 @@ def referral_trial_create(
         org_id=org_id,
         event_type="CREATED",
         user={"username": user.get("username") or "admin"},
-        comment="Created via referral trial parser",
+        comment="Created via referral email import" if source_email_token_name else "Created via referral trial parser",
     )
+    if has_requestor_details(requestor_values):
+        insert_case_event(
+            case_id=case_id,
+            org_id=org_id,
+            event_type="REQUESTOR_DETAILS_UPDATED",
+            user={"username": user.get("username") or "admin"},
+            comment="Requestor details captured: " + requestor_details_summary(requestor_values),
+        )
 
     for idx, extra_case in enumerate(cleaned_extra_cases, start=1):
         extra_case_id = generated_case_ids[idx]
@@ -9227,8 +10806,40 @@ def referral_trial_create(
             org_id=org_id,
             event_type="CREATED",
             user={"username": user.get("username") or "admin"},
-            comment="Created via referral trial parser",
+            comment="Created via referral email import" if source_email_token_name else "Created via referral trial parser",
         )
+        if has_requestor_details(requestor_values):
+            insert_case_event(
+                case_id=extra_case_id,
+                org_id=org_id,
+                event_type="REQUESTOR_DETAILS_UPDATED",
+                user={"username": user.get("username") or "admin"},
+                comment="Requestor details captured: " + requestor_details_summary(requestor_values),
+            )
+
+    import_row_id = (email_import_id or "").strip()
+    if import_row_id:
+        conn = get_db()
+        if org_id and not user.get("is_superuser"):
+            conn.execute(
+                """
+                UPDATE email_import_messages
+                SET status = 'case_created', updated_at = ?, error_message = ?
+                WHERE id = ? AND org_id = ?
+                """,
+                (utc_now_iso(), f"Created case {case_id}", import_row_id, org_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE email_import_messages
+                SET status = 'case_created', updated_at = ?, error_message = ?
+                WHERE id = ?
+                """,
+                (utc_now_iso(), f"Created case {case_id}", import_row_id),
+            )
+        conn.commit()
+        conn.close()
 
     return RedirectResponse(url=f"/submitted/{case_id}", status_code=303)
 
@@ -9281,6 +10892,11 @@ async def submit_case(
     study_code: str = Form(""),
     uncatalogued_exam_requested: str = Form(""),
     uncatalogued_exam_reason: str = Form(""),
+    requestor_name: str = Form(""),
+    requestor_email: str = Form(""),
+    requestor_organisation: str = Form(""),
+    requestor_reference: str = Form(""),
+    send_report_to_requestor: str = Form(""),
     admin_notes: str = Form(""),
     radiologist: str = Form(""),
     attachments: list[UploadFile] = File(...),
@@ -9336,6 +10952,13 @@ async def submit_case(
     selected_study_code = resolved_exam["study_code"]
     selected_preset_id = resolved_exam["study_description_preset_id"]
     case_modality = resolved_exam["modality"]
+    requestor_values = build_requestor_case_values(
+        requestor_name=requestor_name,
+        requestor_email=requestor_email,
+        requestor_organisation=requestor_organisation,
+        requestor_reference=requestor_reference,
+        send_report_to_requestor=send_report_to_requestor,
+    )
 
     # Validate radiologist (optional - can assign later via bulk assignment)
     radiologist = radiologist.strip() if radiologist else ""
@@ -9400,6 +11023,11 @@ async def submit_case(
     has_exception_at_col = table_has_column("cases", "exam_catalogue_exception_at")
     has_exception_by_col = table_has_column("cases", "exam_catalogue_exception_by")
     has_exception_by_id_col = table_has_column("cases", "exam_catalogue_exception_by_id")
+    requestor_insert_fields = [
+        (column, value)
+        for column, value in requestor_values.items()
+        if table_has_column("cases", column)
+    ]
     case_insert_columns = ["id", "created_at", "patient_first_name", "patient_surname", "patient_referral_id"]
     case_insert_values: list = [case_id, created_at, patient_first_name.strip(), patient_surname.strip(), patient_referral_id.strip()]
     if has_dob_col:
@@ -9436,6 +11064,9 @@ async def submit_case(
     if has_exception_by_id_col:
         case_insert_columns.append("exam_catalogue_exception_by_id")
         case_insert_values.append(resolved_exam["exception_by_id"])
+    for column, value in requestor_insert_fields:
+        case_insert_columns.append(column)
+        case_insert_values.append(value)
     placeholders = ", ".join(["?"] * len(case_insert_columns))
     conn.execute(
         f"INSERT INTO cases ({', '.join(case_insert_columns)}) VALUES ({placeholders})",
@@ -9471,6 +11102,14 @@ async def submit_case(
         user=user,
         comment=admin_notes.strip() or None,
     )
+    if has_requestor_details(requestor_values):
+        insert_case_event(
+            case_id=case_id,
+            org_id=org_id,
+            event_type="REQUESTOR_DETAILS_UPDATED",
+            user=user,
+            comment="Requestor details captured: " + requestor_details_summary(requestor_values),
+        )
     if resolved_exam["exception_requested"]:
         # Task 4: Record the temporary uncatalogued exam audit event once per submitted case.
         insert_case_event(
@@ -9522,6 +11161,8 @@ async def submit_case(
                 extra_insert_values.append(None)
             if has_exception_by_id_col:
                 extra_insert_values.append(None)
+            for _column, value in requestor_insert_fields:
+                extra_insert_values.append(value)
             conn2.execute(
                 f"INSERT INTO cases ({', '.join(extra_insert_columns)}) VALUES ({placeholders})",
                 tuple(extra_insert_values),
@@ -9554,6 +11195,14 @@ async def submit_case(
                 user=user,
                 comment=admin_notes.strip() or None,
             )
+            if has_requestor_details(requestor_values):
+                insert_case_event(
+                    case_id=extra_case_id,
+                    org_id=org_id,
+                    event_type="REQUESTOR_DETAILS_UPDATED",
+                    user=user,
+                    comment="Requestor details captured: " + requestor_details_summary(requestor_values),
+                )
 
     # Redirect to admin dashboard
     return RedirectResponse(url="/admin", status_code=303)
@@ -10027,18 +11676,20 @@ def view_specific_attachment_preview(request: Request, case_id: str, attachment_
     attachment = get_case_attachment_for_user(request, case_id, attachment_id)
     filename = attachment.get("uploaded_filename") or "Attachment"
     lower_name = str(filename).lower()
+    file_bytes = load_case_attachment_bytes(attachment.get("stored_filepath"))
+    if file_bytes is None:
+        raise HTTPException(status_code=410, detail="Attachment missing or expired")
+
     if lower_name.endswith(".pdf"):
-        return HTMLResponse(
-            f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}iframe{{width:100%;height:100%;border:0;background:#fff}}</style></head><body><iframe src="/case/{case_id}/attachments/{attachment_id}/inline#view=FitH"></iframe></body></html>"""
+        return render_pdf_preview_html(
+            file_bytes,
+            filename,
+            f"/case/{case_id}/attachments/{attachment_id}/inline",
         )
     if lower_name.endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")):
         return HTMLResponse(
             f"""<!doctype html><html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}body{{display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}}img{{max-width:100%;max-height:100%;object-fit:contain;background:#fff;border-radius:8px}}</style></head><body><img src="/case/{case_id}/attachments/{attachment_id}/inline" alt="{html.escape(filename)}"></body></html>"""
         )
-
-    file_bytes = load_case_attachment_bytes(attachment.get("stored_filepath"))
-    if file_bytes is None:
-        raise HTTPException(status_code=410, detail="Attachment missing or expired")
 
     if lower_name.endswith((".txt", ".csv", ".json", ".xml", ".html", ".htm", ".md")):
         return render_text_preview_html(file_bytes)
@@ -10134,12 +11785,16 @@ def view_attachment_preview(request: Request, case_id: str):
     filename = case_data.get("uploaded_filename") or Path(stored_path).name
     lower_name = str(filename).lower()
     media_type, _ = mimetypes.guess_type(filename)
+    file_bytes = load_case_attachment_bytes(stored_path)
+    if file_bytes is None:
+        clear_case_stored_filepath(case_id)
+        raise HTTPException(status_code=410, detail="Referral file missing or expired")
 
     if lower_name.endswith(".pdf"):
-        return HTMLResponse(
-            f"""<!doctype html>
-<html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}iframe{{width:100%;height:100%;border:0;background:#fff}}</style></head>
-<body><iframe src="/case/{case_id}/attachment/inline#view=FitH"></iframe></body></html>"""
+        return render_pdf_preview_html(
+            file_bytes,
+            filename,
+            f"/case/{case_id}/attachment/inline",
         )
 
     if lower_name.endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")):
@@ -10148,11 +11803,6 @@ def view_attachment_preview(request: Request, case_id: str):
 <html><head><meta charset="utf-8"><style>html,body{{height:100%;margin:0;background:#0b1220}}body{{display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}}img{{max-width:100%;max-height:100%;object-fit:contain;background:#fff;border-radius:8px}}</style></head>
 <body><img src="/case/{case_id}/attachment/inline" alt="{html.escape(filename)}"></body></html>"""
         )
-
-    file_bytes = load_case_attachment_bytes(stored_path)
-    if file_bytes is None:
-        clear_case_stored_filepath(case_id)
-        raise HTTPException(status_code=410, detail="Referral file missing or expired")
 
     if lower_name.endswith((".txt", ".csv", ".json", ".xml", ".html", ".htm", ".md")):
         return render_text_preview_html(file_bytes)
@@ -10289,6 +11939,12 @@ def case_pdf(request: Request, case_id: str, inline: bool = False, include_timel
                 return "Decision recorded"
             if event_type == "REPORT_SENT":
                 return "Justification sent"
+            if event_type == "REQUESTOR_DETAILS_UPDATED":
+                return "Requestor details updated"
+            if event_type == "REQUESTOR_REPORT_SENT":
+                return "Requestor report sent"
+            if event_type == "REQUESTOR_REPORT_SEND_FAILED":
+                return "Requestor report send failed"
             if event_type == "JUSTIFICATION_NOT_REQUIRED":
                 return "No justification required"
             if event_type == "REPORT_SENT_RESET":
@@ -10852,14 +12508,16 @@ def account_page(request: Request, msg: str = "", error: str = ""):
 </div>
 <div class="account-wrap">
     <div class="account-shell">
-    <div class="topbar">
-        <a href="{back_url}" class="btn secondary">&larr; Back</a>
-        <div class="topbar-actions">
+    <div class="internal-page-header">
+        <div>
+            <h1 class="internal-page-title">My Account</h1>
+            <p class="internal-page-subtitle">Edit your personal details. Role and permissions are managed by your administrator.</p>
+        </div>
+        <div class="topbar-actions internal-page-actions">
+            <a href="{back_url}" class="btn secondary">Back</a>
             <a href="/logout" class="btn secondary">Logout</a>
         </div>
     </div>
-    <h1 class="page-title">My Account</h1>
-    <p class="page-sub">Edit your personal details. Role and permissions are managed by your administrator.</p>
 
     {msg_html}{error_html}
 
